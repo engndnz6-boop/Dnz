@@ -1,0 +1,2093 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<title>DNZ — Metraj &amp; Teklif</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0F3B4C">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="DNZ Metraj">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+:root{
+  --abyss:#08202E;
+  --lagoon:#0F3B4C;
+  --tide:#1C6E8C;
+  --foam:#EAF6F5;
+  --aqua:#2FD3C7;
+  --aqua-dim:#22A99F;
+  --ink:#0B2436;
+  --ink-soft:#345264;
+  --coral:#E8776B;
+  --glass-bg:rgba(234,246,245,0.62);
+  --glass-bg-strong:rgba(234,246,245,0.82);
+  --glass-border:rgba(255,255,255,0.55);
+  --shadow-color:rgba(4,20,28,0.35);
+  --radius:18px;
+  --font-display:'Outfit',sans-serif;
+  --font-body:'Inter',sans-serif;
+  --font-mono:'JetBrains Mono',monospace;
+}
+*,*::before,*::after{box-sizing:border-box;}
+html,body{
+  margin:0;padding:0;width:100%;min-height:100%;
+  overflow-x:hidden;
+  font-family:var(--font-body);
+  color:var(--ink);
+  -webkit-tap-highlight-color:transparent;
+}
+body{
+  min-height:100vh;
+  min-height:100dvh;
+  background:
+    radial-gradient(ellipse 80% 60% at 20% -10%, rgba(47,211,199,0.28), transparent 60%),
+    radial-gradient(ellipse 70% 50% at 90% 10%, rgba(28,110,140,0.16), transparent 60%),
+    linear-gradient(160deg, #F5FBFA 0%, #E6F4F2 45%, #D7EDEC 100%);
+  background-attachment:fixed;
+  background-size:200% 200%, 200% 200%, 100% 100%;
+  animation: driftBg 26s ease-in-out infinite alternate;
+  display:flex;flex-direction:column;
+}
+@keyframes driftBg{
+  0%{background-position:0% 0%, 100% 0%, 0 0;}
+  100%{background-position:20% 30%, 70% 40%, 0 0;}
+}
+@media (prefers-reduced-motion:reduce){
+  body{animation:none;}
+  *{animation-duration:0.001ms !important; transition-duration:0.001ms !important;}
+}
+
+/* wave divider */
+.wave-divider{width:100%;height:22px;display:block;line-height:0;margin-top:-1px;}
+.wave-divider svg{width:100%;height:100%;display:block;}
+
+/* glass primitives */
+.glass{
+  background:var(--glass-bg);
+  backdrop-filter:blur(18px) saturate(140%);
+  -webkit-backdrop-filter:blur(18px) saturate(140%);
+  border:1px solid var(--glass-border);
+  border-radius:var(--radius);
+  box-shadow:0 8px 32px var(--shadow-color), inset 0 1px 0 rgba(255,255,255,0.5);
+  position:relative;
+  overflow:hidden;
+}
+.glass-strong{background:var(--glass-bg-strong);}
+
+/* ripple (dnz) effect */
+.ripple-wrap{position:relative;overflow:hidden;}
+.ripple-el{
+  position:absolute;border-radius:50%;
+  background:radial-gradient(circle, rgba(47,211,199,0.55) 0%, rgba(47,211,199,0.25) 40%, rgba(255,255,255,0) 70%);
+  transform:scale(0);
+  animation:rippleAnim 700ms ease-out forwards;
+  pointer-events:none;
+  z-index:5;
+}
+@keyframes rippleAnim{
+  to{transform:scale(1);opacity:0;}
+}
+
+/* header */
+#app{display:flex;flex-direction:column;min-height:100vh;min-height:100dvh;width:100%;}
+header.topbar{
+  position:sticky;top:0;z-index:40;
+  margin:10px 10px 0 10px;
+  padding:12px 16px;
+  display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+}
+.brand{display:flex;align-items:center;gap:10px;min-width:0;flex-shrink:0;}
+.brand-mark{
+  width:38px;height:38px;border-radius:12px;flex-shrink:0;
+  background:linear-gradient(135deg,var(--aqua),var(--tide));
+  display:flex;align-items:center;justify-content:center;
+  box-shadow:0 4px 14px rgba(47,211,199,0.45);
+}
+.brand-mark svg{width:22px;height:22px;}
+.brand-text{display:flex;flex-direction:column;line-height:1.05;min-width:0;}
+.brand-text b{font-family:var(--font-display);font-weight:800;font-size:1.15rem;letter-spacing:0.5px;color:var(--ink);}
+.brand-text span{font-size:0.68rem;color:var(--ink-soft);font-weight:500;letter-spacing:0.3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+
+.project-picker{
+  margin-left:auto;display:flex;align-items:center;gap:8px;min-width:0;
+  flex:1 1 260px;max-width:420px;
+}
+select.proj-select{
+  flex:1;min-width:0;
+  appearance:none;-webkit-appearance:none;
+  background:rgba(255,255,255,0.55);
+  border:1px solid var(--glass-border);
+  border-radius:12px;padding:9px 30px 9px 12px;
+  font-family:var(--font-body);font-weight:600;font-size:0.85rem;color:var(--ink);
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230B2436' stroke-width='2'><path d='M6 9l6 6 6-6'/></svg>");
+  background-repeat:no-repeat;background-position:right 8px center;background-size:16px;
+  text-overflow:ellipsis;white-space:nowrap;overflow:hidden;
+}
+
+/* tabs */
+nav.tabs{
+  margin:10px;
+  display:flex;gap:6px;padding:6px;overflow-x:auto;
+  scrollbar-width:none;
+}
+nav.tabs::-webkit-scrollbar{display:none;}
+.tab-btn{
+  flex:0 0 auto;
+  display:flex;align-items:center;gap:6px;
+  padding:9px 16px;border-radius:12px;border:none;cursor:pointer;
+  font-family:var(--font-display);font-weight:600;font-size:0.85rem;
+  background:transparent;color:var(--ink-soft);
+  transition:background 160ms ease, color 160ms ease, transform 160ms ease;
+  white-space:nowrap;
+}
+.tab-btn svg{width:16px;height:16px;flex-shrink:0;}
+.tab-btn.active{
+  background:linear-gradient(135deg,var(--aqua),var(--aqua-dim));
+  color:#04201C;box-shadow:0 4px 14px rgba(47,211,199,0.4);
+}
+.tab-btn:not(.active):hover{background:rgba(255,255,255,0.35);color:var(--ink);}
+
+main{flex:1;min-width:0;width:100%;padding:0 10px 40px 10px;display:flex;flex-direction:column;gap:14px;max-width:1180px;margin:0 auto;width:100%;}
+
+.card{padding:18px;display:flex;flex-direction:column;gap:14px;min-width:0;}
+.card h2{margin:0;font-family:var(--font-display);font-size:1.05rem;font-weight:700;display:flex;align-items:center;gap:8px;}
+.card h2 svg{width:18px;height:18px;color:var(--aqua-dim);}
+.card p.hint{margin:0;font-size:0.8rem;color:var(--ink-soft);line-height:1.4;}
+
+.field-grid{
+  display:grid;gap:10px;
+  grid-template-columns:repeat(auto-fill,minmax(130px,1fr));
+}
+.field{display:flex;flex-direction:column;gap:4px;min-width:0;}
+.field label{font-size:0.7rem;font-weight:600;color:var(--ink-soft);letter-spacing:0.2px;}
+.field input,.field select{
+  width:100%;padding:9px 10px;border-radius:10px;
+  border:1px solid rgba(11,36,54,0.15);
+  background:rgba(255,255,255,0.6);
+  font-family:var(--font-body);font-size:0.85rem;color:var(--ink);
+  min-width:0;
+}
+.field input:focus,.field select:focus{outline:2px solid var(--aqua-dim);outline-offset:1px;}
+.field input.mono,.field.mono input{font-family:var(--font-mono);}
+
+.btn{
+  border:none;border-radius:12px;padding:10px 18px;cursor:pointer;
+  font-family:var(--font-display);font-weight:600;font-size:0.85rem;
+  display:inline-flex;align-items:center;gap:6px;justify-content:center;
+  transition:transform 120ms ease, box-shadow 120ms ease;
+  white-space:nowrap;
+}
+.btn svg{width:15px;height:15px;}
+.btn:active{transform:scale(0.97);}
+.btn-primary{background:linear-gradient(135deg,var(--aqua),var(--aqua-dim));color:#04201C;box-shadow:0 4px 14px rgba(47,211,199,0.4);}
+.btn-ghost{background:rgba(255,255,255,0.45);color:var(--ink);border:1px solid rgba(11,36,54,0.12);}
+.btn-danger{background:rgba(232,119,107,0.18);color:#7A2B22;border:1px solid rgba(232,119,107,0.4);}
+.btn-danger:hover{background:rgba(232,119,107,0.3);}
+.btn-block{width:100%;}
+.btn-sm{padding:6px 10px;font-size:0.75rem;border-radius:8px;}
+.btn-row{display:flex;gap:8px;flex-wrap:wrap;}
+
+.icon-btn{
+  width:32px;height:32px;border-radius:9px;border:none;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;
+  background:rgba(255,255,255,0.5);color:var(--ink-soft);
+  transition:background 120ms ease, color 120ms ease;
+}
+.icon-btn svg{width:15px;height:15px;}
+.icon-btn:hover{background:rgba(255,255,255,0.8);color:var(--ink);}
+.icon-btn.danger:hover{background:rgba(232,119,107,0.25);color:#7A2B22;}
+
+.table-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:12px;}
+table{border-collapse:collapse;width:100%;min-width:760px;font-size:0.78rem;}
+thead th{
+  text-align:left;padding:9px 10px;background:rgba(11,36,54,0.08);
+  font-family:var(--font-display);font-weight:700;font-size:0.68rem;text-transform:uppercase;letter-spacing:0.4px;
+  color:var(--ink-soft);position:sticky;top:0;white-space:nowrap;
+}
+tbody td{padding:8px 10px;border-top:1px solid rgba(11,36,54,0.08);white-space:nowrap;}
+tbody tr:hover{background:rgba(255,255,255,0.35);}
+td.num,th.num{font-family:var(--font-mono);text-align:right;}
+.row-actions{display:flex;gap:4px;}
+
+.filter-bar{display:grid;gap:8px;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));}
+.filter-bar select{width:100%;padding:8px 9px;border-radius:9px;border:1px solid rgba(11,36,54,0.15);background:rgba(255,255,255,0.55);font-size:0.78rem;font-family:var(--font-body);color:var(--ink);}
+
+.totals-strip{display:flex;flex-wrap:wrap;gap:10px;}
+.total-chip{
+  padding:8px 14px;border-radius:12px;background:rgba(255,255,255,0.55);
+  border:1px solid rgba(255,255,255,0.6);
+  display:flex;flex-direction:column;gap:2px;min-width:88px;
+}
+.total-chip span.lbl{font-size:0.62rem;font-weight:700;color:var(--ink-soft);text-transform:uppercase;letter-spacing:0.4px;}
+.total-chip span.val{font-family:var(--font-mono);font-weight:700;font-size:1rem;color:var(--ink);}
+
+.empty-state{padding:30px 14px;text-align:center;color:var(--ink-soft);font-size:0.85rem;}
+.empty-state svg{width:36px;height:36px;margin-bottom:8px;opacity:0.5;}
+
+/* project list */
+.project-list{display:flex;flex-direction:column;gap:8px;}
+.project-item{
+  display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:14px;
+  background:rgba(255,255,255,0.4);border:1px solid rgba(255,255,255,0.5);cursor:pointer;
+}
+.project-item.active{background:rgba(47,211,199,0.25);border-color:var(--aqua-dim);}
+.project-item .pinfo{flex:1;min-width:0;}
+.project-item .pinfo b{display:block;font-family:var(--font-display);font-size:0.92rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.project-item .pinfo span{font-size:0.72rem;color:var(--ink-soft);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;}
+
+/* modal */
+.modal-backdrop{
+  position:fixed;inset:0;background:rgba(4,16,22,0.55);backdrop-filter:blur(4px);
+  display:flex;align-items:center;justify-content:center;z-index:100;padding:16px;
+}
+.modal{max-width:420px;width:100%;padding:20px;max-height:86vh;overflow-y:auto;}
+.modal h3{margin:0 0 4px 0;font-family:var(--font-display);font-size:1rem;}
+.modal .field-grid{margin-top:6px;}
+
+.badge{
+  display:inline-flex;padding:3px 9px;border-radius:20px;font-size:0.68rem;font-weight:700;
+  background:rgba(47,211,199,0.22);color:#0A5850;
+}
+
+footer.appfoot{text-align:center;padding:14px;color:rgba(11,36,54,0.45);font-size:0.68rem;}
+
+.logo-preview{width:56px;height:56px;border-radius:10px;object-fit:contain;background:rgba(255,255,255,0.7);border:1px solid rgba(11,36,54,0.1);padding:4px;}
+
+.toast{
+  position:fixed;bottom:18px;left:50%;transform:translateX(-50%);
+  padding:12px 20px;border-radius:12px;z-index:200;
+  font-family:var(--font-body);font-weight:600;font-size:0.85rem;
+  background:var(--glass-bg-strong);backdrop-filter:blur(14px);
+  border:1px solid var(--glass-border);box-shadow:0 8px 24px var(--shadow-color);
+  color:var(--ink);opacity:0;pointer-events:none;transition:opacity 200ms ease, transform 200ms ease;
+  max-width:90vw;text-align:center;
+}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(-6px);}
+
+/* pick list for metrajdan ekle */
+.pick-list{display:flex;flex-direction:column;gap:6px;max-height:280px;overflow-y:auto;}
+.pick-item{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:10px;background:rgba(255,255,255,0.4);font-size:0.78rem;}
+.pick-item label{flex:1;min-width:0;overflow-wrap:anywhere;}
+
+.checkline{display:flex;align-items:center;gap:6px;font-size:0.8rem;color:var(--ink-soft);}
+
+/* PDF hidden render area */
+#pdf-render-root{position:fixed;left:-99999px;top:0;width:794px;background:#ffffff;}
+
+.backup-banner{
+  display:flex;align-items:center;gap:10px;
+  margin:8px 12px 0;padding:10px 14px;border-radius:12px;
+  background:rgba(255,183,77,0.18);border:1px solid rgba(255,152,0,0.55);
+  color:#7a4a00;font-size:0.8rem;font-weight:600;flex-wrap:wrap;
+}
+.backup-banner svg{flex-shrink:0;width:20px;height:20px;color:#c77700;}
+.backup-banner span{flex:1;min-width:200px;}
+.backup-banner .btn{white-space:nowrap;}
+
+@media (max-width:640px){
+  header.topbar{gap:8px;padding:10px 12px;}
+  .brand-text span{display:none;}
+  .project-picker{flex:1 1 100%;max-width:none;order:3;}
+  table{font-size:0.72rem;}
+  .card{padding:14px;}
+}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <header class="topbar glass">
+    <div class="brand">
+      <div class="brand-mark">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#04201C" stroke-width="2.2" stroke-linecap="round"><path d="M2 15c1.5-2 3.5-2 5 0s3.5 2 5 0 3.5-2 5 0 3.5 2 5 0"/><path d="M2 20c1.5-2 3.5-2 5 0s3.5 2 5 0 3.5-2 5 0 3.5 2 5 0"/><path d="M12 3v9"/><path d="M9 6l3-3 3 3"/></svg>
+      </div>
+      <div class="brand-text">
+        <b>DNZ</b>
+        <span>Metraj &amp; Teklif Yönetimi</span>
+      </div>
+    </div>
+    <div class="project-picker">
+      <select id="projectSelect" class="proj-select ripple-el-host"></select>
+      <button class="icon-btn ripple-el-host" id="btnQuickNewProject" title="Yeni proje">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <div id="backupBanner" class="backup-banner" style="display:none;">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4M12 17h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
+    <span>Kaydedilmemiş yedeğiniz var. Verilerinizi kaybetmemek için Ayarlar &gt; "Yedeği İndir" ile yedek alın.</span>
+    <button class="btn btn-sm btn-primary" id="bannerBackupBtn">Şimdi Yedekle</button>
+  </div>
+
+  <nav class="tabs glass" id="tabNav">
+    <button class="tab-btn active ripple-el-host" data-tab="projeler">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 7h5l2 2h11v9a2 2 0 01-2 2H3z"/></svg>
+      Projeler
+    </button>
+    <button class="tab-btn ripple-el-host" data-tab="metraj">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 3h18v18H3z"/><path d="M9 3v18M15 3v18M3 9h18M3 15h18"/></svg>
+      Metraj
+    </button>
+    <button class="tab-btn ripple-el-host" data-tab="icmal">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/></svg>
+      İcmal
+    </button>
+    <button class="tab-btn ripple-el-host" data-tab="teklif">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+      Teklif
+    </button>
+    <button class="tab-btn ripple-el-host" data-tab="ayarlar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 004.6 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.6a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+      Ayarlar
+    </button>
+  </nav>
+
+  <div class="wave-divider" aria-hidden="true">
+    <svg viewBox="0 0 1200 22" preserveAspectRatio="none">
+      <path d="M0,12 C100,22 200,2 300,10 C400,18 500,2 600,10 C700,18 800,2 900,10 C1000,18 1100,2 1200,10 L1200,22 L0,22 Z" fill="var(--tide)" opacity="0.25"/>
+      <path d="M0,16 C120,24 260,6 400,14 C540,22 680,4 820,12 C960,20 1080,6 1200,14 L1200,22 L0,22 Z" fill="var(--aqua-dim)" opacity="0.35"/>
+    </svg>
+  </div>
+
+  <main id="mainContent"></main>
+
+  <footer class="appfoot">DNZ — cihazınızda ve hesabınızda güvenle saklanır</footer>
+</div>
+
+<div id="modalRoot"></div>
+<div id="toastRoot" class="toast"></div>
+<div id="pdf-render-root"></div>
+
+<script>
+/* ======================= STATE ======================= */
+const STORAGE_KEY = 'dnzMetrajData_v1';
+const LS_STORAGE_KEY = 'dnzMetrajData_localCache_v1';
+const UNITS = ['m2','mt','kg','adet','m3','ton'];
+const UNIT_LABEL = {m2:'m²', mt:'mt', kg:'kg', adet:'adet', m3:'m³', ton:'ton'};
+
+function defaultState(){
+  return {
+    company:{ name:'', logo:'' },
+    activeProjectId:null,
+    projects:{},
+    lastBackupAt:null,
+    dirtySinceBackup:false
+  };
+}
+function newProject(name, employer){
+  const id = uid();
+  return {
+    id, name: name||'Yeni Proje', employer: employer||'',
+    createdAt: Date.now(),
+    metrajRows:[],
+    teklifRows:[],
+    teklifNote:'',
+    memory:{ blok:[], kat:[], daire:[], mekan:[], eleman:[], imalat:[] }
+  };
+}
+function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,8); }
+
+let state = defaultState();
+let ui = {
+  tab:'projeler',
+  metrajEditId:null,
+  teklifEditId:null,
+  filters:{blok:'',kat:'',daire:'',mekan:'',eleman:'',imalat:'',minha:''},
+  icmalFilters:{blok:'',kat:'',daire:'',mekan:''}
+};
+
+/* ======================= PERSISTENCE ======================= */
+// Otomatik yedekleme dosyası: kullanıcının kendi seçtiği bir konumda (Drive/Dropbox
+// klasörü, harici disk, telefonda bir klasör vs.) duran tek bir JSON dosyası. Bir kez
+// seçildikten sonra HER veri değişikliğinde bu dosyaya otomatik yazılır ve uygulama HER
+// açılışında öncelikle bu dosyadan okunur. Böylece "kendim yükledim" derdi ortadan kalkar.
+let autoBackupHandleCache = null;
+let autoBackupInfo = { name:null, active:false };
+async function getAutoBackupHandle(){
+  if(autoBackupHandleCache !== null) return autoBackupHandleCache;
+  autoBackupHandleCache = await fsIdbGet(FS_AUTO_BACKUP_HANDLE_KEY);
+  return autoBackupHandleCache;
+}
+async function refreshAutoBackupInfo(){
+  try{
+    const handle = await getAutoBackupHandle();
+    if(handle){
+      const perm = await handle.queryPermission({mode:'readwrite'});
+      autoBackupInfo = { name: handle.name, active: perm==='granted' };
+    } else {
+      autoBackupInfo = { name:null, active:false };
+    }
+  }catch(e){
+    autoBackupInfo = { name:null, active:false };
+  }
+}
+async function writeAutoBackup(text){
+  try{
+    const handle = await getAutoBackupHandle();
+    if(!handle) return false;
+    const perm = await handle.queryPermission({mode:'readwrite'});
+    if(perm!=='granted') return false;
+    const writable = await handle.createWritable();
+    await writable.write(text);
+    await writable.close();
+    return true;
+  }catch(e){
+    console.error('Otomatik yedekleme yazma hatası', e);
+    return false;
+  }
+}
+// Ham kayıt: state'i olduğu gibi depolar, "yedeklendi" bayrağına dokunmaz.
+async function persistStateRaw(){
+  const json = JSON.stringify(state);
+  // 1) Tarayıcı önbelleği (localStorage): her cihaz/tarayıcıda çalışan, en güvenilir katman.
+  //    Mobil dahil hemen hemen her tarayıcıda desteklenir; bu yüzden ana güvence budur.
+  try{
+    localStorage.setItem(LS_STORAGE_KEY, json);
+  }catch(e){
+    console.error('Tarayıcı önbelleğine kaydetme hatası', e);
+  }
+  // 2) Claude ortamı içindeyse (window.storage mevcutsa) onu da güncelle.
+  if(typeof window.storage !== 'undefined'){
+    try{
+      await window.storage.set(STORAGE_KEY, json, false);
+    }catch(e){
+      console.error('Kaydetme hatası', e);
+    }
+  }
+  // 3) Otomatik yedekleme konumu ayarlanmışsa (ve izin hâlâ geçerliyse) her kayıtta
+  //    o dosyayı da güncelle. Bu isteğe bağlı bir ek güvencedir (özellikle masaüstünde);
+  //    desteklenmiyorsa veya izin yoksa sessizce atlanır, hata göstermez.
+  await writeAutoBackup(json);
+}
+// Normal veri değişikliklerinde çağrılır: veri değiştiği için "yedeklenmemiş değişiklik var" işaretlenir.
+async function saveState(){
+  state.dirtySinceBackup = true;
+  await persistStateRaw();
+  updateBackupBanner();
+}
+async function loadState(){
+  // 1) Önce, kullanıcının seçtiği otomatik yedekleme dosyası var mı ve izin hâlâ
+  //    geçerli mi diye bak. Varsa bu dosya ARTIK ana kaynaktır; doğrudan oradan yükle.
+  try{
+    const handle = await getAutoBackupHandle();
+    if(handle){
+      const perm = await handle.queryPermission({mode:'readwrite'});
+      if(perm==='granted'){
+        const text = await readBackupFromHandle(handle);
+        if(text && text.trim()){
+          const parsed = JSON.parse(text);
+          state = Object.assign(defaultState(), parsed);
+          if(!state.projects) state.projects = {};
+          state.dirtySinceBackup = false;
+          return;
+        }
+      }
+    }
+  }catch(e){ /* otomatik yedek dosyasından okunamazsa aşağıdaki normal akışa düş */ }
+
+  // 2) Otomatik yedekleme konumu ayarlanmamışsa (veya okunamadıysa) tarayıcı önbelleğini
+  //    (localStorage) dene — bu, hemen hemen her cihaz/tarayıcıda (mobil dahil) çalışır.
+  let loadedFromCache = false;
+  try{
+    const raw = localStorage.getItem(LS_STORAGE_KEY);
+    if(raw){
+      const parsed = JSON.parse(raw);
+      state = Object.assign(defaultState(), parsed);
+      if(!state.projects) state.projects = {};
+      loadedFromCache = true;
+    }
+  }catch(e){ /* localStorage yoksa/okunamazsa aşağıdaki akışa düş */ }
+
+  // 3) Tarayıcı önbelleğinde veri yoksa, Claude ortamındaysak window.storage'ı dene.
+  if(!loadedFromCache){
+    try{
+      if(typeof window.storage !== 'undefined'){
+        const r = await window.storage.get(STORAGE_KEY, false);
+        if(r && r.value){
+          const parsed = JSON.parse(r.value);
+          state = Object.assign(defaultState(), parsed);
+          if(!state.projects) state.projects = {};
+        } else {
+          state = defaultState();
+        }
+      } else {
+        state = defaultState();
+      }
+    }catch(e){
+      state = defaultState();
+    }
+  }
+  // 4) Eski davranış: "Yedekten Geri Yükle" ile daha önce açılmış salt-okunur bir
+  //    dosya hafızası varsa ve normal depo boşsa, izin istemeden otomatik dene.
+  if(!state.activeProjectId && Object.keys(state.projects).length===0){
+    try{
+      const handle = await fsIdbGet(FS_BACKUP_HANDLE_KEY);
+      if(handle){
+        const perm = await handle.queryPermission({mode:'read'});
+        if(perm==='granted'){
+          const text = await readBackupFromHandle(handle);
+          const parsed = JSON.parse(text);
+          if(parsed && parsed.projects && Object.keys(parsed.projects).length>0){
+            state = Object.assign(defaultState(), parsed);
+            if(!state.projects) state.projects = {};
+            state.dirtySinceBackup = false;
+          }
+        }
+      }
+    }catch(e){ /* otomatik geri yükleme başarısız olursa sessizce geç, normal state kalır */ }
+  }
+}
+function hasAnyData(){
+  return Object.values(state.projects||{}).some(p=> (p.metrajRows&&p.metrajRows.length) || (p.teklifRows&&p.teklifRows.length));
+}
+function needsBackupWarning(){
+  return hasAnyData() && state.dirtySinceBackup===true;
+}
+function fmtBackupDate(ts){
+  if(!ts) return 'Henüz yedekleme yapılmadı';
+  const d = new Date(ts);
+  const pad = n=>String(n).padStart(2,'0');
+  return `${pad(d.getDate())}.${pad(d.getMonth()+1)}.${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+function updateBackupBanner(){
+  const el = document.getElementById('backupBanner');
+  if(!el) return;
+  if(needsBackupWarning()){
+    el.style.display = 'flex';
+  } else {
+    el.style.display = 'none';
+  }
+}
+
+/* ======================= HELPERS ======================= */
+function activeProject(){
+  if(!state.activeProjectId) return null;
+  return state.projects[state.activeProjectId] || null;
+}
+function fmtNum(n){
+  if(n===null||n===undefined||isNaN(n)) n=0;
+  return Number(n).toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+function fmtMoney(n){
+  if(n===null||n===undefined||isNaN(n)) n=0;
+  return Number(n).toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2})+' TL';
+}
+function todayStr(){
+  const d = new Date();
+  return d.toLocaleDateString('tr-TR',{day:'2-digit',month:'2-digit',year:'numeric'});
+}
+function esc(s){
+  return String(s??'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function showToast(msg, ms=2400){
+  const t = document.getElementById('toastRoot');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(()=>t.classList.remove('show'), ms);
+}
+function addMemory(project, field, value){
+  if(!value) return;
+  value = value.trim();
+  if(!value) return;
+  if(!project.memory[field]) project.memory[field]=[];
+  if(!project.memory[field].some(v=>v.toLowerCase()===value.toLowerCase())){
+    project.memory[field].push(value);
+  }
+}
+// Baştaki/sondaki boşluk ve büyük/küçük harf farkını yok sayarak karşılaştırma anahtarı üretir.
+// (Örn. "Duvar", " Duvar" ve "duvar" aynı kabul edilir.) Filtreleme ve İcmal gruplamasında
+// aynı kaydın yanlışlıkla farklı gruplara/ filtre seçeneklerine düşmesini engeller.
+function normKey(v){ return (v==null?'':String(v)).trim().toLocaleLowerCase('tr'); }
+function distinctFromRows(rows, field){
+  const map = new Map(); // normalize edilmiş anahtar -> gösterilecek (trimlenmiş) değer
+  rows.forEach(r=>{
+    const raw = r[field];
+    if(raw==null) return;
+    const trimmed = String(raw).trim();
+    if(!trimmed) return;
+    const key = normKey(trimmed);
+    if(!map.has(key)) map.set(key, trimmed);
+  });
+  return Array.from(map.values()).sort((a,b)=>a.localeCompare(b,'tr'));
+}
+function resizeImageDataUrl(dataUrl, maxDim=320, quality=0.82){
+  return new Promise((resolve)=>{
+    try{
+      const img = new Image();
+      img.onload = ()=>{
+        let width = img.width, height = img.height;
+        if(width>maxDim || height>maxDim){
+          if(width>=height){ height = Math.round(height*maxDim/width); width = maxDim; }
+          else { width = Math.round(width*maxDim/height); height = maxDim; }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width; canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0,0,width,height);
+        ctx.drawImage(img,0,0,width,height);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.onerror = ()=>resolve(dataUrl);
+      img.src = dataUrl;
+    }catch(e){ resolve(dataUrl); }
+  });
+}
+
+/* ======================= RIPPLE ======================= */
+document.addEventListener('pointerdown', (e)=>{
+  const target = e.target.closest('.glass, .btn, .icon-btn, .tab-btn, .project-item, select, .card');
+  if(!target) return;
+  const rect = target.getBoundingClientRect();
+  const size = Math.max(rect.width, rect.height) * 1.6;
+  const span = document.createElement('span');
+  span.className = 'ripple-el';
+  span.style.width = size+'px';
+  span.style.height = size+'px';
+  span.style.left = (e.clientX - rect.left - size/2)+'px';
+  span.style.top = (e.clientY - rect.top - size/2)+'px';
+  const prevPos = getComputedStyle(target).position;
+  if(prevPos==='static') target.style.position='relative';
+  if(getComputedStyle(target).overflow==='visible') target.style.overflow='hidden';
+  target.appendChild(span);
+  setTimeout(()=>span.remove(), 720);
+}, {passive:true});
+
+/* ======================= CALC ======================= */
+function computeRow(row){
+  const adet = parseFloat(row.adet)||1;
+  const uzunluk = parseFloat(row.uzunluk)||1;
+  const yukseklik = row.yukseklik!==''&&row.yukseklik!==null&&row.yukseklik!==undefined ? (parseFloat(row.yukseklik)||1) : 1;
+  const kisaKenar = row.kisaKenar!==''&&row.kisaKenar!==null&&row.kisaKenar!==undefined ? (parseFloat(row.kisaKenar)||1) : 1;
+  const minha = parseFloat(row.minha)||0;
+  const toplam = adet*uzunluk*yukseklik*kisaKenar;
+  const altToplam = toplam - minha;
+  return { toplam: Math.round(toplam*100)/100, altToplam: Math.round(altToplam*100)/100 };
+}
+
+/* ======================= RENDER ROOT ======================= */
+function renderAll(){
+  renderTopbar();
+  renderTabs();
+  renderMain();
+  updateBackupBanner();
+}
+function renderTopbar(){
+  const sel = document.getElementById('projectSelect');
+  const projects = Object.values(state.projects).sort((a,b)=>a.name.localeCompare(b.name,'tr'));
+  if(projects.length===0){
+    sel.innerHTML = `<option value="">— Proje yok —</option>`;
+  } else {
+    sel.innerHTML = projects.map(p=>`<option value="${p.id}" ${p.id===state.activeProjectId?'selected':''}>${esc(p.name)}</option>`).join('');
+  }
+  sel.onchange = ()=>{ state.activeProjectId = sel.value||null; saveState(); renderAll(); };
+}
+function renderTabs(){
+  document.querySelectorAll('.tab-btn').forEach(b=>{
+    b.classList.toggle('active', b.dataset.tab===ui.tab);
+  });
+}
+document.getElementById('tabNav').addEventListener('click',(e)=>{
+  const btn = e.target.closest('.tab-btn');
+  if(!btn) return;
+  ui.tab = btn.dataset.tab;
+  renderTabs();
+  renderMain();
+});
+document.getElementById('btnQuickNewProject').addEventListener('click', ()=> openProjectModal(null));
+document.getElementById('bannerBackupBtn').addEventListener('click', exportBackupFile);
+
+/* ======================= YEDEKLENMEDEN ÇIKIŞI ENGELLEME ======================= */
+// 1) Sekme/tarayıcı kapatma, sayfa yenileme: tarayıcının kendi "Bu sayfadan ayrılmak
+//    istiyor musunuz?" uyarısını tetikler.
+window.addEventListener('beforeunload', (e)=>{
+  if(needsBackupWarning()){
+    e.preventDefault();
+    e.returnValue = '';
+    return '';
+  }
+});
+
+// 2) Telefon/uygulama "geri" tuşu: history'e ekstra bir kayıt koyup, geri tuşuna
+//    basıldığında (popstate) yedekleme yapılmamışsa özel bir uyarı modalı gösteriyoruz.
+//    Kullanıcı "Yedeklemeden Çık" derse gerçek geri gidişe izin veriyoruz.
+let allowExitOnce = false;
+function armExitTrap(){
+  try{ history.pushState({dnzExitTrap:true}, '', location.href); }catch(e){/* yoksay */}
+}
+armExitTrap();
+window.addEventListener('popstate', ()=>{
+  if(allowExitOnce){ allowExitOnce = false; return; }
+  if(needsBackupWarning()){
+    armExitTrap(); // geri tuşunu tekrar "tuzağa" al
+    showExitBackupWarning();
+  }
+});
+function showExitBackupWarning(){
+  const modalRoot = document.getElementById('modalRoot');
+  modalRoot.innerHTML = `
+    <div class="modal-backdrop" id="modalBackdrop">
+      <div class="modal glass-strong glass">
+        <h3>Yedekleme Yapmadınız</h3>
+        <p class="hint">Son değişiklikleriniz henüz bir dosyaya yedeklenmedi. Şimdi yedek almak ister misiniz?</p>
+        <div class="btn-row" style="margin-top:10px;justify-content:flex-end;">
+          <button class="btn btn-danger" id="exitAnyway">Yedeklemeden Çık</button>
+          <button class="btn btn-primary" id="exitBackupNow">Şimdi Yedekle</button>
+        </div>
+      </div>
+    </div>`;
+  document.getElementById('exitBackupNow').onclick = async ()=>{
+    closeModal();
+    await exportBackupFile();
+  };
+  document.getElementById('exitAnyway').onclick = ()=>{
+    closeModal();
+    allowExitOnce = true;
+    history.back();
+  };
+}
+
+function renderMain(){
+  const main = document.getElementById('mainContent');
+  if(ui.tab==='projeler') return renderProjelerTab(main);
+  if(ui.tab==='ayarlar') return renderAyarlarTab(main);
+  const proj = activeProject();
+  if(!proj){
+    main.innerHTML = `
+      <div class="card glass">
+        <div class="empty-state">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 7h5l2 2h11v9a2 2 0 01-2 2H3z"/></svg>
+          <div>Devam etmek için önce bir proje seçin ya da oluşturun.</div>
+          <div class="btn-row" style="justify-content:center;margin-top:12px;">
+            <button class="btn btn-primary" id="goProjeler">Projeler'e git</button>
+          </div>
+        </div>
+      </div>`;
+    document.getElementById('goProjeler').onclick = ()=>{ ui.tab='projeler'; renderTabs(); renderMain(); };
+    return;
+  }
+  if(ui.tab==='metraj') return renderMetrajTab(main, proj);
+  if(ui.tab==='icmal') return renderIcmalTab(main, proj);
+  if(ui.tab==='teklif') return renderTeklifTab(main, proj);
+}
+
+/* ======================= PROJELER TAB ======================= */
+function renderProjelerTab(main){
+  const projects = Object.values(state.projects).sort((a,b)=>b.createdAt-a.createdAt);
+  main.innerHTML = `
+    <div class="card glass">
+      <h2>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7h5l2 2h11v9a2 2 0 01-2 2H3z"/></svg>
+        Projeler
+      </h2>
+      <p class="hint">Örneğin "Ankara Projesi", "İstanbul Projesi" gibi birden fazla proje oluşturup aralarında geçiş yapabilirsiniz. Her projenin metraj kayıtları, teklifleri ve girdiğiniz alan isimleri (blok, kat, daire, mekân, imalat cinsi vb.) kendi içinde ayrı ayrı saklanır.</p>
+      <div class="btn-row">
+        <button class="btn btn-primary" id="btnNewProject">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+          Yeni Proje Ekle
+        </button>
+      </div>
+    </div>
+    <div class="card glass">
+      <h2>Proje Listesi <span class="badge">${projects.length}</span></h2>
+      <div class="project-list" id="projectList">
+        ${projects.length===0 ? `<div class="empty-state">Henüz proje eklenmedi.</div>` : projects.map(p=>`
+          <div class="project-item ${p.id===state.activeProjectId?'active':''}" data-id="${p.id}">
+            <div class="pinfo">
+              <b>${esc(p.name)}</b>
+              <span>${p.employer? 'İşveren: '+esc(p.employer) : 'İşveren belirtilmedi'} · ${p.metrajRows.length} metraj satırı · ${p.teklifRows.length} teklif kalemi</span>
+            </div>
+            <button class="icon-btn" data-act="select" title="Seç">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+            </button>
+            <button class="icon-btn" data-act="edit" title="Güncelle">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+            </button>
+            <button class="icon-btn danger" data-act="delete" title="Sil">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0l-1 14a2 2 0 01-2 2H7a2 2 0 01-2-2L4 6h16z"/></svg>
+            </button>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `;
+  document.getElementById('btnNewProject').onclick = ()=>openProjectModal(null);
+  document.getElementById('projectList').addEventListener('click',(e)=>{
+    const item = e.target.closest('.project-item');
+    if(!item) return;
+    const id = item.dataset.id;
+    const act = e.target.closest('[data-act]')?.dataset.act || 'select';
+    if(act==='select'){
+      state.activeProjectId = id; saveState(); renderAll();
+    } else if(act==='edit'){
+      openProjectModal(state.projects[id]);
+    } else if(act==='delete'){
+      confirmModal(`"${state.projects[id].name}" projesini ve tüm metraj/teklif kayıtlarını silmek istediğinize emin misiniz? Bu işlem geri alınamaz.`, ()=>{
+        delete state.projects[id];
+        if(state.activeProjectId===id){
+          const remaining = Object.keys(state.projects);
+          state.activeProjectId = remaining[0]||null;
+        }
+        saveState(); renderAll();
+        showToast('Proje silindi.');
+      });
+    }
+  });
+}
+
+function openProjectModal(project){
+  const isEdit = !!project;
+  const modalRoot = document.getElementById('modalRoot');
+  modalRoot.innerHTML = `
+    <div class="modal-backdrop" id="modalBackdrop">
+      <div class="modal glass-strong glass">
+        <h3>${isEdit?'Projeyi Güncelle':'Yeni Proje'}</h3>
+        <p class="hint">${isEdit?'Proje adını ve işveren bilgisini güncelleyebilirsiniz.':'Proje adı ve işveren bilgisini girin.'}</p>
+        <div class="field-grid" style="grid-template-columns:1fr;">
+          <div class="field">
+            <label>Proje Adı</label>
+            <input type="text" id="mProjName" value="${isEdit?esc(project.name):''}" placeholder="Örn: Ankara Projesi">
+          </div>
+          <div class="field">
+            <label>İşveren Adı</label>
+            <input type="text" id="mProjEmployer" value="${isEdit?esc(project.employer):''}" placeholder="Örn: XYZ İnşaat A.Ş.">
+          </div>
+        </div>
+        <div class="btn-row" style="margin-top:8px;justify-content:flex-end;">
+          <button class="btn btn-ghost" id="mCancel">Vazgeç</button>
+          <button class="btn btn-primary" id="mSave">${isEdit?'Güncelle':'Oluştur'}</button>
+        </div>
+      </div>
+    </div>
+  `;
+  document.getElementById('mCancel').onclick = closeModal;
+  document.getElementById('modalBackdrop').addEventListener('click',(e)=>{ if(e.target.id==='modalBackdrop') closeModal(); });
+  document.getElementById('mSave').onclick = ()=>{
+    const name = document.getElementById('mProjName').value.trim();
+    const employer = document.getElementById('mProjEmployer').value.trim();
+    if(!name){ showToast('Lütfen proje adı girin.'); return; }
+    if(isEdit){
+      project.name = name; project.employer = employer;
+    } else {
+      const p = newProject(name, employer);
+      state.projects[p.id] = p;
+      state.activeProjectId = p.id;
+    }
+    saveState(); closeModal(); renderAll();
+    showToast(isEdit?'Proje güncellendi.':'Proje oluşturuldu.');
+  };
+}
+function closeModal(){ document.getElementById('modalRoot').innerHTML=''; }
+function confirmModal(msg, onYes){
+  const modalRoot = document.getElementById('modalRoot');
+  modalRoot.innerHTML = `
+    <div class="modal-backdrop" id="modalBackdrop">
+      <div class="modal glass-strong glass">
+        <h3>Emin misiniz?</h3>
+        <p class="hint">${esc(msg)}</p>
+        <div class="btn-row" style="margin-top:10px;justify-content:flex-end;">
+          <button class="btn btn-ghost" id="cCancel">Vazgeç</button>
+          <button class="btn btn-danger" id="cYes">Evet, Sil</button>
+        </div>
+      </div>
+    </div>`;
+  document.getElementById('cCancel').onclick = closeModal;
+  document.getElementById('modalBackdrop').addEventListener('click',(e)=>{ if(e.target.id==='modalBackdrop') closeModal(); });
+  document.getElementById('cYes').onclick = ()=>{ closeModal(); onYes(); };
+}
+
+/* ======================= METRAJ TAB ======================= */
+function emptyMetrajForm(){
+  return {id:null, blok:'',kat:'',daire:'',mekan:'',eleman:'',imalat:'',adet:'1',kisaKenar:'',uzunluk:'',yukseklik:'',minha:'',birim:'m2'};
+}
+let metrajForm = emptyMetrajForm();
+
+function renderMetrajTab(main, proj){
+  const calc = computeRow(metrajForm);
+  main.innerHTML = `
+    <div class="card glass">
+      <h2>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3h18v18H3z"/><path d="M9 3v18M15 3v18M3 9h18M3 15h18"/></svg>
+        Metraj Girişi — <span style="color:var(--aqua-dim)">${esc(proj.name)}</span>
+      </h2>
+      <p class="hint">Alanları daha önce girdiğiniz gibi yazmaya başladığınızda öneriler otomatik çıkar. Toplam (brüt) ve Alt Toplam (net, boşluk düşülmüş) otomatik hesaplanır; gerekirse elle düzeltebilirsiniz.</p>
+      <div class="field-grid" id="metrajFieldGrid"></div>
+      <div class="btn-row">
+        <button class="btn btn-primary ripple-el-host" id="btnSaveRow">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+          ${metrajForm.id? 'Satırı Güncelle':'Satırı Ekle'}
+        </button>
+        <button class="btn btn-ghost" id="btnClearForm">Formu Temizle</button>
+      </div>
+    </div>
+
+    <div class="card glass">
+      <h2>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 3H2l8 9.46V19l4 2v-8.54z"/></svg>
+        Filtrele
+      </h2>
+      <div class="filter-bar" id="filterBar"></div>
+    </div>
+
+    <div class="card glass">
+      <h2>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18"/></svg>
+        Metraj Listesi
+      </h2>
+      <div class="table-scroll" id="metrajTableWrap"></div>
+      <div class="totals-strip" id="metrajTotals"></div>
+      <div class="btn-row">
+        <button class="btn btn-primary" id="btnMetrajPdf">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg>
+          PDF Olarak İndir
+        </button>
+      </div>
+    </div>
+  `;
+
+  renderMetrajFieldGrid(proj);
+  renderFilterBar(proj);
+  renderMetrajTable(proj);
+  renderMetrajTotals(proj);
+
+  document.getElementById('btnSaveRow').onclick = ()=>saveMetrajRow(proj);
+  document.getElementById('btnClearForm').onclick = ()=>{ metrajForm = emptyMetrajForm(); renderMetrajTab(main, proj); };
+  document.getElementById('btnMetrajPdf').onclick = ()=>exportMetrajPdf(proj);
+}
+
+function renderMetrajFieldGrid(proj){
+  const grid = document.getElementById('metrajFieldGrid');
+  const dl = (field)=> (proj.memory[field]||[]).map(v=>`<option value="${esc(v)}">`).join('');
+  grid.innerHTML = `
+    <div class="field"><label>Blok</label>
+      <input list="dl-blok" id="f-blok" value="${esc(metrajForm.blok)}" placeholder="Örn: A Blok">
+      <datalist id="dl-blok">${dl('blok')}</datalist>
+    </div>
+    <div class="field"><label>Kat</label>
+      <input list="dl-kat" id="f-kat" value="${esc(metrajForm.kat)}" placeholder="Örn: 1. Kat">
+      <datalist id="dl-kat">${dl('kat')}</datalist>
+    </div>
+    <div class="field"><label>Daire</label>
+      <input list="dl-daire" id="f-daire" value="${esc(metrajForm.daire)}" placeholder="Örn: 1. Daire">
+      <datalist id="dl-daire">${dl('daire')}</datalist>
+    </div>
+    <div class="field"><label>Mekân</label>
+      <input list="dl-mekan" id="f-mekan" value="${esc(metrajForm.mekan)}" placeholder="Örn: Salon">
+      <datalist id="dl-mekan">${dl('mekan')}</datalist>
+    </div>
+    <div class="field"><label>Uygulama Yeri</label>
+      <input list="dl-eleman" id="f-eleman" value="${esc(metrajForm.eleman)}" placeholder="Örn: Duvar / Tavan">
+      <datalist id="dl-eleman">${dl('eleman')}</datalist>
+    </div>
+    <div class="field" style="grid-column:span 2;"><label>İmalat Cinsi</label>
+      <input list="dl-imalat" id="f-imalat" value="${esc(metrajForm.imalat)}" placeholder="Örn: Bölme Duvar İmalatı">
+      <datalist id="dl-imalat">${dl('imalat')}</datalist>
+    </div>
+    <div class="field"><label>Adet</label><input class="mono" type="number" step="any" id="f-adet" value="${esc(metrajForm.adet)}"></div>
+    <div class="field"><label>Kısa Kenar</label><input class="mono" type="number" step="any" id="f-kisaKenar" value="${esc(metrajForm.kisaKenar)}"></div>
+    <div class="field"><label>Uzunluk</label><input class="mono" type="number" step="any" id="f-uzunluk" value="${esc(metrajForm.uzunluk)}"></div>
+    <div class="field"><label>Yükseklik</label><input class="mono" type="number" step="any" id="f-yukseklik" value="${esc(metrajForm.yukseklik)}"></div>
+    <div class="field"><label>Kapı Boşluğu (Minha)</label><input class="mono" type="number" step="any" id="f-minha" value="${esc(metrajForm.minha)}"></div>
+    <div class="field"><label>Birim</label>
+      <select id="f-birim">${UNITS.map(u=>`<option value="${u}" ${u===metrajForm.birim?'selected':''}>${UNIT_LABEL[u]}</option>`).join('')}</select>
+    </div>
+    <div class="field"><label>Toplam (Brüt)</label><input class="mono" type="text" id="f-toplamDisplay" value="${fmtNum(computeRow(metrajForm).toplam)}" readonly style="opacity:0.75;"></div>
+    <div class="field"><label>Alt Toplam (Net)</label><input class="mono" type="text" id="f-altToplamDisplay" value="${fmtNum(computeRow(metrajForm).altToplam)}" readonly style="opacity:0.75;font-weight:700;"></div>
+  `;
+  const ids = ['blok','kat','daire','mekan','eleman','imalat','adet','kisaKenar','uzunluk','yukseklik','minha','birim'];
+  ids.forEach(k=>{
+    const el = document.getElementById('f-'+k);
+    el.addEventListener('input', ()=>{
+      metrajForm[k] = el.value;
+      const c = computeRow(metrajForm);
+      document.getElementById('f-toplamDisplay').value = fmtNum(c.toplam);
+      document.getElementById('f-altToplamDisplay').value = fmtNum(c.altToplam);
+    });
+  });
+}
+
+function saveMetrajRow(proj){
+  // Blok/Kat/Daire/Mekân/Uygulama Yeri/İmalat Cinsi serbest metin alanlarındaki baştaki/
+  // sondaki boşlukları temizliyoruz. Aksi halde "Duvar" ve "Duvar " (sonda boşluk) İcmal'de
+  // farklı kayıtlar gibi ayrı ayrı toplanıyordu.
+  ['blok','kat','daire','mekan','eleman','imalat'].forEach(f=>{
+    if(typeof metrajForm[f]==='string') metrajForm[f] = metrajForm[f].trim();
+  });
+  const c = computeRow(metrajForm);
+  const row = Object.assign({}, metrajForm, {toplam:c.toplam, altToplam:c.altToplam});
+  if(!row.mekan && !row.imalat && !row.blok){
+    showToast('Lütfen en azından Blok, Mekân veya İmalat Cinsi girin.');
+    return;
+  }
+  if(row.id){
+    const idx = proj.metrajRows.findIndex(r=>r.id===row.id);
+    if(idx>-1) proj.metrajRows[idx] = row;
+  } else {
+    row.id = uid();
+    row.createdAt = Date.now();
+    proj.metrajRows.push(row);
+  }
+  ['blok','kat','daire','mekan','eleman','imalat'].forEach(f=>addMemory(proj, f, row[f]));
+  saveState();
+  metrajForm = emptyMetrajForm();
+  renderMain();
+  showToast('Metraj satırı kaydedildi.');
+}
+
+function renderFilterBar(proj){
+  const bar = document.getElementById('filterBar');
+  const fields = [['blok','Blok'],['kat','Kat'],['daire','Daire'],['mekan','Mekân'],['eleman','Uygulama Yeri'],['imalat','İmalat Cinsi'],['minha','Minha']];
+  bar.innerHTML = fields.map(([f,label])=>{
+    const opts = distinctFromRows(proj.metrajRows, f);
+    return `<select id="filt-${f}">
+      <option value="">${label}: Tümü</option>
+      ${opts.map(o=>`<option value="${esc(o)}" ${ui.filters[f]===o?'selected':''}>${esc(o)}</option>`).join('')}
+    </select>`;
+  }).join('') + `<button class="btn btn-ghost btn-sm" id="btnClearFilters" style="align-self:end;">Filtreleri Temizle</button>`;
+  fields.forEach(([f])=>{
+    document.getElementById('filt-'+f).addEventListener('change',(e)=>{
+      ui.filters[f] = e.target.value;
+      renderMetrajTable(proj);
+      renderMetrajTotals(proj);
+    });
+  });
+  document.getElementById('btnClearFilters').onclick = ()=>{
+    ui.filters = {blok:'',kat:'',daire:'',mekan:'',eleman:'',imalat:'',minha:''};
+    renderMain();
+  };
+}
+
+function filteredRows(proj){
+  return proj.metrajRows.filter(r=>{
+    return ['blok','kat','daire','mekan','eleman','imalat','minha'].every(f=> !ui.filters[f] || normKey(r[f])===normKey(ui.filters[f]));
+  });
+}
+
+function renderMetrajTable(proj){
+  const wrap = document.getElementById('metrajTableWrap');
+  const rows = filteredRows(proj);
+  if(rows.length===0){
+    wrap.innerHTML = `<div class="empty-state">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="4" width="18" height="16" rx="2"/></svg>
+      <div>Bu filtrelere uygun metraj kaydı yok.</div>
+    </div>`;
+    return;
+  }
+  wrap.innerHTML = `
+    <table>
+      <thead><tr>
+        <th>Blok</th><th>Kat</th><th>Daire</th><th>Mekân</th><th>Uygulama Yeri</th><th>İmalat Cinsi</th>
+        <th class="num">Adet</th><th class="num">K.Kenar</th><th class="num">Uzunluk</th><th class="num">Yükseklik</th>
+        <th class="num">Minha</th><th>Birim</th><th class="num">Toplam</th><th class="num">Alt Toplam</th><th></th>
+      </tr></thead>
+      <tbody>
+        ${rows.map(r=>`
+          <tr data-id="${r.id}">
+            <td>${esc(r.blok)}</td><td>${esc(r.kat)}</td><td>${esc(r.daire)}</td><td>${esc(r.mekan)}</td>
+            <td>${esc(r.eleman)}</td><td>${esc(r.imalat)}</td>
+            <td class="num">${esc(r.adet)}</td><td class="num">${esc(r.kisaKenar)}</td><td class="num">${esc(r.uzunluk)}</td><td class="num">${esc(r.yukseklik)}</td>
+            <td class="num">${esc(r.minha)}</td><td>${UNIT_LABEL[r.birim]||r.birim}</td>
+            <td class="num">${fmtNum(r.toplam)}</td><td class="num" style="font-weight:700;">${fmtNum(r.altToplam)}</td>
+            <td>
+              <div class="row-actions">
+                <button class="icon-btn" data-act="edit" title="Düzenle">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                </button>
+                <button class="icon-btn danger" data-act="delete" title="Sil">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0l-1 14a2 2 0 01-2 2H7a2 2 0 01-2-2L4 6h16z"/></svg>
+                </button>
+              </div>
+            </td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `;
+  wrap.querySelectorAll('tr[data-id]').forEach(tr=>{
+    tr.addEventListener('click',(e)=>{
+      const act = e.target.closest('[data-act]')?.dataset.act;
+      if(!act) return;
+      const id = tr.dataset.id;
+      if(act==='edit'){
+        const row = proj.metrajRows.find(r=>r.id===id);
+        metrajForm = Object.assign({}, row);
+        renderMain();
+        window.scrollTo({top:0, behavior:'smooth'});
+      } else if(act==='delete'){
+        confirmModal('Bu metraj satırını silmek istediğinize emin misiniz?', ()=>{
+          proj.metrajRows = proj.metrajRows.filter(r=>r.id!==id);
+          saveState(); renderMain();
+          showToast('Satır silindi.');
+        });
+      }
+    });
+  });
+}
+
+function renderMetrajTotals(proj){
+  const el = document.getElementById('metrajTotals');
+  const rows = filteredRows(proj);
+  const sums = {};
+  UNITS.forEach(u=>sums[u]=0);
+  rows.forEach(r=>{ sums[r.birim] = (sums[r.birim]||0) + (parseFloat(r.altToplam)||0); });
+  el.innerHTML = UNITS.filter(u=>sums[u]!==0).map(u=>`
+    <div class="total-chip"><span class="lbl">Toplam ${UNIT_LABEL[u]}</span><span class="val">${fmtNum(sums[u])}</span></div>
+  `).join('') || `<div class="total-chip"><span class="lbl">Toplam</span><span class="val">0,00</span></div>`;
+}
+
+/* ======================= ICMAL TAB ======================= */
+function icmalFilteredRows(proj){
+  return proj.metrajRows.filter(r=>{
+    return ['blok','kat','daire','mekan'].every(f=> !ui.icmalFilters[f] || normKey(r[f])===normKey(ui.icmalFilters[f]));
+  });
+}
+function groupIcmalRows(rows){
+  const map = new Map();
+  rows.forEach(r=>{
+    // Uygulama Yeri / İmalat Cinsi serbest metin olduğu için baştaki/sondaki boşluk ve
+    // büyük/küçük harf farkları (ör. "Duvar" / "duvar ") normalize edilerek aynı grupta toplanır.
+    const eleman = (r.eleman||'').toString().trim() || '(Belirtilmemiş)';
+    const imalat = (r.imalat||'').toString().trim() || '(Belirtilmemiş)';
+    const birim = r.birim || 'm2';
+    const key = [normKey(eleman), normKey(imalat), birim].join('|');
+    if(!map.has(key)) map.set(key, {eleman, imalat, birim, toplam:0, altToplam:0, adet:0});
+    const g = map.get(key);
+    g.toplam += (parseFloat(r.toplam)||0);
+    g.altToplam += (parseFloat(r.altToplam)||0);
+    g.adet += 1;
+  });
+  return Array.from(map.values()).sort((a,b)=>{
+    return a.eleman.localeCompare(b.eleman,'tr') || a.imalat.localeCompare(b.imalat,'tr');
+  });
+}
+function renderIcmalTab(main, proj){
+  main.innerHTML = `
+    <div class="card glass">
+      <h2>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/></svg>
+        İcmal — <span style="color:var(--aqua-dim)">${esc(proj.name)}</span>
+      </h2>
+      <p class="hint">Girilen tüm metraj satırları, Uygulama Yeri ve İmalat Cinsi bazında otomatik olarak gruplanır ve toplamları hesaplanır. Örn: "Tavan / Alçıpan Asma Tavan — 100 m²" gibi. İsterseniz Blok, Kat, Daire veya Mekân bazında filtreleyebilirsiniz.</p>
+      <div class="filter-bar" id="icmalFilterBar"></div>
+    </div>
+
+    <div class="card glass">
+      <h2>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18"/></svg>
+        İcmal Tablosu
+      </h2>
+      <div class="table-scroll" id="icmalTableWrap"></div>
+      <div class="totals-strip" id="icmalTotals"></div>
+      <div class="btn-row">
+        <button class="btn btn-primary" id="btnIcmalPdf">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg>
+          PDF Olarak İndir
+        </button>
+      </div>
+    </div>
+  `;
+  renderIcmalFilterBar(proj);
+  renderIcmalTable(proj);
+  renderIcmalTotals(proj);
+  document.getElementById('btnIcmalPdf').onclick = ()=>exportIcmalPdf(proj);
+}
+function renderIcmalFilterBar(proj){
+  const bar = document.getElementById('icmalFilterBar');
+  const fields = [['blok','Blok'],['kat','Kat'],['daire','Daire'],['mekan','Mekân']];
+  bar.innerHTML = fields.map(([f,label])=>{
+    const opts = distinctFromRows(proj.metrajRows, f);
+    return `<select id="icmalFilt-${f}">
+      <option value="">${label}: Tümü</option>
+      ${opts.map(o=>`<option value="${esc(o)}" ${ui.icmalFilters[f]===o?'selected':''}>${esc(o)}</option>`).join('')}
+    </select>`;
+  }).join('') + `<button class="btn btn-ghost btn-sm" id="btnClearIcmalFilters" style="align-self:end;">Filtreleri Temizle</button>`;
+  fields.forEach(([f])=>{
+    document.getElementById('icmalFilt-'+f).addEventListener('change',(e)=>{
+      ui.icmalFilters[f] = e.target.value;
+      renderIcmalTable(proj);
+      renderIcmalTotals(proj);
+    });
+  });
+  document.getElementById('btnClearIcmalFilters').onclick = ()=>{
+    ui.icmalFilters = {blok:'',kat:'',daire:'',mekan:''};
+    renderMain();
+  };
+}
+function renderIcmalTable(proj){
+  const wrap = document.getElementById('icmalTableWrap');
+  const groups = groupIcmalRows(icmalFilteredRows(proj));
+  if(groups.length===0){
+    wrap.innerHTML = `<div class="empty-state">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="4" width="18" height="16" rx="2"/></svg>
+      <div>Bu filtrelere uygun metraj kaydı yok.</div>
+    </div>`;
+    return;
+  }
+  wrap.innerHTML = `
+    <table>
+      <thead><tr>
+        <th>Uygulama Yeri</th><th>İmalat Cinsi</th><th>Birim</th>
+        <th class="num">Satır Sayısı</th><th class="num">Toplam (Brüt)</th><th class="num">Toplam (Net)</th>
+      </tr></thead>
+      <tbody>
+        ${groups.map(g=>`
+          <tr>
+            <td>${esc(g.eleman)}</td><td>${esc(g.imalat)}</td><td>${UNIT_LABEL[g.birim]||g.birim}</td>
+            <td class="num">${g.adet}</td>
+            <td class="num">${fmtNum(g.toplam)}</td>
+            <td class="num" style="font-weight:700;">${fmtNum(g.altToplam)}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `;
+}
+function renderIcmalTotals(proj){
+  const el = document.getElementById('icmalTotals');
+  const groups = groupIcmalRows(icmalFilteredRows(proj));
+  const sums = {};
+  UNITS.forEach(u=>sums[u]=0);
+  groups.forEach(g=>{ sums[g.birim] = (sums[g.birim]||0) + g.altToplam; });
+  el.innerHTML = UNITS.filter(u=>sums[u]!==0).map(u=>`
+    <div class="total-chip"><span class="lbl">Toplam ${UNIT_LABEL[u]}</span><span class="val">${fmtNum(sums[u])}</span></div>
+  `).join('') || `<div class="total-chip"><span class="lbl">Toplam</span><span class="val">0,00</span></div>`;
+}
+async function exportIcmalPdf(proj){
+  showToast('PDF hazırlanıyor…');
+  const groups = groupIcmalRows(icmalFilteredRows(proj));
+  const sums = {};
+  UNITS.forEach(u=>sums[u]=0);
+  groups.forEach(g=>{ sums[g.birim] = (sums[g.birim]||0) + g.altToplam; });
+
+  const c = 'padding:6px 6px;border-bottom:1px solid #E4EFEF;';
+  const tableRows = groups.map(g=>`
+    <tr>
+      <td style="${c}">${esc(g.eleman)}</td>
+      <td style="${c}">${esc(g.imalat)}</td>
+      <td style="${c}">${UNIT_LABEL[g.birim]||g.birim}</td>
+      <td style="${c}text-align:right;">${g.adet}</td>
+      <td style="${c}text-align:right;">${fmtNum(g.toplam)}</td>
+      <td style="${c}text-align:right;font-weight:700;white-space:nowrap;">${fmtNum(g.altToplam)}</td>
+    </tr>
+  `).join('');
+
+  const totalsRow = UNITS.filter(u=>sums[u]!==0).map(u=>`
+    <div style="display:inline-flex;flex-direction:column;padding:8px 14px;border:1px solid #1C6E8C;border-radius:8px;margin:4px 6px 0 0;">
+      <span style="font-size:9px;font-weight:700;color:#345264;text-transform:uppercase;">Toplam ${UNIT_LABEL[u]}</span>
+      <span style="font-size:14px;font-weight:700;">${fmtNum(sums[u])}</span>
+    </div>
+  `).join('');
+
+  const html = `
+    ${pdfHeaderHtml(proj, 'İcmal Raporu')}
+    <table style="width:100%;border-collapse:collapse;font-size:10px;table-layout:auto;">
+      <thead>
+        <tr style="background:#EAF6F5;">
+          ${['Uygulama Yeri','İmalat Cinsi','Birim','Satır Sayısı','Toplam (Brüt)','Toplam (Net)'].map(h=>`<th style="text-align:left;padding:7px 6px;border-bottom:1.5px solid #1C6E8C;white-space:nowrap;">${h}</th>`).join('')}
+        </tr>
+      </thead>
+      <tbody>${tableRows || '<tr><td colspan="6" style="padding:10px;text-align:center;color:#345264;">Kayıt yok</td></tr>'}</tbody>
+    </table>
+    <div style="margin-top:18px;">
+      <div style="font-size:11px;font-weight:700;margin-bottom:4px;">Genel Toplamlar</div>
+      <div>${totalsRow || '<span style="font-size:11px;color:#345264;">-</span>'}</div>
+    </div>
+    <div style="margin-top:36px;font-size:9px;color:#8096A3;">DNZ Metraj &amp; Teklif Yönetimi ile oluşturulmuştur.</div>
+  `;
+  try{
+    await renderNodeToPdf(html, `icmal-${proj.name.replace(/[^a-z0-9ığüşöç]+/gi,'_')}.pdf`, 'l');
+    showToast('İcmal PDF indirildi.');
+  }catch(e){
+    console.error(e);
+    showToast('PDF oluşturulurken bir sorun oluştu.');
+  }
+}
+
+/* ======================= TEKLIF TAB ======================= */
+function emptyTeklifForm(){
+  return {id:null, aciklama:'', miktar:'', birim:'m2', birimFiyat:''};
+}
+let teklifForm = emptyTeklifForm();
+
+function renderTeklifTab(main, proj){
+  main.innerHTML = `
+    <div class="card glass">
+      <h2>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+        Teklif Kalemi Ekle — <span style="color:var(--aqua-dim)">${esc(proj.name)}</span>
+      </h2>
+      <div class="field-grid">
+        <div class="field" style="grid-column:span 3;"><label>Açıklama</label>
+          <input type="text" id="t-aciklama" value="${esc(teklifForm.aciklama)}" placeholder="Örn: A Blok, 1.Kat, 1.Daire, Salon, Bölme Duvar İmalatı">
+        </div>
+        <div class="field"><label>Miktar</label><input class="mono" type="number" step="any" id="t-miktar" value="${esc(teklifForm.miktar)}"></div>
+        <div class="field"><label>Birim</label>
+          <select id="t-birim">${UNITS.map(u=>`<option value="${u}" ${u===teklifForm.birim?'selected':''}>${UNIT_LABEL[u]}</option>`).join('')}</select>
+        </div>
+        <div class="field"><label>Birim Fiyat (TL)</label><input class="mono" type="number" step="any" id="t-birimFiyat" value="${esc(teklifForm.birimFiyat)}"></div>
+        <div class="field"><label>Tutar (TL)</label><input class="mono" type="text" readonly style="opacity:0.75;font-weight:700;" id="t-tutarDisplay" value="${fmtMoney((parseFloat(teklifForm.miktar)||0)*(parseFloat(teklifForm.birimFiyat)||0))}"></div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary" id="btnSaveTeklif">${teklifForm.id?'Kalemi Güncelle':'Kalemi Ekle'}</button>
+        <button class="btn btn-ghost" id="btnClearTeklif">Formu Temizle</button>
+        <button class="btn btn-ghost" id="btnFromMetraj">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3h18v18H3z"/></svg>
+          Metrajdan Ekle
+        </button>
+      </div>
+    </div>
+
+    <div class="card glass">
+      <h2>Teklif Notu</h2>
+      <p class="hint">Buraya yazacağınız not (ör. ödeme koşulları, geçerlilik süresi, ek açıklamalar) teklif PDF çıktısının altında görünür.</p>
+      <div class="field-grid" style="grid-template-columns:1fr;">
+        <div class="field">
+          <textarea id="t-note" rows="3" style="width:100%;padding:9px 10px;border-radius:10px;border:1px solid rgba(11,36,54,0.15);background:rgba(255,255,255,0.6);font-family:var(--font-body);font-size:0.85rem;color:var(--ink);resize:vertical;" placeholder="Örn: Fiyatlarımız 30 gün geçerlidir. KDV hariçtir.">${esc(proj.teklifNote||'')}</textarea>
+        </div>
+      </div>
+    </div>
+
+    <div class="card glass">
+      <h2>Teklif Kalemleri</h2>
+      <div class="table-scroll" id="teklifTableWrap"></div>
+      <div class="totals-strip" id="teklifTotals"></div>
+      <div class="btn-row">
+        <button class="btn btn-primary" id="btnTeklifPdf">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg>
+          Teklif PDF'ini İndir
+        </button>
+      </div>
+    </div>
+  `;
+  ['aciklama','miktar','birim','birimFiyat'].forEach(k=>{
+    document.getElementById('t-'+k).addEventListener('input', ()=>{
+      teklifForm[k] = document.getElementById('t-'+k).value;
+      document.getElementById('t-tutarDisplay').value = fmtMoney((parseFloat(teklifForm.miktar)||0)*(parseFloat(teklifForm.birimFiyat)||0));
+    });
+  });
+  document.getElementById('btnSaveTeklif').onclick = ()=>saveTeklifRow(proj);
+  document.getElementById('btnClearTeklif').onclick = ()=>{ teklifForm = emptyTeklifForm(); renderMain(); };
+  document.getElementById('btnFromMetraj').onclick = ()=>openMetrajPickModal(proj);
+  document.getElementById('btnTeklifPdf').onclick = ()=>openTeklifTemplateModal(proj);
+  let noteSaveTimer = null;
+  document.getElementById('t-note').addEventListener('input',(e)=>{
+    proj.teklifNote = e.target.value;
+    clearTimeout(noteSaveTimer);
+    noteSaveTimer = setTimeout(()=>saveState(), 500);
+  });
+
+  renderTeklifTable(proj);
+  renderTeklifTotals(proj);
+}
+
+function saveTeklifRow(proj){
+  const miktar = parseFloat(teklifForm.miktar)||0;
+  const birimFiyat = parseFloat(teklifForm.birimFiyat)||0;
+  if(!teklifForm.aciklama.trim()){ showToast('Lütfen açıklama girin.'); return; }
+  const row = {
+    id: teklifForm.id || uid(),
+    aciklama: teklifForm.aciklama.trim(),
+    miktar, birim: teklifForm.birim, birimFiyat,
+    tutar: Math.round(miktar*birimFiyat*100)/100
+  };
+  if(teklifForm.id){
+    const idx = proj.teklifRows.findIndex(r=>r.id===row.id);
+    if(idx>-1) proj.teklifRows[idx]=row;
+  } else {
+    proj.teklifRows.push(row);
+  }
+  saveState();
+  teklifForm = emptyTeklifForm();
+  renderMain();
+  showToast('Teklif kalemi kaydedildi.');
+}
+
+function renderTeklifTable(proj){
+  const wrap = document.getElementById('teklifTableWrap');
+  if(proj.teklifRows.length===0){
+    wrap.innerHTML = `<div class="empty-state">Henüz teklif kalemi eklenmedi.</div>`;
+    return;
+  }
+  wrap.innerHTML = `
+    <table>
+      <thead><tr><th>Açıklama</th><th class="num">Miktar</th><th>Birim</th><th class="num">Birim Fiyat</th><th class="num">Tutar</th><th></th></tr></thead>
+      <tbody>
+        ${proj.teklifRows.map(r=>`
+          <tr data-id="${r.id}">
+            <td>${esc(r.aciklama)}</td>
+            <td class="num">${fmtNum(r.miktar)}</td>
+            <td>${UNIT_LABEL[r.birim]||r.birim}</td>
+            <td class="num">${fmtNum(r.birimFiyat)}</td>
+            <td class="num" style="font-weight:700;">${fmtMoney(r.tutar)}</td>
+            <td>
+              <div class="row-actions">
+                <button class="icon-btn" data-act="edit" title="Düzenle">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                </button>
+                <button class="icon-btn danger" data-act="delete" title="Sil">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0l-1 14a2 2 0 01-2 2H7a2 2 0 01-2-2L4 6h16z"/></svg>
+                </button>
+              </div>
+            </td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `;
+  wrap.querySelectorAll('tr[data-id]').forEach(tr=>{
+    tr.addEventListener('click',(e)=>{
+      const act = e.target.closest('[data-act]')?.dataset.act;
+      if(!act) return;
+      const id = tr.dataset.id;
+      if(act==='edit'){
+        teklifForm = Object.assign({}, proj.teklifRows.find(r=>r.id===id));
+        renderMain(); window.scrollTo({top:0, behavior:'smooth'});
+      } else if(act==='delete'){
+        confirmModal('Bu teklif kalemini silmek istediğinize emin misiniz?', ()=>{
+          proj.teklifRows = proj.teklifRows.filter(r=>r.id!==id);
+          saveState(); renderMain();
+          showToast('Kalem silindi.');
+        });
+      }
+    });
+  });
+}
+
+function renderTeklifTotals(proj){
+  const el = document.getElementById('teklifTotals');
+  const total = proj.teklifRows.reduce((s,r)=>s+(parseFloat(r.tutar)||0),0);
+  el.innerHTML = `<div class="total-chip"><span class="lbl">Genel Toplam</span><span class="val">${fmtMoney(total)}</span></div>`;
+}
+
+function groupMetrajForPicker(proj){
+  const map = new Map();
+  proj.metrajRows.forEach(r=>{
+    // Boşluk/büyük-küçük harf farkları normalize edilerek aynı konum + imalat cinsi
+    // birleştirilir (İcmal'deki gruplama ile tutarlı davranış için).
+    const key = ['blok','kat','daire','mekan','eleman','imalat'].map(f=>normKey(r[f])).concat(r.birim).join('|');
+    if(!map.has(key)) map.set(key, {blok:r.blok,kat:r.kat,daire:r.daire,mekan:r.mekan,eleman:r.eleman,imalat:r.imalat,birim:r.birim,miktar:0});
+    map.get(key).miktar += (parseFloat(r.altToplam)||0);
+  });
+  return Array.from(map.values());
+}
+
+function openMetrajPickModal(proj){
+  const groups = groupMetrajForPicker(proj);
+  const modalRoot = document.getElementById('modalRoot');
+  if(groups.length===0){
+    showToast('Bu projede henüz metraj kaydı yok.');
+    return;
+  }
+  modalRoot.innerHTML = `
+    <div class="modal-backdrop" id="modalBackdrop">
+      <div class="modal glass-strong glass">
+        <h3>Metrajdan Teklife Ekle</h3>
+        <p class="hint">Aynı konum ve imalat cinsine ait satırlar birleştirilerek gösterilir. Eklemek istediklerinizi seçin.</p>
+        <div class="pick-list" id="pickList">
+          ${groups.map((g,i)=>{
+            const desc = [g.blok,g.kat,g.daire,g.mekan,g.eleman,g.imalat].filter(Boolean).join(', ');
+            return `<div class="pick-item">
+              <input type="checkbox" id="pk-${i}" data-idx="${i}">
+              <label for="pk-${i}">${esc(desc)} — <b>${fmtNum(g.miktar)} ${UNIT_LABEL[g.birim]}</b></label>
+            </div>`;
+          }).join('')}
+        </div>
+        <div class="btn-row" style="margin-top:10px;justify-content:flex-end;">
+          <button class="btn btn-ghost" id="pkCancel">Vazgeç</button>
+          <button class="btn btn-primary" id="pkAdd">Seçilenleri Ekle</button>
+        </div>
+      </div>
+    </div>
+  `;
+  document.getElementById('pkCancel').onclick = closeModal;
+  document.getElementById('modalBackdrop').addEventListener('click',(e)=>{ if(e.target.id==='modalBackdrop') closeModal(); });
+  document.getElementById('pkAdd').onclick = ()=>{
+    const checked = Array.from(document.querySelectorAll('#pickList input:checked'));
+    if(checked.length===0){ showToast('Lütfen en az bir kalem seçin.'); return; }
+    checked.forEach(chk=>{
+      const g = groups[parseInt(chk.dataset.idx)];
+      const desc = [g.blok,g.kat,g.daire,g.mekan,g.eleman,g.imalat].filter(Boolean).join(', ');
+      proj.teklifRows.push({
+        id:uid(), aciklama:desc, miktar:Math.round(g.miktar*100)/100, birim:g.birim, birimFiyat:0, tutar:0
+      });
+    });
+    saveState(); closeModal(); renderMain();
+    showToast(`${checked.length} kalem teklife eklendi.`);
+  };
+}
+
+/* ======================= AYARLAR TAB ======================= */
+function openTeklifTemplateModal(proj){
+  const modalRoot = document.getElementById('modalRoot');
+  modalRoot.innerHTML = `
+    <div class="modal-backdrop" id="modalBackdrop">
+      <div class="modal glass-strong glass">
+        <h3>Hangi şablonla indirilsin?</h3>
+        <p class="hint">PDF çıktısının üst başlığı seçiminize göre değişir.</p>
+        <div class="btn-row" style="margin-top:10px;flex-direction:column;align-items:stretch;">
+          <button class="btn btn-primary btn-block" id="tplTeklifForm">Teklif Formu</button>
+          <button class="btn btn-ghost btn-block" id="tplHakedis">Yapılan Hakediş Listesi</button>
+        </div>
+        <div class="btn-row" style="margin-top:10px;justify-content:flex-end;">
+          <button class="btn btn-ghost" id="tplCancel">Vazgeç</button>
+        </div>
+      </div>
+    </div>
+  `;
+  document.getElementById('tplCancel').onclick = closeModal;
+  document.getElementById('modalBackdrop').addEventListener('click',(e)=>{ if(e.target.id==='modalBackdrop') closeModal(); });
+  document.getElementById('tplTeklifForm').onclick = ()=>{ closeModal(); exportTeklifPdf(proj, 'TEKLİF FORMU'); };
+  document.getElementById('tplHakedis').onclick = ()=>{ closeModal(); exportTeklifPdf(proj, 'YAPILAN HAKEDİŞ LİSTESİ'); };
+}
+
+function renderAyarlarTab(main){
+  main.innerHTML = `
+    <div class="card glass">
+      <h2>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/></svg>
+        Firma Bilgileri
+      </h2>
+      <p class="hint">Bu bilgiler PDF çıktılarının üst kısmında (logo ve firma adı) görünür.</p>
+      <div class="field-grid">
+        <div class="field" style="grid-column:span 2;"><label>Firma Adı</label>
+          <input type="text" id="s-companyName" value="${esc(state.company.name)}" placeholder="Örn: Deniz Yapı İnşaat Ltd. Şti.">
+        </div>
+        <div class="field">
+          <label>Logo</label>
+          <div style="display:flex;align-items:center;gap:10px;">
+            ${state.company.logo? `<img class="logo-preview" src="${state.company.logo}">` : `<div class="logo-preview" style="display:flex;align-items:center;justify-content:center;font-size:0.6rem;color:var(--ink-soft);">Logo yok</div>`}
+            <input type="file" id="s-logoFile" accept="image/*" style="font-size:0.75rem;max-width:140px;">
+          </div>
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary" id="btnSaveCompany">Kaydet</button>
+        ${state.company.logo? `<button class="btn btn-danger" id="btnRemoveLogo">Logoyu Kaldır</button>`:''}
+      </div>
+    </div>
+
+    <div class="card glass">
+      <h2>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+        Yedekleme ve Geri Yükleme
+      </h2>
+      <p class="hint">Tüm proje, metraj, teklif ve ayar verileriniz otomatik olarak bu cihazın tarayıcı önbelleğine kaydedilir ve tarayıcıyı ya da uygulamayı kapatıp tekrar açtığınızda geri gelir. Bu veriler yalnızca bu cihaz/tarayıcıya özeldir; önbellek temizlenirse veya başka bir cihazdan girerseniz kaybolabilir. Ek güvence için verilerinizi bir dosyaya indirip, gerektiğinde o dosyadan geri yükleyebilirsiniz.</p>
+      <p class="hint" style="font-weight:700;${needsBackupWarning()?'color:#c77700;':'color:var(--aqua-dim);'}">
+        Son yedekleme: ${esc(fmtBackupDate(state.lastBackupAt))}${needsBackupWarning() ? ' — kaydedilmemiş değişiklikler var!' : ''}
+      </p>
+      <div class="btn-row">
+        <button class="btn btn-primary" id="btnExportBackup">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+          Yedeği İndir
+        </button>
+        <button class="btn btn-ghost" id="btnImportBackupBtn">Yedekten Geri Yükle</button>
+        ${window.showOpenFilePicker ? `<button class="btn btn-ghost btn-sm" id="btnChooseBackupFile" title="Farklı bir yedek dosyası seçin">Farklı Dosya Seç</button>` : ''}
+        <input type="file" id="s-importFile" accept="application/json" style="display:none;">
+      </div>
+    </div>
+
+    <div class="card glass">
+      <h2>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
+        Otomatik Yedekleme Konumu
+      </h2>
+      <p class="hint">
+        İstediğiniz bir klasörü (ör. Google Drive/Dropbox senkron klasörünüz, harici disk, telefonunuzda bir klasör) tek seferliğine seçin.
+        Bundan sonra her değişiklik otomatik olarak o dosyaya yazılır ve uygulama her açıldığında veriler doğrudan oradan gelir —
+        artık her seferinde elle "Yedekten Geri Yükle" yapmanıza gerek kalmaz.
+      </p>
+      ${!window.showSaveFilePicker ? `
+        <p class="hint" style="color:#c77700;font-weight:600;">
+          Bu tarayıcı bu özelliği desteklemiyor (iOS Safari gibi). Bilgisayarda Chrome veya Edge kullanmanız gerekir.
+        </p>
+      ` : autoBackupInfo.name ? `
+        <p class="hint" style="font-weight:700;color:${autoBackupInfo.active?'var(--aqua-dim)':'#c77700'};">
+          ${autoBackupInfo.active ? `Aktif: <span style="font-family:var(--font-mono);">${esc(autoBackupInfo.name)}</span>` : `İzin geçersiz oldu: <span style="font-family:var(--font-mono);">${esc(autoBackupInfo.name)}</span> — lütfen konumu yeniden seçin.`}
+        </p>
+      ` : `
+        <p class="hint">Henüz bir otomatik yedekleme konumu seçilmedi.</p>
+      `}
+      <div class="btn-row">
+        ${window.showSaveFilePicker ? `<button class="btn btn-primary" id="btnChooseAutoBackup">${autoBackupInfo.name ? 'Konumu Değiştir' : 'Konum Seç'}</button>` : ''}
+        ${autoBackupInfo.name ? `<button class="btn btn-ghost" id="btnClearAutoBackup">Otomatik Yedeklemeyi Kaldır</button>` : ''}
+      </div>
+    </div>
+
+    <div class="card glass">
+      <h2>Tehlikeli Bölge</h2>
+      <p class="hint">Bu işlem tüm projeleri, metraj kayıtlarını ve teklifleri kalıcı olarak siler.</p>
+      <div class="btn-row">
+        <button class="btn btn-danger" id="btnResetAll">Tüm Verileri Sıfırla</button>
+      </div>
+    </div>
+  `;
+  document.getElementById('btnSaveCompany').onclick = ()=>{
+    state.company.name = document.getElementById('s-companyName').value.trim();
+    saveState(); showToast('Firma bilgileri kaydedildi.');
+    renderMain();
+  };
+  const logoInput = document.getElementById('s-logoFile');
+  logoInput.onchange = ()=>{
+    const file = logoInput.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = async ()=>{
+      try{
+        state.company.logo = await resizeImageDataUrl(reader.result, 320, 0.82);
+        await saveState();
+        renderMain();
+        showToast('Logo yüklendi.');
+      }catch(e){
+        console.error(e);
+        showToast('Logo yüklenirken bir sorun oluştu.');
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+  const rmLogoBtn = document.getElementById('btnRemoveLogo');
+  if(rmLogoBtn) rmLogoBtn.onclick = ()=>{ state.company.logo=''; saveState(); renderMain(); };
+
+  document.getElementById('btnExportBackup').onclick = exportBackupFile;
+  document.getElementById('btnImportBackupBtn').onclick = handleImportBackupClick;
+  document.getElementById('s-importFile').onchange = (e)=>importBackupFile(e.target.files[0]);
+  const chooseBtn = document.getElementById('btnChooseBackupFile');
+  if(chooseBtn) chooseBtn.onclick = chooseNewBackupFile;
+  const chooseAutoBtn = document.getElementById('btnChooseAutoBackup');
+  if(chooseAutoBtn) chooseAutoBtn.onclick = chooseAutoBackupLocation;
+  const clearAutoBtn = document.getElementById('btnClearAutoBackup');
+  if(clearAutoBtn) clearAutoBtn.onclick = clearAutoBackupLocation;
+  document.getElementById('btnResetAll').onclick = ()=>{
+    confirmModal('TÜM projeler, metraj ve teklif verileri silinecek. Devam edilsin mi?', ()=>{
+      state = defaultState();
+      saveState(); renderAll();
+      showToast('Tüm veriler sıfırlandı.');
+    });
+  };
+}
+
+/* ---- Yedek dosyası konumu hafızası (IndexedDB - File System Access handle'ları saklamak için) ---- */
+const FS_IDB_NAME = 'dnzMetrajFileHandles';
+const FS_IDB_STORE = 'handles';
+const FS_BACKUP_HANDLE_KEY = 'lastBackupFileHandle';
+const FS_AUTO_BACKUP_HANDLE_KEY = 'autoBackupFileHandle';
+function fsIdbOpen(){
+  return new Promise((resolve,reject)=>{
+    const req = indexedDB.open(FS_IDB_NAME, 1);
+    req.onupgradeneeded = ()=>{ req.result.createObjectStore(FS_IDB_STORE); };
+    req.onsuccess = ()=>resolve(req.result);
+    req.onerror = ()=>reject(req.error);
+  });
+}
+async function fsIdbSet(key, val){
+  try{
+    const db = await fsIdbOpen();
+    return new Promise((resolve,reject)=>{
+      const tx = db.transaction(FS_IDB_STORE,'readwrite');
+      tx.objectStore(FS_IDB_STORE).put(val, key);
+      tx.oncomplete = ()=>resolve();
+      tx.onerror = ()=>reject(tx.error);
+    });
+  }catch(e){ /* IndexedDB yoksa sessizce geç */ }
+}
+async function fsIdbGet(key){
+  try{
+    const db = await fsIdbOpen();
+    return new Promise((resolve,reject)=>{
+      const tx = db.transaction(FS_IDB_STORE,'readonly');
+      const req = tx.objectStore(FS_IDB_STORE).get(key);
+      req.onsuccess = ()=>resolve(req.result || null);
+      req.onerror = ()=>reject(req.error);
+    });
+  }catch(e){ return null; }
+}
+
+function backupFileName(){
+  const d = new Date();
+  return `dnz-metraj-yedek-${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}.json`;
+}
+
+async function markBackupDone(){
+  state.lastBackupAt = Date.now();
+  state.dirtySinceBackup = false;
+  await persistStateRaw();
+  updateBackupBanner();
+  renderMain();
+}
+
+// NOT: Daha önce burada, tarayıcı destekliyorsa önce "showSaveFilePicker" (ör. Google Drive
+// gibi bulut konumlarına doğrudan yazma) deneniyor, bu başarısız olursa klasik indirmeye
+// düşülüyordu. Bulut sağlayıcılarına (özellikle Google Drive) doğrudan yazma bazı
+// cihazlarda dosyayı BOŞ oluşturup sonra yazma hatası verebiliyor; kod da hatayı yakalayıp
+// sessizce ikinci bir indirme (telefona) daha başlatıyordu. Sonuç: Drive'da boş bir dosya +
+// telefonda ayrı bir indirme, yani "2 defa indiriyor, biri boş" şikayeti.
+// Çözüm: Export işlemi için TEK ve güvenilir yöntem olan klasik indirmeyi kullanıyoruz.
+// Dosya cihazın "İndirilenler" klasörüne iner; isterseniz oradan Drive'a elle
+// kopyalayabilir/yükleyebilirsiniz. Bu şekilde çift indirme ve boş dosya riski ortadan kalkar.
+async function exportBackupFile(){
+  const dataStr = JSON.stringify(state,null,2);
+  const fname = backupFileName();
+  try{
+    const blob = new Blob([dataStr], {type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = fname;
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+    await markBackupDone();
+    showToast('Yedek dosyası indirildi. (Telefonunuzun "İndirilenler" klasörüne kaydedildi.)');
+  }catch(e){
+    console.error(e);
+    showToast('Yedek dosyası indirilirken bir sorun oluştu.');
+  }
+}
+
+function processBackupText(text){
+  try{
+    const parsed = JSON.parse(text);
+    confirmModal('Yedek dosyasından geri yükleme mevcut tüm verilerin üzerine yazacaktır. Devam edilsin mi?', async ()=>{
+      state = Object.assign(defaultState(), parsed);
+      if(!state.projects) state.projects={};
+      // Az önce bir yedek dosyasından yüklendiği için veriler o dosyayla aynı; "yedeklenmemiş
+      // değişiklik" uyarısının hemen tekrar çıkmaması için dirty bayrağını temizliyoruz.
+      state.dirtySinceBackup = false;
+      await persistStateRaw();
+      renderAll();
+      showToast('Yedekten geri yükleme tamamlandı.');
+    });
+  }catch(e){
+    showToast('Dosya okunamadı. Lütfen geçerli bir yedek dosyası seçin.');
+  }
+}
+
+function importBackupFile(file){
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = ()=> processBackupText(reader.result);
+  reader.readAsText(file);
+}
+
+async function readBackupFromHandle(handle){
+  const file = await handle.getFile();
+  return await file.text();
+}
+
+async function handleImportBackupClick(){
+  if(!window.showOpenFilePicker){
+    document.getElementById('s-importFile').click();
+    return;
+  }
+  try{
+    let handle = await fsIdbGet(FS_BACKUP_HANDLE_KEY);
+    if(handle){
+      let perm = await handle.queryPermission({mode:'read'});
+      if(perm!=='granted') perm = await handle.requestPermission({mode:'read'});
+      if(perm!=='granted') handle = null;
+    }
+    if(!handle){
+      [handle] = await window.showOpenFilePicker({
+        types: [{ description:'JSON Yedek Dosyası', accept:{'application/json':['.json']} }]
+      });
+      await fsIdbSet(FS_BACKUP_HANDLE_KEY, handle);
+    }
+    const text = await readBackupFromHandle(handle);
+    processBackupText(text);
+  }catch(e){
+    if(e && e.name==='AbortError') return;
+    console.error(e);
+    showToast('Dosya okunamadı. Lütfen geçerli bir yedek dosyası seçin.');
+  }
+}
+
+// Kullanıcının istediği bir konumda (Drive/Dropbox klasörü, harici disk, telefonda bir
+// klasör vs.) yeni bir dosya oluşturur ya da var olan bir dosyayı seçer ve bunu, uygulama
+// her açıldığında otomatik olarak okunacak / her değişiklikte otomatik yazılacak "ana"
+// yedekleme dosyası olarak işaretler.
+async function chooseAutoBackupLocation(){
+  if(!window.showSaveFilePicker){
+    showToast('Bu özellik bu cihazda/tarayıcıda desteklenmiyor. Merak etmeyin, verileriniz otomatik olarak tarayıcı önbelleğine kaydediliyor.');
+    return;
+  }
+  let handle;
+  try{
+    handle = await window.showSaveFilePicker({
+      suggestedName: backupFileName(),
+      types: [{ description:'JSON Yedek Dosyası', accept:{'application/json':['.json']} }]
+    });
+  }catch(e){
+    if(e && e.name==='AbortError') return;
+    console.error(e);
+    showToast('Dosya seçilirken bir sorun oluştu.');
+    return;
+  }
+  // İzni kontrol et; zaten verilmişse (çoğu zaman dosya yeni seçildiğinde otomatik verilir)
+  // tekrar istemeye gerek yok. Bazı mobil tarayıcılar/işletim sistemleri kalıcı yazma izni
+  // modelini desteklemez ve bu adım "denied"/"prompt" döner — bu durumda hata göstermek yerine
+  // sessizce bu özelliği atlayıp kullanıcıyı tarayıcı önbelleğinin zaten devrede olduğu
+  // konusunda bilgilendiriyoruz (veri kaybı riski yok, sadece bu ek dosya senkronu çalışmıyor).
+  let perm = 'denied';
+  try{
+    perm = await handle.queryPermission({mode:'readwrite'});
+    if(perm !== 'granted'){
+      perm = await handle.requestPermission({mode:'readwrite'});
+    }
+  }catch(e){
+    console.error('İzin isteme hatası', e);
+    perm = 'denied';
+  }
+  if(perm !== 'granted'){
+    showToast('Bu cihaz dosyaya otomatik yazma iznini desteklemiyor. Sorun değil: verileriniz zaten tarayıcı önbelleğine otomatik kaydediliyor. Ek güvence için "Yedeği İndir" ile elle de yedek alabilirsiniz.');
+    return;
+  }
+  try{
+    await fsIdbSet(FS_AUTO_BACKUP_HANDLE_KEY, handle);
+    autoBackupHandleCache = handle;
+    // Dosya boş kalmasın diye mevcut veriyi hemen o dosyaya yazıyoruz.
+    const writable = await handle.createWritable();
+    await writable.write(JSON.stringify(state, null, 2));
+    await writable.close();
+    state.lastBackupAt = Date.now();
+    state.dirtySinceBackup = false;
+    await refreshAutoBackupInfo();
+    renderMain();
+    updateBackupBanner();
+    showToast(`Otomatik yedekleme konumu ayarlandı: ${handle.name}`);
+  }catch(e){
+    console.error(e);
+    showToast('Yedekleme konumu kaydedilirken bir sorun oluştu.');
+  }
+}
+async function clearAutoBackupLocation(){
+  await fsIdbSet(FS_AUTO_BACKUP_HANDLE_KEY, null);
+  autoBackupHandleCache = null;
+  await refreshAutoBackupInfo();
+  renderMain();
+  showToast('Otomatik yedekleme konumu kaldırıldı.');
+}
+
+async function chooseNewBackupFile(){
+  if(!window.showOpenFilePicker){
+    document.getElementById('s-importFile').click();
+    return;
+  }
+  try{
+    const [handle] = await window.showOpenFilePicker({
+      types: [{ description:'JSON Yedek Dosyası', accept:{'application/json':['.json']} }]
+    });
+    await fsIdbSet(FS_BACKUP_HANDLE_KEY, handle);
+    const text = await readBackupFromHandle(handle);
+    processBackupText(text);
+  }catch(e){
+    if(e && e.name==='AbortError') return;
+    console.error(e);
+    showToast('Dosya okunamadı. Lütfen geçerli bir yedek dosyası seçin.');
+  }
+}
+
+/* ======================= PDF EXPORT ======================= */
+function pdfHeaderHtml(proj, subtitle){
+  const logo = state.company.logo ? `<img src="${state.company.logo}" style="max-height:56px;max-width:180px;object-fit:contain;">` : '';
+  const nameLine = state.company.name ? `<div style="font-family:'Outfit',sans-serif;font-weight:800;font-size:18px;color:#0B2436;">${esc(state.company.name)}</div>` : '';
+  const subLine = subtitle ? `<div style="font-size:11px;color:#345264;">${esc(subtitle)}</div>` : '';
+  return `
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #1C6E8C;padding-bottom:14px;margin-bottom:16px;">
+    <div style="display:flex;flex-direction:column;align-items:flex-start;gap:6px;">
+      ${logo}
+      <div>
+        ${nameLine}
+        ${subLine}
+      </div>
+    </div>
+    <div style="text-align:right;font-size:11px;color:#345264;">
+      <div><b>Proje:</b> ${esc(proj.name)}</div>
+      ${proj.employer?`<div><b>İşveren:</b> ${esc(proj.employer)}</div>`:''}
+      <div><b>Tarih:</b> ${todayStr()}</div>
+    </div>
+  </div>`;
+}
+function pdfBaseStyles(width){
+  return `font-family:'Inter',Arial,sans-serif;color:#0B2436;padding:24px;width:${width}px;background:#ffffff;`;
+}
+async function renderNodeToPdf(html, filename, orientation){
+  orientation = orientation || 'p';
+  const width = orientation==='l' ? 1122 : 794;
+  const root = document.getElementById('pdf-render-root');
+  root.style.width = width+'px';
+  root.innerHTML = `<div id="pdf-inner" style="${pdfBaseStyles(width)}">${html}</div>`;
+  await new Promise(r=>setTimeout(r,60));
+  const node = document.getElementById('pdf-inner');
+  const canvas = await html2canvas(node, {scale:2, useCORS:true, backgroundColor:'#ffffff'});
+  const imgData = canvas.toDataURL('image/png');
+  const { jsPDF } = window.jspdf;
+  const pdf = new jsPDF(orientation,'mm','a4');
+  const pageWidth = orientation==='l' ? 297 : 210;
+  const pageHeight = orientation==='l' ? 210 : 297;
+  const imgWidth = pageWidth;
+  const imgHeight = canvas.height * imgWidth / canvas.width;
+  let heightLeft = imgHeight;
+  let position = 0;
+  pdf.addImage(imgData,'PNG',0,position,imgWidth,imgHeight);
+  heightLeft -= pageHeight;
+  while(heightLeft > 0){
+    position = heightLeft - imgHeight;
+    pdf.addPage();
+    pdf.addImage(imgData,'PNG',0,position,imgWidth,imgHeight);
+    heightLeft -= pageHeight;
+  }
+  pdf.save(filename);
+  root.innerHTML = '';
+  root.style.width = '';
+}
+
+async function exportMetrajPdf(proj){
+  showToast('PDF hazırlanıyor…');
+  const rows = filteredRows(proj);
+  const sums = {};
+  UNITS.forEach(u=>sums[u]=0);
+  rows.forEach(r=>{ sums[r.birim] = (sums[r.birim]||0) + (parseFloat(r.altToplam)||0); });
+
+  const c = 'padding:6px 6px;border-bottom:1px solid #E4EFEF;';
+  const tableRows = rows.map(r=>`
+    <tr>
+      <td style="${c}">${esc(r.blok)}</td><td style="${c}">${esc(r.kat)}</td><td style="${c}">${esc(r.daire)}</td><td style="${c}">${esc(r.mekan)}</td>
+      <td style="${c}">${esc(r.eleman)}</td><td style="${c}">${esc(r.imalat)}</td>
+      <td style="${c}text-align:right;">${esc(r.adet)}</td>
+      <td style="${c}text-align:right;">${esc(r.kisaKenar)}</td>
+      <td style="${c}text-align:right;">${esc(r.uzunluk)}</td>
+      <td style="${c}text-align:right;">${esc(r.yukseklik)}</td>
+      <td style="${c}text-align:right;">${esc(r.minha)}</td>
+      <td style="${c}">${UNIT_LABEL[r.birim]||r.birim}</td>
+      <td style="${c}text-align:right;">${fmtNum(r.toplam)}</td>
+      <td style="${c}text-align:right;font-weight:700;white-space:nowrap;">${fmtNum(r.altToplam)}</td>
+    </tr>
+  `).join('');
+
+  const totalsRow = UNITS.filter(u=>sums[u]!==0).map(u=>`
+    <div style="display:inline-flex;flex-direction:column;padding:8px 14px;border:1px solid #1C6E8C;border-radius:8px;margin:4px 6px 0 0;">
+      <span style="font-size:9px;font-weight:700;color:#345264;text-transform:uppercase;">Toplam ${UNIT_LABEL[u]}</span>
+      <span style="font-size:14px;font-weight:700;">${fmtNum(sums[u])}</span>
+    </div>
+  `).join('');
+
+  const html = `
+    ${pdfHeaderHtml(proj, 'Metraj Raporu')}
+    <table style="width:100%;border-collapse:collapse;font-size:10px;table-layout:auto;">
+      <thead>
+        <tr style="background:#EAF6F5;">
+          ${['Blok','Kat','Daire','Mekân','Uygulama Yeri','İmalat Cinsi','Adet','K.Kenar','Uzunluk','Yükseklik','Minha','Birim','Toplam','Alt Toplam'].map(h=>`<th style="text-align:left;padding:7px 6px;border-bottom:1.5px solid #1C6E8C;white-space:nowrap;">${h}</th>`).join('')}
+        </tr>
+      </thead>
+      <tbody>${tableRows || '<tr><td colspan="14" style="padding:10px;text-align:center;color:#345264;">Kayıt yok</td></tr>'}</tbody>
+    </table>
+    <div style="margin-top:18px;">
+      <div style="font-size:11px;font-weight:700;margin-bottom:4px;">Genel Toplamlar</div>
+      <div>${totalsRow || '<span style="font-size:11px;color:#345264;">-</span>'}</div>
+    </div>
+    <div style="margin-top:36px;font-size:9px;color:#8096A3;">DNZ Metraj &amp; Teklif Yönetimi ile oluşturulmuştur.</div>
+  `;
+  try{
+    await renderNodeToPdf(html, `metraj-${proj.name.replace(/[^a-z0-9ığüşöç]+/gi,'_')}.pdf`, 'l');
+    showToast('Metraj PDF indirildi.');
+  }catch(e){
+    console.error(e);
+    showToast('PDF oluşturulurken bir sorun oluştu.');
+  }
+}
+
+async function exportTeklifPdf(proj, templateTitle){
+  templateTitle = templateTitle || 'TEKLİF FORMU';
+  showToast('PDF hazırlanıyor…');
+  const total = proj.teklifRows.reduce((s,r)=>s+(parseFloat(r.tutar)||0),0);
+  const tableRows = proj.teklifRows.map(r=>`
+    <tr>
+      <td style="max-width:260px;">${esc(r.aciklama)}</td>
+      <td style="text-align:right;">${fmtNum(r.miktar)}</td>
+      <td>${UNIT_LABEL[r.birim]||r.birim}</td>
+      <td style="text-align:right;">${fmtNum(r.birimFiyat)}</td>
+      <td style="text-align:right;font-weight:700;">${fmtMoney(r.tutar)}</td>
+    </tr>
+  `).join('');
+
+  const html = `
+    ${pdfHeaderHtml(proj)}
+    <div style="font-family:'Outfit',sans-serif;font-weight:700;font-size:15px;letter-spacing:1px;margin-bottom:14px;color:#1C6E8C;text-align:center;">${esc(templateTitle)}</div>
+    <table style="width:100%;border-collapse:collapse;font-size:10px;">
+      <thead>
+        <tr style="background:#EAF6F5;">
+          <th style="text-align:left;padding:7px 6px;border-bottom:1.5px solid #1C6E8C;">Açıklama</th>
+          <th style="text-align:right;padding:7px 6px;border-bottom:1.5px solid #1C6E8C;">Miktar</th>
+          <th style="text-align:left;padding:7px 6px;border-bottom:1.5px solid #1C6E8C;">Birim</th>
+          <th style="text-align:right;padding:7px 6px;border-bottom:1.5px solid #1C6E8C;">Birim Fiyat</th>
+          <th style="text-align:right;padding:7px 6px;border-bottom:1.5px solid #1C6E8C;">Tutar</th>
+        </tr>
+      </thead>
+      <tbody>${tableRows || '<tr><td colspan="5" style="padding:10px;text-align:center;color:#345264;">Kayıt yok</td></tr>'}</tbody>
+    </table>
+    <div style="display:flex;justify-content:flex-end;margin-top:14px;">
+      <div style="min-width:220px;border:1.5px solid #1C6E8C;border-radius:8px;padding:12px 16px;text-align:right;">
+        <div style="font-size:10px;color:#345264;font-weight:700;text-transform:uppercase;">Genel Toplam</div>
+        <div style="font-size:18px;font-weight:800;color:#0B2436;">${fmtMoney(total)}</div>
+      </div>
+    </div>
+    ${proj.teklifNote && proj.teklifNote.trim() ? `
+    <div style="margin-top:20px;padding:12px 14px;background:#F4FBFA;border:1px solid #1C6E8C55;border-radius:8px;font-size:10px;color:#345264;white-space:pre-wrap;">
+      <b style="color:#0B2436;">Not:</b> ${esc(proj.teklifNote)}
+    </div>` : ''}
+    <div style="display:flex;justify-content:space-between;margin-top:70px;">
+      <div style="text-align:center;width:45%;">
+        <div style="border-top:1px solid #0B2436;padding-top:6px;font-size:10px;">İŞVEREN<br>${esc(proj.employer||'')}</div>
+      </div>
+      <div style="text-align:center;width:45%;">
+        <div style="border-top:1px solid #0B2436;padding-top:6px;font-size:10px;">YÜKLENİCİ<br>${esc(state.company.name||'')}</div>
+      </div>
+    </div>
+  `;
+  try{
+    const fnamePrefix = templateTitle==='YAPILAN HAKEDİŞ LİSTESİ' ? 'hakedis' : 'teklif';
+    await renderNodeToPdf(html, `${fnamePrefix}-${proj.name.replace(/[^a-z0-9ığüşöç]+/gi,'_')}.pdf`);
+    showToast('PDF indirildi.');
+  }catch(e){
+    console.error(e);
+    showToast('PDF oluşturulurken bir sorun oluştu.');
+  }
+}
+
+/* ======================= PWA / OFFLINE ======================= */
+// İnternetsiz çalışabilmesi için service worker'ı kaydet. Bu, uygulama en az bir kez
+// internetli açıldıktan sonra tüm dosyaları (ve dış kütüphaneleri) önbelleğe alır;
+// sonraki açılışlarda internet olmasa da uygulama çalışmaya devam eder.
+if('serviceWorker' in navigator){
+  window.addEventListener('load', ()=>{
+    navigator.serviceWorker.register('service-worker.js').catch((e)=>{
+      console.error('Service worker kaydı başarısız', e);
+    });
+  });
+}
+
+/* ======================= INIT ======================= */
+(async function init(){
+  await loadState();
+  await refreshAutoBackupInfo();
+  if(state.company.logo && state.company.logo.length > 400000){
+    try{
+      state.company.logo = await resizeImageDataUrl(state.company.logo, 320, 0.8);
+      await saveState();
+    }catch(e){ /* yoksay */ }
+  }
+  if(!state.activeProjectId && Object.keys(state.projects).length>0){
+    state.activeProjectId = Object.keys(state.projects)[0];
+  }
+  renderAll();
+})();
+</script>
+</body>
+</html>
