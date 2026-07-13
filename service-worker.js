@@ -4,7 +4,7 @@
 // manifest, ikonlar) ve dışarıdan yüklenen kütüphaneleri (fontlar, html2canvas, jsPDF)
 // önbelleğe alır; ağ yoksa önbellekten, varsa güncel sürümden sunar.
 
-const CACHE_NAME = 'dnz-metraj-v1';
+const CACHE_NAME = 'dnz-metraj-v4';
 const CORE_ASSETS = [
   './',
   './index.html',
