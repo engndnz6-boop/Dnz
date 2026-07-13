@@ -428,6 +428,10 @@ footer.appfoot{text-align:center;padding:14px;color:rgba(11,36,54,0.45);font-siz
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 17V9M15 17V5M4 21h16"/><circle cx="9" cy="9" r="0"/></svg>
       Toplu İcmal
     </button>
+    <button class="tab-btn ripple-el-host" data-tab="topluhesap">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 3v18h18"/><path d="M7 16l4-6 4 4 5-8"/></svg>
+      Toplu Hesap
+    </button>
     <button class="tab-btn ripple-el-host" data-tab="tahsilat">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/><path d="M3 3l1 1M21 3l-1 1"/></svg>
       Tahsilat
@@ -507,7 +511,10 @@ let ui = {
   avansFilterId:'',
   zimmetFilterId:'',
   topluIcmalId:'',
-  topluIcmalAy: currentYm(),
+  topluIcmalStart: isoMonthStart(),
+  topluIcmalEnd: isoToday(),
+  topluHesapStart: isoMonthStart(),
+  topluHesapEnd: isoToday(),
   tahsilatEditId:null,
   masrafFilterKalemi:''
 };
@@ -691,6 +698,17 @@ function fmtMoney(n){
 function todayStr(){
   const d = new Date();
   return d.toLocaleDateString('tr-TR',{day:'2-digit',month:'2-digit',year:'numeric'});
+}
+// ISO (YYYY-MM-DD) formatında bugünün tarihi — <input type="date"> alanlarında varsayılan
+// değer olarak ve tarih aralığı karşılaştırmalarında kullanılır (todayStr() DD.MM.YYYY
+// döndürdüğü için karşılaştırmaya uygun değildir).
+function isoToday(){
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function isoMonthStart(){
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-01`;
 }
 function esc(s){
   return String(s??'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -902,6 +920,7 @@ function renderMain(){
   if(ui.tab==='puantaj') return renderPuantajTab(main, proj);
   if(ui.tab==='avanszimmet') return renderAvansZimmetTab(main, proj);
   if(ui.tab==='topluicmal') return renderTopluIcmalTab(main, proj);
+  if(ui.tab==='topluhesap') return renderTopluHesapTab(main, proj);
   if(ui.tab==='tahsilat') return renderTahsilatTab(main, proj);
   if(ui.tab==='masraf') return renderMasrafTab(main, proj);
 }
@@ -1903,6 +1922,70 @@ function personelMesaiToplam(p, ym){
   return total;
 }
 
+/* ---- İki tarih arası (serbest aralık) hesaplamalar: Toplu İcmal ve Toplu Hesap
+   sekmelerinde, tek bir aya bağlı kalmadan istenen herhangi bir dönem için kullanılır.
+   Puantaj/mesai kayıtları zaten "YYYY-MM-DD" biçiminde saklandığından, ay sınırı gözetmeden
+   doğrudan tarih aralığı üzerinden okunabilir. ---- */
+function datesInRange(start, end){
+  if(!start || !end || start>end) return [];
+  const out = [];
+  let d = new Date(start+'T00:00:00');
+  const endD = new Date(end+'T00:00:00');
+  while(d <= endD){
+    out.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`);
+    d.setDate(d.getDate()+1);
+  }
+  return out;
+}
+// Bir personelin, verilen tarih aralığındaki X/Y/O (Tam Gün/Yarım Gün/İzinli-Yok) dağılımı
+// ve toplam çalışılan gün sayısını (X=1, Y=0.5, O=0) döndürür.
+function personelPuantajDetailInRange(p, start, end){
+  const dates = datesInRange(start, end);
+  let tam=0, yarim=0, izin=0;
+  dates.forEach(key=>{
+    const val = p.puantaj && p.puantaj[key];
+    if(val==='X') tam++;
+    else if(val==='Y') yarim++;
+    else if(val==='O') izin++;
+  });
+  return { tam, yarim, izin, toplamGun: tam + yarim*0.5, dates };
+}
+function personelMesaiInRange(p, start, end){
+  const dates = datesInRange(start, end);
+  let total = 0;
+  dates.forEach(key=>{
+    const val = parseFloat(p.mesai && p.mesai[key]);
+    if(val) total += val;
+  });
+  return total;
+}
+function personelAvansListInRange(proj, personelId, start, end){
+  return (proj.avanslar||[]).filter(a=> a.personelId===personelId && a.odemeTarihi>=start && a.odemeTarihi<=end)
+    .slice().sort((a,b)=> (a.odemeTarihi||'').localeCompare(b.odemeTarihi||''));
+}
+function personelAvansToplamInRange(proj, personelId, start, end){
+  return personelAvansListInRange(proj, personelId, start, end).reduce((s,a)=> s+(parseFloat(a.tutar)||0), 0);
+}
+// Projedeki tüm personel için, verilen tarih aralığında çalışılan gün, mesai saati, hakediş,
+// alınan avans ve kalan bakiyeyi hesaplar; "Toplu Çalışan Hesabı" (topluhesap) sekmesinde kullanılır.
+function topluHesapRows(proj, start, end){
+  const list = (proj.personel||[]).slice().sort((a,b)=>a.adSoyad.localeCompare(b.adSoyad,'tr'));
+  const rows = list.map(p=>{
+    const det = personelPuantajDetailInRange(p, start, end);
+    const mesaiSaat = personelMesaiInRange(p, start, end);
+    const yevmiye = parseFloat(p.yevmiye)||0;
+    const saatlik = yevmiye/8;
+    const hakedis = det.toplamGun*yevmiye + mesaiSaat*saatlik;
+    const avans = personelAvansToplamInRange(proj, p.id, start, end);
+    return { p, gun: det.toplamGun, tam: det.tam, yarim: det.yarim, izin: det.izin, mesaiSaat, hakedis, avans, kalan: hakedis-avans };
+  });
+  const totals = rows.reduce((acc,r)=>{
+    acc.gun += r.gun; acc.mesaiSaat += r.mesaiSaat; acc.hakedis += r.hakedis; acc.avans += r.avans; acc.kalan += r.kalan;
+    return acc;
+  }, {gun:0, mesaiSaat:0, hakedis:0, avans:0, kalan:0});
+  return { rows, totals };
+}
+
 function renderPuantajTab(main, proj){
   main.innerHTML = `
     <div class="card glass">
@@ -2618,12 +2701,16 @@ function renderTopluIcmalTab(main, proj){
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 17V9M15 17V5M4 21h16"/></svg>
         Çalışan Toplu İcmal — <span style="color:var(--aqua-dim)">${esc(proj.name)}</span>
       </h2>
-      <div class="field-grid" style="grid-template-columns:2fr 1fr;align-items:end;">
+      <p class="hint">Seçtiğiniz personel için, belirlediğiniz tarih aralığındaki puantaj, mesai, ödeme (avans) ve hakediş özetini gösterir; "Personel Hak Ediş, Avans ve Dönem Puantaj Ekstresi" olarak PDF indirir.</p>
+      <div class="field-grid" style="grid-template-columns:2fr 1fr 1fr;align-items:end;">
         <div class="field"><label>Personel Seçin</label>
           <select id="ti-personelId">${personelOptionsHtml(personelList, ui.topluIcmalId, '— Personel Seçin —')}</select>
         </div>
-        <div class="field"><label>Puantaj/Mesai Ayı</label>
-          <input type="month" id="ti-ay" class="month-picker" value="${ui.topluIcmalAy}">
+        <div class="field"><label>Başlangıç Tarihi</label>
+          <input type="date" id="ti-start" value="${esc(ui.topluIcmalStart)}">
+        </div>
+        <div class="field"><label>Bitiş Tarihi</label>
+          <input type="date" id="ti-end" value="${esc(ui.topluIcmalEnd)}">
         </div>
       </div>
     </div>
@@ -2633,8 +2720,12 @@ function renderTopluIcmalTab(main, proj){
     ui.topluIcmalId = e.target.value;
     renderTopluIcmalBody(proj);
   });
-  document.getElementById('ti-ay').addEventListener('change',(e)=>{
-    ui.topluIcmalAy = e.target.value || currentYm();
+  document.getElementById('ti-start').addEventListener('change',(e)=>{
+    ui.topluIcmalStart = e.target.value || isoMonthStart();
+    renderTopluIcmalBody(proj);
+  });
+  document.getElementById('ti-end').addEventListener('change',(e)=>{
+    ui.topluIcmalEnd = e.target.value || isoToday();
     renderTopluIcmalBody(proj);
   });
   renderTopluIcmalBody(proj);
@@ -2644,44 +2735,68 @@ function renderTopluIcmalBody(proj){
   const body = document.getElementById('topluIcmalBody');
   const p = (proj.personel||[]).find(x=>x.id===ui.topluIcmalId);
   if(!p){
-    body.innerHTML = `<div class="card glass"><div class="empty-state">Özetini görmek için yukarıdan bir personel seçin.</div></div>`;
+    body.innerHTML = `<div class="card glass"><div class="empty-state">Ekstresini görmek için yukarıdan bir personel seçin.</div></div>`;
     return;
   }
-  const toplamGun = personelToplamGunTumZaman(p);
-  const toplamMesaiSaat = personelToplamMesaiTumZaman(p);
+  const start = ui.topluIcmalStart, end = ui.topluIcmalEnd;
+  if(!start || !end || start>end){
+    body.innerHTML = `<div class="card glass"><div class="empty-state">Lütfen geçerli bir tarih aralığı seçin (başlangıç tarihi bitişten önce olmalı).</div></div>`;
+    return;
+  }
+  const det = personelPuantajDetailInRange(p, start, end);
+  const mesaiSaat = personelMesaiInRange(p, start, end);
   const yevmiye = parseFloat(p.yevmiye)||0;
   const saatlik = yevmiye/8;
-  const hakGun = toplamGun*yevmiye;
-  const hakMesai = toplamMesaiSaat*saatlik;
+  const hakGun = det.toplamGun*yevmiye;
+  const hakMesai = mesaiSaat*saatlik;
   const hakedis = hakGun+hakMesai;
-  const toplamAvans = personelToplamAvans(proj, p.id);
+  const odemeler = personelAvansListInRange(proj, p.id, start, end);
+  const toplamAvans = odemeler.reduce((s,a)=>s+(parseFloat(a.tutar)||0),0);
   const kalanOdeme = hakedis - toplamAvans;
-  const zimmetList = (proj.zimmetler||[]).filter(z=>z.personelId===p.id).sort((a,b)=>(b.zimmetTarihi||'').localeCompare(a.zimmetTarihi||''));
+  const zimmetler = (proj.zimmetler||[]).filter(z=>z.personelId===p.id)
+    .slice().sort((a,b)=>(a.zimmetTarihi||'').localeCompare(b.zimmetTarihi||''));
   const st = personelStatus(p);
 
   body.innerHTML = `
     <div class="card glass">
       <h2>${esc(p.adSoyad)} <span class="status-badge ${st.cls}" style="margin-left:8px;">${st.text}</span></h2>
-      <p class="hint">${esc(p.pozisyon)||'—'} · Giriş: ${fmtDateStr(p.girisTarihi)} · Çıkış: ${fmtDateStr(p.cikisTarihi)} · Yevmiye: ${fmtMoney(yevmiye)}</p>
+      <p class="hint">${esc(p.pozisyon)||'—'} · Dönem: ${fmtDateStr(start)} — ${fmtDateStr(end)} · Yevmiye: ${fmtMoney(yevmiye)}</p>
       <div class="totals-strip">
-        <div class="total-chip"><span class="lbl">Toplam Çalışılan Gün</span><span class="val">${fmtNum(toplamGun)}</span></div>
-        <div class="total-chip"><span class="lbl">Toplam Mesai Saati</span><span class="val">${fmtNum(toplamMesaiSaat)}</span></div>
-        <div class="total-chip"><span class="lbl">Puantaj Hakedişi</span><span class="val">${fmtMoney(hakGun)}</span></div>
-        <div class="total-chip"><span class="lbl">Mesai Hakedişi</span><span class="val">${fmtMoney(hakMesai)}</span></div>
+        <div class="total-chip"><span class="lbl">Tam Gün (X)</span><span class="val">${det.tam}</span></div>
+        <div class="total-chip"><span class="lbl">Yarım Gün (Y)</span><span class="val">${det.yarim}</span></div>
+        <div class="total-chip"><span class="lbl">İzinli/Yok (O)</span><span class="val">${det.izin}</span></div>
+        <div class="total-chip"><span class="lbl">Toplam Çalışılan Gün</span><span class="val">${fmtNum(det.toplamGun)}</span></div>
+        <div class="total-chip"><span class="lbl">Mesai Saati</span><span class="val">${fmtNum(mesaiSaat)}</span></div>
         <div class="total-chip"><span class="lbl">Toplam Hakediş</span><span class="val">${fmtMoney(hakedis)}</span></div>
-        <div class="total-chip"><span class="lbl">Aldığı Avans</span><span class="val">${fmtMoney(toplamAvans)}</span></div>
-        <div class="total-chip"><span class="lbl">Kalan Ödeme</span><span class="val">${fmtMoney(kalanOdeme)}</span></div>
+        <div class="total-chip"><span class="lbl">Alınan Avans</span><span class="val">${fmtMoney(toplamAvans)}</span></div>
+        <div class="total-chip"><span class="lbl">Net Kalan Ödeme</span><span class="val">${fmtMoney(kalanOdeme)}</span></div>
       </div>
     </div>
 
     <div class="card glass">
-      <h2>Aldığı Zimmetler</h2>
+      <h2>Dönem İçi Yapılan Ödemeler</h2>
       <div class="table-scroll">
-        ${zimmetList.length===0 ? `<div class="empty-state">Bu personele zimmet verilmemiş.</div>` : `
+        ${odemeler.length===0 ? `<div class="empty-state">Bu dönemde ödeme/avans kaydı yok.</div>` : `
         <table>
-          <thead><tr><th>Zimmet Tarihi</th><th>Marka/Model</th><th>Açıklama</th><th>Teslim Tarihi</th></tr></thead>
+          <thead><tr><th>Tarih</th><th>Ödeme Şekli</th><th>Açıklama</th><th class="num">Tutar</th></tr></thead>
           <tbody>
-            ${zimmetList.map(z=>`<tr>
+            ${odemeler.map(a=>`<tr>
+              <td>${fmtDateStr(a.odemeTarihi)}</td><td>${esc(a.odemeSekli)}</td><td>${esc(a.aciklama)||'—'}</td>
+              <td class="num">${fmtMoney(a.tutar)}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>`}
+      </div>
+    </div>
+
+    <div class="card glass">
+      <h2>Zimmetinde Bulunan / Teslim Edilen Ürünler</h2>
+      <div class="table-scroll">
+        ${zimmetler.length===0 ? `<div class="empty-state">Bu personel adına kayıtlı zimmet yok.</div>` : `
+        <table>
+          <thead><tr><th>Zimmet Tarihi</th><th>Marka/Model</th><th>Açıklama</th><th>Teslim / Durum</th></tr></thead>
+          <tbody>
+            ${zimmetler.map(z=>`<tr>
               <td>${fmtDateStr(z.zimmetTarihi)}</td><td>${esc(z.markaModel)}</td><td>${esc(z.aciklama)||'—'}</td>
               <td>${z.teslimTarihi ? fmtDateStr(z.teslimTarihi) : '<span class="status-badge aktif">Zimmette</span>'}</td>
             </tr>`).join('')}
@@ -2691,118 +2806,328 @@ function renderTopluIcmalBody(proj){
     </div>
 
     <div class="card glass">
-      <h2>Puantaj Cetveli (${ui.topluIcmalAy})</h2>
-      <div class="table-scroll" id="ti-puantajWrap"></div>
-    </div>
-    <div class="card glass">
-      <h2>Mesai Cetveli (${ui.topluIcmalAy})</h2>
-      <div class="table-scroll" id="ti-mesaiWrap"></div>
-    </div>
-
-    <div class="card glass">
       <div class="btn-row">
         <button class="btn btn-primary" id="btnTopluIcmalPdf">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg>
-          Toplu İcmal PDF'ini İndir
+          Personel Ekstresi PDF'ini İndir
         </button>
       </div>
     </div>
   `;
-  const monthList = activePersonelForMonth(proj, ui.topluIcmalAy).filter(x=>x.id===p.id);
-  renderPuantajTable(proj, {wrapId:'ti-puantajWrap', ym:ui.topluIcmalAy, list:monthList});
-  renderMesaiTable(proj, {wrapId:'ti-mesaiWrap', ym:ui.topluIcmalAy, list:monthList});
   document.getElementById('btnTopluIcmalPdf').onclick = ()=>exportTopluIcmalPdf(proj, p);
 }
 
 async function exportTopluIcmalPdf(proj, p){
   showToast('PDF hazırlanıyor…');
-  const ym = ui.topluIcmalAy;
-  const toplamGun = personelToplamGunTumZaman(p);
-  const toplamMesaiSaat = personelToplamMesaiTumZaman(p);
+  const start = ui.topluIcmalStart, end = ui.topluIcmalEnd;
+  const det = personelPuantajDetailInRange(p, start, end);
+  const mesaiSaat = personelMesaiInRange(p, start, end);
   const yevmiye = parseFloat(p.yevmiye)||0;
   const saatlik = yevmiye/8;
-  const hakGun = toplamGun*yevmiye;
-  const hakMesai = toplamMesaiSaat*saatlik;
+  const hakGun = det.toplamGun*yevmiye;
+  const hakMesai = mesaiSaat*saatlik;
   const hakedis = hakGun+hakMesai;
-  const toplamAvans = personelToplamAvans(proj, p.id);
+  const odemeler = personelAvansListInRange(proj, p.id, start, end);
+  const toplamAvans = odemeler.reduce((s,a)=>s+(parseFloat(a.tutar)||0),0);
   const kalanOdeme = hakedis - toplamAvans;
-  const zimmetList = (proj.zimmetler||[]).filter(z=>z.personelId===p.id);
+  const dates = det.dates;
+  const zimmetRows = (proj.zimmetler||[]).filter(z=>z.personelId===p.id)
+    .slice().sort((a,b)=>(a.zimmetTarihi||'').localeCompare(b.zimmetTarihi||''));
 
-  const cellStyle = 'border:1px solid #E4EFEF;padding:3px 2px;text-align:center;';
-  const wkndStyle = 'background:#FBEDEA;';
-  const nameStyle = 'border:1px solid #E4EFEF;padding:4px 6px;text-align:left;white-space:nowrap;font-weight:600;';
-  const n = daysInMonth(ym);
-  const days = Array.from({length:n}, (_,i)=>i+1);
-  const gunToplamAy = personelPuantajToplam(p, ym);
-  const mesaiToplamAy = personelMesaiToplam(p, ym);
+  const attCellStyle = 'border:1px solid #E4EFEF;padding:4px 1px;text-align:center;font-size:9px;white-space:nowrap;';
+  const attHeadStyle = 'background:#0B2436;color:#ffffff;padding:4px 1px;text-align:center;font-size:8px;font-weight:700;white-space:nowrap;';
+  const ATT_COLOR = {X:'#0A5850', Y:'#8a5a00', O:'#7A2B22'};
+  const MONTH_NAMES = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
 
-  const puantajRow = `
+  // Seçilen tarih aralığı bir aydan uzun olabildiği (Toplu İcmal serbest aralık kullanır) için
+  // günleri sabit sayıda (ör. 20'şerli) değil, HER AYI KENDİ TEK SATIRINA alacak şekilde
+  // takvim ayına göre grupluyoruz. Bir ay en fazla 31 gün olduğundan (mevcut aylık Puantaj/Mesai
+  // raporunda olduğu gibi) bu satır her zaman sayfa genişliğine sığar.
+  const monthMap = new Map();
+  dates.forEach(key=>{
+    const ym = key.slice(0,7);
+    if(!monthMap.has(ym)) monthMap.set(ym, []);
+    monthMap.get(ym).push(key);
+  });
+  const monthGroups = Array.from(monthMap.entries()).map(([ym, keys])=>{
+    const [y,m] = ym.split('-');
+    return { caption: `${MONTH_NAMES[parseInt(m,10)-1]} ${y}`, keys };
+  });
+
+  const monthGridHtml = (groups, valueFn)=> groups.map(({caption, keys})=>{
+    const head = keys.map(key=>`<th style="${attHeadStyle}">${key.slice(8,10)}</th>`).join('');
+    const row = keys.map(valueFn).join('');
+    return `
+      <div style="font-size:9px;font-weight:700;color:#345264;margin:6px 0 3px;">${esc(caption)}</div>
+      <table style="width:100%;table-layout:fixed;border-collapse:collapse;">
+        <thead><tr>${head}</tr></thead>
+        <tbody><tr>${row}</tr></tbody>
+      </table>`;
+  }).join('');
+
+  const puantajTablesHtml = monthGridHtml(monthGroups, key=>{
+    const val = (p.puantaj && p.puantaj[key]) || '';
+    const color = ATT_COLOR[val] || '#B7C4CC';
+    return `<td style="${attCellStyle}font-weight:700;color:${color};">${val || '-'}</td>`;
+  }) || `<div style="font-size:10px;color:#8096A3;">Seçilen dönemde tarih bulunamadı.</div>`;
+
+  const mesaiTablesHtml = monthGridHtml(monthGroups, key=>{
+    const val = parseFloat(p.mesai && p.mesai[key]) || 0;
+    return `<td style="${attCellStyle}${val?'font-weight:700;color:#1C6E8C;':''}">${val ? fmtNum(val) : '-'}</td>`;
+  });
+
+  const infoBoxStyle = 'flex:1;border:1px solid #DCEBEA;border-radius:8px;padding:12px 14px;background:#F7FBFB;';
+  const labelStyle = 'font-size:9px;font-weight:700;color:#345264;letter-spacing:0.3px;';
+  const valueStyle = 'font-size:11px;font-weight:700;color:#0B2436;';
+
+  const paymentsRows = odemeler.map(a=>`
     <tr>
-      <td style="${nameStyle}">${esc(p.adSoyad)}</td>
-      ${days.map(d=>{
-        const key = dateKeyFor(ym,d);
-        const val = (p.puantaj && p.puantaj[key]) || '';
-        return `<td style="${cellStyle}${isWeekendDay(ym,d)?wkndStyle:''}">${val}</td>`;
-      }).join('')}
-      <td style="${cellStyle}font-weight:700;">${fmtNum(gunToplamAy)}</td>
-      <td style="${cellStyle}font-weight:700;">${fmtMoney(gunToplamAy*yevmiye)}</td>
-    </tr>`;
-  const mesaiRow = `
-    <tr>
-      <td style="${nameStyle}">${esc(p.adSoyad)}</td>
-      ${days.map(d=>{
-        const key = dateKeyFor(ym,d);
-        const val = (p.mesai && p.mesai[key]) || '';
-        return `<td style="${cellStyle}${isWeekendDay(ym,d)?wkndStyle:''}">${val||''}</td>`;
-      }).join('')}
-      <td style="${cellStyle}font-weight:700;">${fmtNum(mesaiToplamAy)}</td>
-      <td style="${cellStyle}font-weight:700;">${fmtMoney(mesaiToplamAy*saatlik)}</td>
-    </tr>`;
+      <td style="border:1px solid #E4EFEF;padding:5px 6px;font-size:10px;">${fmtDateStr(a.odemeTarihi)}</td>
+      <td style="border:1px solid #E4EFEF;padding:5px 6px;font-size:10px;">${esc(a.odemeSekli)}</td>
+      <td style="border:1px solid #E4EFEF;padding:5px 6px;font-size:10px;">${esc(a.aciklama)||'—'}</td>
+      <td style="border:1px solid #E4EFEF;padding:5px 6px;font-size:10px;text-align:right;">${fmtMoney(a.tutar)}</td>
+    </tr>`).join('') || `<tr><td colspan="4" style="border:1px solid #E4EFEF;padding:10px;text-align:center;color:#8096A3;font-size:10px;">Bu dönemde ödeme kaydı yok.</td></tr>`;
 
-  const rowStyle = 'padding:7px 4px;border-bottom:1px solid #E4EFEF;';
-  const infoRow = (label,val)=>`<tr><td style="${rowStyle}font-weight:700;color:#345264;width:40%;">${esc(label)}</td><td style="${rowStyle}">${esc(val)}</td></tr>`;
+  const zimmetRowsHtml = zimmetRows.map(z=>`
+    <tr>
+      <td style="border:1px solid #E4EFEF;padding:5px 6px;font-size:10px;">${fmtDateStr(z.zimmetTarihi)}</td>
+      <td style="border:1px solid #E4EFEF;padding:5px 6px;font-size:10px;">${esc(z.markaModel)}</td>
+      <td style="border:1px solid #E4EFEF;padding:5px 6px;font-size:10px;">${esc(z.aciklama)||'—'}</td>
+      <td style="border:1px solid #E4EFEF;padding:5px 6px;font-size:10px;${z.teslimTarihi?'':'color:#0A8F5B;font-weight:700;'}">${z.teslimTarihi ? fmtDateStr(z.teslimTarihi) : 'Zimmette'}</td>
+    </tr>`).join('') || `<tr><td colspan="4" style="border:1px solid #E4EFEF;padding:10px;text-align:center;color:#8096A3;font-size:10px;">Bu personel adına kayıtlı zimmet yok.</td></tr>`;
+
+  const summaryRow = (label, val, color)=>`
+    <tr>
+      <td style="padding:6px 4px;border-bottom:1px solid #E4EFEF;font-size:10px;color:#345264;">${esc(label)}</td>
+      <td style="padding:6px 4px;border-bottom:1px solid #E4EFEF;font-size:10px;text-align:right;font-weight:700;${color?`color:${color};`:''}">${val}</td>
+    </tr>`;
 
   const html = `
-    ${pdfHeaderHtml(proj, 'Çalışan Toplu İcmal')}
-    <div style="font-family:'Outfit',sans-serif;font-weight:700;font-size:15px;margin-bottom:10px;color:#1C6E8C;">${esc(p.adSoyad)}</div>
-    <table style="width:100%;border-collapse:collapse;font-size:11px;max-width:560px;margin-bottom:16px;">
-      ${infoRow('Pozisyonu', p.pozisyon||'—')}
-      ${infoRow('İşe Giriş / Çıkış', `${fmtDateStr(p.girisTarihi)} — ${fmtDateStr(p.cikisTarihi)}`)}
-      ${infoRow('Yevmiye', fmtMoney(yevmiye))}
-      ${infoRow('Toplam Çalışılan Gün', fmtNum(toplamGun))}
-      ${infoRow('Toplam Mesai Saati', fmtNum(toplamMesaiSaat))}
-      ${infoRow('Puantaj Hakedişi', fmtMoney(hakGun))}
-      ${infoRow('Mesai Hakedişi', fmtMoney(hakMesai))}
-      ${infoRow('Toplam Hakediş', fmtMoney(hakedis))}
-      ${infoRow('Aldığı Avans', fmtMoney(toplamAvans))}
-      ${infoRow('Kalan Ödeme', fmtMoney(kalanOdeme))}
-      ${infoRow('Aldığı Zimmet Sayısı', String(zimmetList.length))}
+    ${pdfHeaderHtml(proj, 'PERSONEL HAK EDİŞ, AVANS VE DÖNEM PUANTAJ EKSTRESİ')}
+    <div style="display:flex;gap:14px;margin-bottom:16px;">
+      <div style="${infoBoxStyle}">
+        <div style="${labelStyle}margin-bottom:3px;">PERSONEL ADI SOYADI</div>
+        <div style="${valueStyle}margin-bottom:8px;">${esc(p.adSoyad)}</div>
+        <div style="${labelStyle}margin-bottom:3px;">T.C. KİMLİK &amp; BABA ADI</div>
+        <div style="${valueStyle}margin-bottom:8px;">${esc(p.kimlikNo)||'—'} | ${esc(p.babaAdi)||'—'}</div>
+        <div style="${labelStyle}margin-bottom:3px;">BANKA IBAN</div>
+        <div style="${valueStyle}">${esc(p.banka)||'—'}</div>
+      </div>
+      <div style="${infoBoxStyle}">
+        <div style="${labelStyle}margin-bottom:3px;">HESAP / HAK DÖNEMİ</div>
+        <div style="${valueStyle}margin-bottom:8px;">${fmtDateStr(start)} — ${fmtDateStr(end)}</div>
+        <div style="${labelStyle}margin-bottom:3px;">SÖZLEŞME GÜNLÜK YEVMİYE</div>
+        <div style="${valueStyle}margin-bottom:8px;">${fmtMoney(yevmiye)}</div>
+        <div style="${labelStyle}margin-bottom:3px;">ŞANTİYE GİRİŞ / ÇIKIŞ</div>
+        <div style="${valueStyle}">${fmtDateStr(p.girisTarihi)} / ${p.cikisTarihi ? fmtDateStr(p.cikisTarihi) : 'Devam Ediyor'}</div>
+      </div>
+    </div>
+
+    <div style="font-family:'Outfit',sans-serif;font-weight:700;font-size:11px;margin-bottom:6px;color:#1C6E8C;letter-spacing:0.3px;">DÖNEM PUANTAJ GÜNLÜK DEVAM ÇİZELGESİ</div>
+    <div style="margin-bottom:14px;">${puantajTablesHtml}</div>
+
+    <div style="font-family:'Outfit',sans-serif;font-weight:700;font-size:11px;margin-bottom:6px;color:#1C6E8C;letter-spacing:0.3px;">DÖNEM MESAİ (FAZLA ÇALIŞMA) ÇİZELGESİ</div>
+    <div style="margin-bottom:16px;">${mesaiTablesHtml || `<div style="font-size:10px;color:#8096A3;">Bu dönemde işlenmiş mesai kaydı yok.</div>`}</div>
+
+    <table style="width:1074px;table-layout:fixed;border-collapse:collapse;margin-bottom:16px;">
+      <colgroup><col style="width:630px"><col style="width:24px"><col style="width:420px"></colgroup>
+      <tr>
+        <td style="vertical-align:top;padding:0;overflow:hidden;">
+          <div style="font-family:'Outfit',sans-serif;font-weight:700;font-size:11px;margin-bottom:6px;color:#1C6E8C;">DÖNEM İÇİ YAPILAN ÖDEMELER</div>
+          <table style="width:100%;table-layout:fixed;border-collapse:collapse;">
+            <colgroup><col style="width:23%"><col style="width:22%"><col style="width:30%"><col style="width:25%"></colgroup>
+            <thead><tr style="background:#EAF6F5;">
+              <th style="border:1px solid #E4EFEF;padding:5px 6px;font-size:9px;text-align:left;">TARİH</th>
+              <th style="border:1px solid #E4EFEF;padding:5px 6px;font-size:9px;text-align:left;">KANAL</th>
+              <th style="border:1px solid #E4EFEF;padding:5px 6px;font-size:9px;text-align:left;">AÇIKLAMA</th>
+              <th style="border:1px solid #E4EFEF;padding:5px 6px;font-size:9px;text-align:right;">TUTAR</th>
+            </tr></thead>
+            <tbody>${paymentsRows}</tbody>
+          </table>
+        </td>
+        <td></td>
+        <td style="vertical-align:top;padding:0;overflow:hidden;">
+          <div style="border:1px solid #1C6E8C;border-radius:8px;padding:12px 14px;width:392px;">
+            <div style="font-family:'Outfit',sans-serif;font-weight:700;font-size:11px;margin-bottom:8px;color:#1C6E8C;">DÖNEM MUTABAKAT ÖZETİ</div>
+            <table style="width:100%;table-layout:fixed;border-collapse:collapse;">
+              <colgroup><col style="width:230px"><col style="width:162px"></colgroup>
+              ${summaryRow('Toplam Tam Gün (X)', `${det.tam} Gün`)}
+              ${summaryRow('Toplam Yarım Gün (Y)', `${det.yarim} Gün`)}
+              ${summaryRow('İzinli / Yok (O)', `${det.izin} Gün`)}
+              ${summaryRow('Çalışılan Mesai Saati', `${fmtNum(mesaiSaat)} s`, '#1C6E8C')}
+              ${summaryRow('Hesaplanan Mesai Tutarı', fmtMoney(hakMesai), '#1C6E8C')}
+              ${summaryRow('Kazanılan Brüt Hakediş (Mesai Dahil)', fmtMoney(hakedis), '#0A8F5B')}
+              ${summaryRow('Düşülen Toplam Avans', `-${fmtMoney(toplamAvans)}`, '#C0392B')}
+            </table>
+            <table style="width:100%;table-layout:fixed;border-collapse:collapse;margin-top:10px;">
+              <colgroup><col style="width:230px"><col style="width:162px"></colgroup>
+              <tr>
+                <td style="padding-top:10px;border-top:2px solid #0B2436;font-weight:700;font-size:11px;">NET KALAN ÖDEME:</td>
+                <td style="padding-top:10px;border-top:2px solid #0B2436;font-weight:800;font-size:14px;text-align:right;white-space:nowrap;">${fmtMoney(kalanOdeme)}</td>
+              </tr>
+            </table>
+          </div>
+        </td>
+      </tr>
     </table>
 
-    <div style="font-family:'Outfit',sans-serif;font-weight:700;font-size:12px;margin-bottom:5px;color:#1C6E8C;">Puantaj Cetveli — ${ym}</div>
-    <table style="width:100%;border-collapse:collapse;font-size:8px;margin-bottom:12px;">
+    <div style="font-family:'Outfit',sans-serif;font-weight:700;font-size:11px;margin-bottom:6px;color:#1C6E8C;">ZİMMETİNDE BULUNAN / TESLİM EDİLEN ÜRÜNLER</div>
+    <table style="width:100%;border-collapse:collapse;margin-bottom:16px;">
       <thead><tr style="background:#EAF6F5;">
-        <th style="${nameStyle}">Adı Soyadı</th>
-        ${days.map(d=>`<th style="${cellStyle}${isWeekendDay(ym,d)?wkndStyle:''}">${d}</th>`).join('')}
-        <th style="${cellStyle}">Toplam</th><th style="${cellStyle}">Tutar</th>
+        <th style="border:1px solid #E4EFEF;padding:5px 6px;font-size:9px;text-align:left;">ZİMMET TARİHİ</th>
+        <th style="border:1px solid #E4EFEF;padding:5px 6px;font-size:9px;text-align:left;">MARKA / MODEL</th>
+        <th style="border:1px solid #E4EFEF;padding:5px 6px;font-size:9px;text-align:left;">AÇIKLAMA</th>
+        <th style="border:1px solid #E4EFEF;padding:5px 6px;font-size:9px;text-align:left;">TESLİM / DURUM</th>
       </tr></thead>
-      <tbody>${puantajRow}</tbody>
+      <tbody>${zimmetRowsHtml}</tbody>
     </table>
 
-    <div style="font-family:'Outfit',sans-serif;font-weight:700;font-size:12px;margin-bottom:5px;color:#1C6E8C;">Mesai Cetveli — ${ym}</div>
-    <table style="width:100%;border-collapse:collapse;font-size:8px;">
-      <thead><tr style="background:#EAF6F5;">
-        <th style="${nameStyle}">Adı Soyadı</th>
-        ${days.map(d=>`<th style="${cellStyle}${isWeekendDay(ym,d)?wkndStyle:''}">${d}</th>`).join('')}
-        <th style="${cellStyle}">Saat</th><th style="${cellStyle}">Tutar</th>
-      </tr></thead>
-      <tbody>${mesaiRow}</tbody>
-    </table>
-    <div style="margin-top:36px;font-size:9px;color:#8096A3;">DNZ Metraj &amp; Teklif Yönetimi ile oluşturulmuştur.</div>
+    <div style="display:flex;justify-content:space-between;margin-top:24px;padding-top:16px;border-top:1px solid #E4EFEF;">
+      <div style="text-align:center;width:45%;">
+        <div style="font-weight:700;font-size:10px;">Personel İmzası</div>
+        <div style="font-size:9px;color:#8096A3;margin-top:4px;">Okudum, Onaylıyorum.</div>
+      </div>
+      <div style="text-align:center;width:45%;">
+        <div style="font-weight:700;font-size:10px;">Muhasebe Onayı</div>
+        <div style="font-size:9px;color:#8096A3;margin-top:4px;">Kaşe / İmza</div>
+      </div>
+    </div>
   `;
   try{
-    await renderNodeToPdf(html, `toplu-icmal-${p.adSoyad.replace(/[^a-z0-9ığüşöç]+/gi,'_')}-${ym}.pdf`, 'l');
-    showToast('Toplu icmal PDF indirildi.');
+    await renderNodeToPdf(html, `personel-ekstresi-${p.adSoyad.replace(/[^a-z0-9ığüşöç]+/gi,'_')}-${start}_${end}.pdf`, 'l');
+    showToast('Personel ekstresi PDF indirildi.');
+  }catch(e){ console.error(e); showToast('PDF oluşturulurken bir sorun oluştu.'); }
+}
+
+/* ======================= TOPLU ÇALIŞAN HESABI (TÜM PERSONEL — TARİH ARALIĞI) ======================= */
+function renderTopluHesapTab(main, proj){
+  main.innerHTML = `
+    <div class="card glass">
+      <h2>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 16l4-6 4 4 5-8"/></svg>
+        Toplu Çalışan Hesabı — <span style="color:var(--aqua-dim)">${esc(proj.name)}</span>
+      </h2>
+      <p class="hint">Belirlediğiniz tarih aralığında, projedeki tüm çalışanların çalıştığı gün sayısı, mesai saati, hakediş, aldığı avans ve kalan bakiyesini tek tabloda; alt toplamlarıyla birlikte gösterir ve PDF olarak indirir.</p>
+      <div class="field-grid" style="grid-template-columns:1fr 1fr;align-items:end;">
+        <div class="field"><label>Başlangıç Tarihi</label>
+          <input type="date" id="th-start" value="${esc(ui.topluHesapStart)}">
+        </div>
+        <div class="field"><label>Bitiş Tarihi</label>
+          <input type="date" id="th-end" value="${esc(ui.topluHesapEnd)}">
+        </div>
+      </div>
+    </div>
+    <div id="topluHesapBody"></div>
+  `;
+  document.getElementById('th-start').addEventListener('change',(e)=>{
+    ui.topluHesapStart = e.target.value || isoMonthStart();
+    renderTopluHesapBody(proj);
+  });
+  document.getElementById('th-end').addEventListener('change',(e)=>{
+    ui.topluHesapEnd = e.target.value || isoToday();
+    renderTopluHesapBody(proj);
+  });
+  renderTopluHesapBody(proj);
+}
+
+function renderTopluHesapBody(proj){
+  const body = document.getElementById('topluHesapBody');
+  const start = ui.topluHesapStart, end = ui.topluHesapEnd;
+  if(!start || !end || start>end){
+    body.innerHTML = `<div class="card glass"><div class="empty-state">Lütfen geçerli bir tarih aralığı seçin (başlangıç tarihi bitişten önce olmalı).</div></div>`;
+    return;
+  }
+  const { rows, totals } = topluHesapRows(proj, start, end);
+  body.innerHTML = `
+    <div class="card glass">
+      <h2>Dönem Özeti — ${fmtDateStr(start)} — ${fmtDateStr(end)}</h2>
+      <div class="table-scroll">
+        ${rows.length===0 ? `<div class="empty-state">Bu projede kayıtlı personel yok.</div>` : `
+        <table>
+          <thead><tr>
+            <th>Adı Soyadı</th><th>Pozisyon</th><th class="num">Çalışılan Gün</th><th class="num">Mesai (s)</th>
+            <th class="num">Hakediş</th><th class="num">Alınan Avans</th><th class="num">Kalan Bakiye</th>
+          </tr></thead>
+          <tbody>
+            ${rows.map(r=>`<tr>
+              <td>${esc(r.p.adSoyad)}</td>
+              <td>${esc(r.p.pozisyon)||'—'}</td>
+              <td class="num">${fmtNum(r.gun)}</td>
+              <td class="num">${fmtNum(r.mesaiSaat)}</td>
+              <td class="num">${fmtMoney(r.hakedis)}</td>
+              <td class="num">${fmtMoney(r.avans)}</td>
+              <td class="num" style="font-weight:700;">${fmtMoney(r.kalan)}</td>
+            </tr>`).join('')}
+          </tbody>
+          <tfoot>
+            <tr style="font-weight:700;background:rgba(47,211,199,0.14);">
+              <td colspan="2">GENEL TOPLAM</td>
+              <td class="num">${fmtNum(totals.gun)}</td>
+              <td class="num">${fmtNum(totals.mesaiSaat)}</td>
+              <td class="num">${fmtMoney(totals.hakedis)}</td>
+              <td class="num">${fmtMoney(totals.avans)}</td>
+              <td class="num">${fmtMoney(totals.kalan)}</td>
+            </tr>
+          </tfoot>
+        </table>`}
+      </div>
+    </div>
+    <div class="card glass">
+      <div class="btn-row">
+        <button class="btn btn-primary" id="btnTopluHesapPdf">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg>
+          Toplu Çalışan Hesabı PDF'ini İndir
+        </button>
+      </div>
+    </div>
+  `;
+  const btn = document.getElementById('btnTopluHesapPdf');
+  if(btn) btn.onclick = ()=>exportTopluHesapPdf(proj, start, end, rows, totals);
+}
+
+async function exportTopluHesapPdf(proj, start, end, rows, totals){
+  showToast('PDF hazırlanıyor…');
+  const th = 'border:1px solid #0B2436;background:#0B2436;color:#ffffff;padding:6px 6px;font-size:9px;text-align:left;';
+  const thNum = th + 'text-align:right;';
+  const td = 'border:1px solid #E4EFEF;padding:5px 6px;font-size:10px;';
+  const tdNum = td + 'text-align:right;';
+  const rowsHtml = rows.map(r=>`
+    <tr>
+      <td style="${td}">${esc(r.p.adSoyad)}</td>
+      <td style="${td}">${esc(r.p.pozisyon)||'—'}</td>
+      <td style="${tdNum}">${fmtNum(r.gun)}</td>
+      <td style="${tdNum}">${fmtNum(r.mesaiSaat)}</td>
+      <td style="${tdNum}">${fmtMoney(r.hakedis)}</td>
+      <td style="${tdNum}">${fmtMoney(r.avans)}</td>
+      <td style="${tdNum}font-weight:700;">${fmtMoney(r.kalan)}</td>
+    </tr>`).join('') || `<tr><td colspan="7" style="${td}text-align:center;color:#8096A3;">Kayıtlı personel bulunamadı.</td></tr>`;
+
+  const html = `
+    ${pdfHeaderHtml(proj, 'Toplu Çalışan Hesabı — Puantaj / Mesai / Avans / Bakiye Özeti')}
+    <div style="font-size:11px;color:#345264;margin-bottom:12px;"><b>Dönem:</b> ${fmtDateStr(start)} — ${fmtDateStr(end)}</div>
+    <table style="width:100%;border-collapse:collapse;margin-bottom:8px;">
+      <thead><tr>
+        <th style="${th}">ADI SOYADI</th><th style="${th}">POZİSYON</th>
+        <th style="${thNum}">ÇALIŞILAN GÜN</th><th style="${thNum}">MESAİ (s)</th>
+        <th style="${thNum}">HAKEDİŞ</th><th style="${thNum}">ALINAN AVANS</th><th style="${thNum}">KALAN BAKİYE</th>
+      </tr></thead>
+      <tbody>${rowsHtml}</tbody>
+      <tfoot>
+        <tr style="background:#EAF6F5;font-weight:700;">
+          <td style="${td}" colspan="2">GENEL TOPLAM</td>
+          <td style="${tdNum}">${fmtNum(totals.gun)}</td>
+          <td style="${tdNum}">${fmtNum(totals.mesaiSaat)}</td>
+          <td style="${tdNum}">${fmtMoney(totals.hakedis)}</td>
+          <td style="${tdNum}">${fmtMoney(totals.avans)}</td>
+          <td style="${tdNum}">${fmtMoney(totals.kalan)}</td>
+        </tr>
+      </tfoot>
+    </table>
+    <div style="margin-top:24px;font-size:9px;color:#8096A3;">DNZ Metraj &amp; Teklif Yönetimi ile oluşturulmuştur.</div>
+  `;
+  try{
+    await renderNodeToPdf(html, `toplu-calisan-hesabi-${proj.name.replace(/[^a-z0-9ığüşöç]+/gi,'_')}-${start}_${end}.pdf`, 'l');
+    showToast('Toplu çalışan hesabı PDF indirildi.');
   }catch(e){ console.error(e); showToast('PDF oluşturulurken bir sorun oluştu.'); }
 }
 
