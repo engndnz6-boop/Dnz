@@ -3,13 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
-<title>DNZ — Metraj &amp; Teklif</title>
+<title>DNZ</title>
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#0F3B4C">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="DNZ Metraj">
+<meta name="apple-mobile-web-app-title" content="DNZ">
 <link rel="apple-touch-icon" href="icon-192.png">
 <link rel="icon" href="icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -106,12 +106,14 @@ header.topbar{
 }
 .brand{display:flex;align-items:center;gap:10px;min-width:0;flex-shrink:0;}
 .brand-mark{
-  width:38px;height:38px;border-radius:12px;flex-shrink:0;
-  background:linear-gradient(135deg,var(--aqua),var(--tide));
+  width:104px;height:38px;border-radius:10px;flex-shrink:0;
+  background:#FFFFFF;
   display:flex;align-items:center;justify-content:center;
-  box-shadow:0 4px 14px rgba(47,211,199,0.45);
+  box-shadow:0 4px 14px rgba(8,32,46,0.22);
+  padding:3px 8px;overflow:hidden;
 }
 .brand-mark svg{width:22px;height:22px;}
+.brand-mark img{width:100%;height:100%;object-fit:contain;display:block;}
 .brand-text{display:flex;flex-direction:column;line-height:1.05;min-width:0;}
 .brand-text b{font-family:var(--font-display);font-weight:800;font-size:1.15rem;letter-spacing:0.5px;color:var(--ink);}
 .brand-text span{font-size:0.68rem;color:var(--ink-soft);font-weight:500;letter-spacing:0.3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
@@ -224,7 +226,22 @@ main{flex:1;min-width:0;width:100%;padding:0 10px 40px 10px;display:flex;flex-di
 .icon-btn:hover{background:rgba(255,255,255,0.8);color:var(--ink);}
 .icon-btn.danger:hover{background:rgba(232,119,107,0.25);color:#7A2B22;}
 
-.table-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:12px;}
+.table-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:12px;max-width:100%;}
+.report-subnav{display:flex;flex-wrap:wrap;gap:8px;}
+.report-subtab-btn{
+  display:flex;align-items:center;gap:7px;
+  padding:9px 14px;border-radius:12px;border:1px solid var(--glass-border);cursor:pointer;
+  font-family:var(--font-display);font-weight:600;font-size:0.8rem;
+  background:rgba(255,255,255,0.5);color:var(--ink-soft);
+  transition:background 160ms ease, color 160ms ease;
+  white-space:nowrap;
+}
+.report-subtab-btn svg{width:15px;height:15px;flex-shrink:0;}
+.report-subtab-btn.active{
+  background:linear-gradient(135deg,var(--aqua),var(--aqua-dim));
+  color:#04201C;box-shadow:0 4px 14px rgba(47,211,199,0.4);border-color:transparent;
+}
+.report-subtab-btn:not(.active):hover{background:rgba(255,255,255,0.8);color:var(--ink);}
 table{border-collapse:collapse;width:100%;min-width:760px;font-size:0.78rem;}
 thead th{
   text-align:left;padding:9px 10px;background:rgba(11,36,54,0.08);
@@ -300,6 +317,20 @@ footer.appfoot{text-align:center;padding:14px;color:rgba(11,36,54,0.45);font-siz
 
 /* PDF hidden render area */
 #pdf-render-root{position:fixed;left:-99999px;top:0;width:794px;background:#ffffff;}
+/* PDF çıktılarındaki tablolar: genel tablo stilinden gelen white-space:nowrap ve
+   min-width:760px kuralları, table-layout:fixed ile birleşince başlık ve hücre
+   metinlerinin (örn. İmalat Cinsi, Birim) komşu hücrelerin üzerine taşmasına yol
+   açıyordu. Bu blok yalnızca PDF render alanındaki tabloları hedefleyip metnin
+   hücre içinde satır kaydırarak kalmasını sağlar. */
+#pdf-render-root table{min-width:0;table-layout:fixed;}
+#pdf-render-root table th,
+#pdf-render-root table td{
+  white-space:normal;
+  overflow-wrap:break-word;
+  word-break:break-word;
+  vertical-align:top;
+  overflow:hidden;
+}
 
 .backup-banner{
   display:flex;align-items:center;gap:10px;
@@ -367,11 +398,10 @@ footer.appfoot{text-align:center;padding:14px;color:rgba(11,36,54,0.45);font-siz
     </button>
     <div class="brand">
       <div class="brand-mark">
-        <svg viewBox="0 0 24 24" fill="none" stroke="#04201C" stroke-width="2.2" stroke-linecap="round"><path d="M2 15c1.5-2 3.5-2 5 0s3.5 2 5 0 3.5-2 5 0 3.5 2 5 0"/><path d="M2 20c1.5-2 3.5-2 5 0s3.5 2 5 0 3.5-2 5 0 3.5 2 5 0"/><path d="M12 3v9"/><path d="M9 6l3-3 3 3"/></svg>
+        <img src="data:image/jpeg;base64,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" alt="DNZ Logo">
       </div>
       <div class="brand-text">
-        <b>DNZ</b>
-        <span>Metraj &amp; Teklif Yönetimi</span>
+        <span>Proje Yönetimi</span>
       </div>
     </div>
     <div class="project-picker">
@@ -397,16 +427,12 @@ footer.appfoot{text-align:center;padding:14px;color:rgba(11,36,54,0.45);font-siz
       </button>
     </div>
     <button class="tab-btn active ripple-el-host" data-tab="projeler">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 7h5l2 2h11v9a2 2 0 01-2 2H3z"/></svg>
-      Projeler
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10a1 1 0 001 1h4v-6h4v6h4a1 1 0 001-1V10"/></svg>
+      Anasayfa
     </button>
     <button class="tab-btn ripple-el-host" data-tab="metraj">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 3h18v18H3z"/><path d="M9 3v18M15 3v18M3 9h18M3 15h18"/></svg>
       Metraj
-    </button>
-    <button class="tab-btn ripple-el-host" data-tab="icmal">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/></svg>
-      İcmal
     </button>
     <button class="tab-btn ripple-el-host" data-tab="teklif">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
@@ -424,21 +450,9 @@ footer.appfoot{text-align:center;padding:14px;color:rgba(11,36,54,0.45);font-siz
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="6" width="20" height="13" rx="2"/><path d="M2 10h20"/><path d="M6 15h4"/></svg>
       Avans/Zimmet
     </button>
-    <button class="tab-btn ripple-el-host" data-tab="topluicmal">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 17V9M15 17V5M4 21h16"/><circle cx="9" cy="9" r="0"/></svg>
-      Toplu İcmal
-    </button>
-    <button class="tab-btn ripple-el-host" data-tab="topluhesap">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 3v18h18"/><path d="M7 16l4-6 4 4 5-8"/></svg>
-      Toplu Hesap
-    </button>
-    <button class="tab-btn ripple-el-host" data-tab="tahsilat">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/><path d="M3 3l1 1M21 3l-1 1"/></svg>
-      Tahsilat
-    </button>
-    <button class="tab-btn ripple-el-host" data-tab="masraf">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 12V8H6a2 2 0 010-4h12v4"/><path d="M4 6v12a2 2 0 002 2h14v-4"/><path d="M18 12a2 2 0 000 4h4v-4z"/></svg>
-      Masraf
+    <button class="tab-btn ripple-el-host" data-tab="raporlar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/></svg>
+      Raporlar
     </button>
     <button class="tab-btn ripple-el-host" data-tab="ayarlar">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 004.6 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.6a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
@@ -468,6 +482,7 @@ const STORAGE_KEY = 'dnzMetrajData_v1';
 const LS_STORAGE_KEY = 'dnzMetrajData_localCache_v1';
 const UNITS = ['m2','mt','kg','adet','m3','ton'];
 const UNIT_LABEL = {m2:'m²', mt:'mt', kg:'kg', adet:'adet', m3:'m³', ton:'ton'};
+const MEAL_PRICES = { sabah:100, ogle:200, aksam:200 };
 
 function defaultState(){
   return {
@@ -491,6 +506,8 @@ function newProject(name, employer){
     zimmetler:[],
     tahsilatlar:[],
     masraflar:[],
+    yemekler:[],
+    yemekFiyat:{ sabah:MEAL_PRICES.sabah, ogle:MEAL_PRICES.ogle, aksam:MEAL_PRICES.aksam },
     memory:{ blok:[], kat:[], daire:[], mekan:[], eleman:[], imalat:[] }
   };
 }
@@ -516,7 +533,11 @@ let ui = {
   topluHesapStart: isoMonthStart(),
   topluHesapEnd: isoToday(),
   tahsilatEditId:null,
-  masrafFilterKalemi:''
+  masrafFilterKalemi:'',
+  yemekFilterStart: isoMonthStart(),
+  yemekFilterEnd: isoToday(),
+  yemekEditId:null,
+  raporTab:'icmal'
 };
 
 /* ======================= PERSISTENCE ======================= */
@@ -709,6 +730,15 @@ function isoToday(){
 function isoMonthStart(){
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-01`;
+}
+// Eskiden bazı formlarda varsayılan tarih yanlışlıkla "GG.AA.YYYY" (görüntü) formatında
+// kaydedilmişti; bu değerleri tarih aralığı filtrelerinin doğru çalışması için ISO
+// "YYYY-MM-DD" formatına çevirir. Zaten ISO formatındaki değerlere dokunmaz.
+function fixLegacyDateStr(v){
+  if(!v) return v;
+  const m = /^(\d{2})\.(\d{2})\.(\d{4})$/.exec(v);
+  if(m) return `${m[3]}-${m[2]}-${m[1]}`;
+  return v;
 }
 function esc(s){
   return String(s??'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -906,7 +936,7 @@ function renderMain(){
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 7h5l2 2h11v9a2 2 0 01-2 2H3z"/></svg>
           <div>Devam etmek için önce bir proje seçin ya da oluşturun.</div>
           <div class="btn-row" style="justify-content:center;margin-top:12px;">
-            <button class="btn btn-primary" id="goProjeler">Projeler'e git</button>
+            <button class="btn btn-primary" id="goProjeler">Anasayfa'ya git</button>
           </div>
         </div>
       </div>`;
@@ -914,15 +944,55 @@ function renderMain(){
     return;
   }
   if(ui.tab==='metraj') return renderMetrajTab(main, proj);
-  if(ui.tab==='icmal') return renderIcmalTab(main, proj);
   if(ui.tab==='teklif') return renderTeklifTab(main, proj);
   if(ui.tab==='personel') return renderPersonelTab(main, proj);
   if(ui.tab==='puantaj') return renderPuantajTab(main, proj);
   if(ui.tab==='avanszimmet') return renderAvansZimmetTab(main, proj);
-  if(ui.tab==='topluicmal') return renderTopluIcmalTab(main, proj);
-  if(ui.tab==='topluhesap') return renderTopluHesapTab(main, proj);
-  if(ui.tab==='tahsilat') return renderTahsilatTab(main, proj);
-  if(ui.tab==='masraf') return renderMasrafTab(main, proj);
+  if(ui.tab==='raporlar') return renderRaporlarTab(main, proj);
+}
+
+/* ======================= RAPORLAR (İcmal / Personeller / Toplu Hesap / Tahsilat / Masraf) ======================= */
+const RAPOR_SUBTABS = [
+  {key:'icmal', label:'İcmal', icon:'<path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/>'},
+  {key:'topluicmal', label:'Personeller', icon:'<path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/>'},
+  {key:'topluhesap', label:'Toplu Hesap', icon:'<path d="M3 3v18h18"/><path d="M7 16l4-6 4 4 5-8"/>'},
+  {key:'tahsilat', label:'Tahsilat', icon:'<path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/>'},
+  {key:'masraf', label:'Masraf', icon:'<path d="M20 12V8H6a2 2 0 010-4h12v4"/><path d="M4 6v12a2 2 0 002 2h14v-4"/><path d="M18 12a2 2 0 000 4h4v-4z"/>'},
+  {key:'yemek', label:'Yemek', icon:'<path d="M3 2v7c0 1.1.9 2 2 2h1v11"/><path d="M6 2v10"/><path d="M9 2v10"/><path d="M18 2a5 5 0 00-5 5v6h3v9"/>'}
+];
+function renderRaporlarTab(main, proj){
+  if(!ui.raporTab) ui.raporTab = 'icmal';
+  main.innerHTML = `
+    <div class="card glass">
+      <h2>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/></svg>
+        Raporlar — <span style="color:var(--aqua-dim)">${esc(proj.name)}</span>
+      </h2>
+      <p class="hint">İcmal, Personeller, Toplu Hesap, Tahsilat ve Masraf raporlarının tümüne buradan ulaşabilir, filtreleyebilir ve PDF çıktısı alabilirsiniz.</p>
+      <div class="report-subnav" id="reportSubnav">
+        ${RAPOR_SUBTABS.map(t=>`
+          <button class="report-subtab-btn ripple-el-host ${ui.raporTab===t.key?'active':''}" data-rap="${t.key}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">${t.icon}</svg>
+            ${t.label}
+          </button>
+        `).join('')}
+      </div>
+    </div>
+    <div id="reportSubContent"></div>
+  `;
+  document.getElementById('reportSubnav').addEventListener('click',(e)=>{
+    const btn = e.target.closest('.report-subtab-btn');
+    if(!btn) return;
+    ui.raporTab = btn.dataset.rap;
+    renderRaporlarTab(main, proj);
+  });
+  const sub = document.getElementById('reportSubContent');
+  if(ui.raporTab==='icmal') renderIcmalTab(sub, proj);
+  else if(ui.raporTab==='topluicmal') renderTopluIcmalTab(sub, proj);
+  else if(ui.raporTab==='topluhesap') renderTopluHesapTab(sub, proj);
+  else if(ui.raporTab==='tahsilat') renderTahsilatTab(sub, proj);
+  else if(ui.raporTab==='masraf') renderMasrafTab(sub, proj);
+  else if(ui.raporTab==='yemek') renderYemekTab(sub, proj);
 }
 
 /* ======================= PROJELER TAB ======================= */
@@ -931,8 +1001,8 @@ function renderProjelerTab(main){
   main.innerHTML = `
     <div class="card glass">
       <h2>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7h5l2 2h11v9a2 2 0 01-2 2H3z"/></svg>
-        Projeler
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10a1 1 0 001 1h4v-6h4v6h4a1 1 0 001-1V10"/></svg>
+        Anasayfa
       </h2>
       <p class="hint">Örneğin "Ankara Projesi", "İstanbul Projesi" gibi birden fazla proje oluşturup aralarında geçiş yapabilirsiniz. Her projenin metraj kayıtları, teklifleri ve girdiğiniz alan isimleri (blok, kat, daire, mekân, imalat cinsi vb.) kendi içinde ayrı ayrı saklanır.</p>
       <div class="btn-row">
@@ -1005,7 +1075,8 @@ function renderProjeBilgiPanosuHtml(proj){
   const calisanaOdenen = projeCalisanaOdenenToplam(proj);
   const kalanCalisan = calisanaOdenecek - calisanaOdenen;
   const masrafToplam = projeMasrafToplam(proj);
-  const kalanKar = hakedisToplam - calisanaOdenecek - masrafToplam;
+  const yemekToplam = projeYemekToplam(proj);
+  const kalanKar = hakedisToplam - calisanaOdenecek - masrafToplam - yemekToplam;
   return `
     <div class="card glass">
       <h2>
@@ -1034,6 +1105,7 @@ function renderProjeBilgiPanosuHtml(proj){
           <b style="font-family:var(--font-display);font-size:0.82rem;color:var(--tide);">Kâr Özeti</b>
           <div class="totals-strip">
             <div class="total-chip"><span class="lbl">Yapılan Masraf</span><span class="val">${fmtMoney(masrafToplam)}</span></div>
+            <div class="total-chip"><span class="lbl">Yemek Masrafı</span><span class="val">${fmtMoney(yemekToplam)}</span></div>
             <div class="total-chip"><span class="lbl">Kalan Kâr</span><span class="val">${fmtMoney(kalanKar)}</span></div>
           </div>
         </div>
@@ -1465,7 +1537,7 @@ async function exportIcmalPdf(proj){
   UNITS.forEach(u=>sums[u]=0);
   groups.forEach(g=>{ sums[g.birim] = (sums[g.birim]||0) + g.altToplam; });
 
-  const c = 'padding:6px 6px;border-bottom:1px solid #E4EFEF;';
+  const c = 'padding:6px 5px;border-bottom:1px solid #E4EFEF;border-right:1px solid #EEF5F4;';
   const tableRows = groups.map(g=>`
     <tr>
       <td style="${c}">${esc(g.eleman)}</td>
@@ -1473,7 +1545,7 @@ async function exportIcmalPdf(proj){
       <td style="${c}">${UNIT_LABEL[g.birim]||g.birim}</td>
       <td style="${c}text-align:right;">${g.adet}</td>
       <td style="${c}text-align:right;">${fmtNum(g.toplam)}</td>
-      <td style="${c}text-align:right;font-weight:700;white-space:nowrap;">${fmtNum(g.altToplam)}</td>
+      <td style="padding:6px 5px;border-bottom:1px solid #E4EFEF;text-align:right;font-weight:700;">${fmtNum(g.altToplam)}</td>
     </tr>
   `).join('');
 
@@ -1486,10 +1558,14 @@ async function exportIcmalPdf(proj){
 
   const html = `
     ${pdfHeaderHtml(proj, 'İcmal Raporu')}
-    <table style="width:100%;border-collapse:collapse;font-size:10px;table-layout:auto;">
+    <table style="width:100%;border-collapse:collapse;font-size:9px;table-layout:fixed;word-break:break-word;">
+      <colgroup>
+        <col style="width:18%"><col style="width:34%"><col style="width:8%">
+        <col style="width:12%"><col style="width:14%"><col style="width:14%">
+      </colgroup>
       <thead>
         <tr style="background:#EAF6F5;">
-          ${['Uygulama Yeri','İmalat Cinsi','Birim','Satır Sayısı','Toplam (Brüt)','Toplam (Net)'].map(h=>`<th style="text-align:left;padding:7px 6px;border-bottom:1.5px solid #1C6E8C;white-space:nowrap;">${h}</th>`).join('')}
+          ${['Uygulama Yeri','İmalat Cinsi','Birim','Satır Sayısı','Toplam (Brüt)','Toplam (Net)'].map(h=>`<th style="text-align:left;padding:7px 5px;border-bottom:1.5px solid #1C6E8C;border-right:1px solid #d5e8e6;">${h}</th>`).join('')}
         </tr>
       </thead>
       <tbody>${tableRows || '<tr><td colspan="6" style="padding:10px;text-align:center;color:#345264;">Kayıt yok</td></tr>'}</tbody>
@@ -1501,7 +1577,7 @@ async function exportIcmalPdf(proj){
     <div style="margin-top:36px;font-size:9px;color:#8096A3;">DNZ Metraj &amp; Teklif Yönetimi ile oluşturulmuştur.</div>
   `;
   try{
-    await renderNodeToPdf(html, `icmal-${proj.name.replace(/[^a-z0-9ığüşöç]+/gi,'_')}.pdf`, 'l');
+    await renderNodeToPdf(html, `icmal-${proj.name.replace(/[^a-z0-9ığüşöç]+/gi,'_')}.pdf`, 'p');
     showToast('İcmal PDF indirildi.');
   }catch(e){
     console.error(e);
@@ -1844,7 +1920,7 @@ async function exportPersonelPdf(proj, p){
     <div style="font-family:'Outfit',sans-serif;font-weight:700;font-size:15px;margin-bottom:10px;color:#1C6E8C;">${esc(p.adSoyad)}
       <span style="font-size:10px;font-weight:600;color:${st.cls==='aktif'?'#0A5850':'#7A2B22'};margin-left:8px;">(${st.text})</span>
     </div>
-    <table style="width:100%;border-collapse:collapse;font-size:11px;max-width:520px;">
+    <table style="width:100%;border-collapse:collapse;font-size:11px;max-width:520px;table-layout:fixed;">
       ${field('Adı Soyadı', p.adSoyad)}
       ${field('Baba Adı', p.babaAdi)}
       ${field('Kimlik No', p.kimlikNo)}
@@ -1922,7 +1998,7 @@ function personelMesaiToplam(p, ym){
   return total;
 }
 
-/* ---- İki tarih arası (serbest aralık) hesaplamalar: Toplu İcmal ve Toplu Hesap
+/* ---- İki tarih arası (serbest aralık) hesaplamalar: Personeller ve Toplu Hesap
    sekmelerinde, tek bir aya bağlı kalmadan istenen herhangi bir dönem için kullanılır.
    Puantaj/mesai kayıtları zaten "YYYY-MM-DD" biçiminde saklandığından, ay sınırı gözetmeden
    doğrudan tarih aralığı üzerinden okunabilir. ---- */
@@ -2217,16 +2293,17 @@ async function exportPuantajMesaiPdf(proj){
     return;
   }
 
-  const cellStyle = 'border:1px solid #E4EFEF;padding:3px 2px;text-align:center;';
+  const cellStyle = 'border:1px solid #E4EFEF;padding:3px 1px;text-align:center;font-size:10px;font-weight:700;line-height:1.1;';
   const wkndStyle = 'background:#FBEDEA;';
-  const nameStyle = 'border:1px solid #E4EFEF;padding:4px 6px;text-align:left;white-space:nowrap;font-weight:600;';
+  const nameStyle = 'border:1px solid #E4EFEF;padding:5px 6px;text-align:left;font-weight:700;word-break:break-word;width:120px;font-size:11px;';
+  const bigStyle = 'border:1px solid #E4EFEF;padding:5px 3px;text-align:center;font-size:11px;width:62px;white-space:nowrap;';
 
   const puantajHead = `
     <tr style="background:#EAF6F5;">
       <th style="${nameStyle}">Adı Soyadı</th>
       ${days.map(d=>`<th style="${cellStyle}${isWeekendDay(ym,d)?wkndStyle:''}">${d}</th>`).join('')}
-      <th style="${cellStyle}">Toplam</th>
-      <th style="${cellStyle}">Tutar</th>
+      <th style="${bigStyle}">Toplam</th>
+      <th style="${bigStyle}">Tutar</th>
     </tr>`;
   const puantajRows = list.map(p=>`
     <tr>
@@ -2236,8 +2313,8 @@ async function exportPuantajMesaiPdf(proj){
         const val = (p.puantaj && p.puantaj[key]) || '';
         return `<td style="${cellStyle}${isWeekendDay(ym,d)?wkndStyle:''}">${val}</td>`;
       }).join('')}
-      <td style="${cellStyle}font-weight:700;">${fmtNum(personelPuantajToplam(p, ym))}</td>
-      <td style="${cellStyle}font-weight:700;">${fmtMoney(personelPuantajToplam(p, ym)*(parseFloat(p.yevmiye)||0))}</td>
+      <td style="${bigStyle}font-weight:700;">${fmtNum(personelPuantajToplam(p, ym))}</td>
+      <td style="${bigStyle}font-weight:700;">${fmtMoney(personelPuantajToplam(p, ym)*(parseFloat(p.yevmiye)||0))}</td>
     </tr>`).join('');
   const puantajDayTotals = days.map(d=>{
     const key = dateKeyFor(ym,d);
@@ -2249,15 +2326,15 @@ async function exportPuantajMesaiPdf(proj){
     <tr style="background:#EAF6F5;font-weight:700;">
       <td style="${nameStyle}">Toplam</td>
       ${puantajDayTotals.map((t,i)=>`<td style="${cellStyle}${isWeekendDay(ym,i+1)?wkndStyle:''}">${t?fmtNum(t):''}</td>`).join('')}
-      <td style="${cellStyle}">${fmtNum(puantajGrand)}</td>
-      <td style="${cellStyle}">${fmtMoney(puantajGrandTutar)}</td>
+      <td style="${bigStyle}">${fmtNum(puantajGrand)}</td>
+      <td style="${bigStyle}">${fmtMoney(puantajGrandTutar)}</td>
     </tr>`;
 
   const mesaiHead = `
     <tr style="background:#EAF6F5;">
       <th style="${nameStyle}">Adı Soyadı</th>
       ${days.map(d=>`<th style="${cellStyle}${isWeekendDay(ym,d)?wkndStyle:''}">${d}</th>`).join('')}
-      <th style="${cellStyle}">Saat</th><th style="${cellStyle}">Tutar</th>
+      <th style="${bigStyle}">Saat</th><th style="${bigStyle}">Tutar</th>
     </tr>`;
   const mesaiRows = list.map(p=>{
     const saatlik = (parseFloat(p.yevmiye)||0)/8;
@@ -2270,8 +2347,8 @@ async function exportPuantajMesaiPdf(proj){
         const val = (p.mesai && p.mesai[key]) || '';
         return `<td style="${cellStyle}${isWeekendDay(ym,d)?wkndStyle:''}">${val||''}</td>`;
       }).join('')}
-      <td style="${cellStyle}font-weight:700;">${fmtNum(toplamSaat)}</td>
-      <td style="${cellStyle}font-weight:700;">${fmtMoney(toplamSaat*saatlik)}</td>
+      <td style="${bigStyle}font-weight:700;">${fmtNum(toplamSaat)}</td>
+      <td style="${bigStyle}font-weight:700;">${fmtMoney(toplamSaat*saatlik)}</td>
     </tr>`;
   }).join('');
   const mesaiDayTotals = days.map(d=>{
@@ -2284,14 +2361,14 @@ async function exportPuantajMesaiPdf(proj){
     <tr style="background:#EAF6F5;font-weight:700;">
       <td style="${nameStyle}">Toplam</td>
       ${mesaiDayTotals.map((t,i)=>`<td style="${cellStyle}${isWeekendDay(ym,i+1)?wkndStyle:''}">${t?fmtNum(t):''}</td>`).join('')}
-      <td style="${cellStyle}">${fmtNum(mesaiGrandHrs)}</td>
-      <td style="${cellStyle}">${fmtMoney(mesaiGrandTutar)}</td>
+      <td style="${bigStyle}">${fmtNum(mesaiGrandHrs)}</td>
+      <td style="${bigStyle}">${fmtMoney(mesaiGrandTutar)}</td>
     </tr>`;
 
   const html = `
     ${pdfHeaderHtml(proj, 'Puantaj ve Mesai Cetveli — ' + ayAdi)}
     <div style="font-family:'Outfit',sans-serif;font-weight:700;font-size:13px;margin-bottom:6px;color:#1C6E8C;">Puantaj Cetveli</div>
-    <table style="width:100%;border-collapse:collapse;font-size:8px;table-layout:auto;margin-bottom:8px;">
+    <table style="width:100%;border-collapse:collapse;font-size:6.5px;table-layout:fixed;margin-bottom:8px;">
       <thead>${puantajHead}</thead>
       <tbody>${puantajRows}</tbody>
       <tfoot>${puantajFoot}</tfoot>
@@ -2299,7 +2376,7 @@ async function exportPuantajMesaiPdf(proj){
     <div style="font-size:9px;color:#345264;margin-bottom:18px;">Alt Toplam (Adam/Gün): <b>${fmtNum(puantajGrand)}</b> &nbsp;|&nbsp; Alt Toplam Tutar: <b>${fmtMoney(puantajGrandTutar)}</b> &nbsp;|&nbsp; X=Tam Gün(1), Y=Yarım Gün(0,5), O=Yok/İzinli(0)</div>
 
     <div style="font-family:'Outfit',sans-serif;font-weight:700;font-size:13px;margin-bottom:6px;color:#1C6E8C;">Mesai Cetveli</div>
-    <table style="width:100%;border-collapse:collapse;font-size:8px;table-layout:auto;">
+    <table style="width:100%;border-collapse:collapse;font-size:6.5px;table-layout:fixed;">
       <thead>${mesaiHead}</thead>
       <tbody>${mesaiRows}</tbody>
       <tfoot>${mesaiFoot}</tfoot>
@@ -2319,7 +2396,7 @@ async function exportPuantajMesaiPdf(proj){
 
 /* ======================= AVANS / ZİMMET TAB ======================= */
 const ODEME_SEKLI_OPTIONS = ['Nakit','Banka Havalesi','Diğer'];
-function emptyAvansForm(){ return {id:null, personelId:'', odemeTarihi: todayStr(), odemeSekli:'Nakit', aciklama:'', tutar:''}; }
+function emptyAvansForm(){ return {id:null, personelId:'', odemeTarihi: isoToday(), odemeSekli:'Nakit', aciklama:'', tutar:''}; }
 function emptyZimmetForm(){ return {id:null, personelId:'', zimmetTarihi: todayStr(), markaModel:'', aciklama:'', teslimTarihi:''}; }
 let avansForm = emptyAvansForm();
 let zimmetForm = emptyZimmetForm();
@@ -2611,11 +2688,11 @@ async function exportAvansPdf(proj){
   showToast('PDF hazırlanıyor…');
   const rows = filteredAvans(proj);
   if(rows.length===0){ showToast('Listelenecek avans kaydı yok.'); return; }
-  const cellStyle = 'border:1px solid #E4EFEF;padding:5px 6px;text-align:left;';
+  const cellStyle = 'border:1px solid #E4EFEF;padding:5px 6px;text-align:left;word-break:break-word;';
   const total = rows.reduce((s,r)=>s+(parseFloat(r.tutar)||0),0);
   const html = `
     ${pdfHeaderHtml(proj, 'Personel Avans Listesi')}
-    <table style="width:100%;border-collapse:collapse;font-size:10px;">
+    <table style="width:100%;border-collapse:collapse;font-size:10px;table-layout:fixed;">
       <thead><tr style="background:#EAF6F5;">
         <th style="${cellStyle}">Adı Soyadı</th><th style="${cellStyle}">Tarih</th><th style="${cellStyle}">Ödeme Şekli</th><th style="${cellStyle}">Açıklama</th><th style="${cellStyle}text-align:right;">Tutar</th>
       </tr></thead>
@@ -2644,10 +2721,10 @@ async function exportZimmetPdf(proj){
   showToast('PDF hazırlanıyor…');
   const rows = filteredZimmet(proj);
   if(rows.length===0){ showToast('Listelenecek zimmet kaydı yok.'); return; }
-  const cellStyle = 'border:1px solid #E4EFEF;padding:5px 6px;text-align:left;';
+  const cellStyle = 'border:1px solid #E4EFEF;padding:5px 6px;text-align:left;word-break:break-word;';
   const html = `
     ${pdfHeaderHtml(proj, 'Personel Zimmet Listesi')}
-    <table style="width:100%;border-collapse:collapse;font-size:10px;">
+    <table style="width:100%;border-collapse:collapse;font-size:10px;table-layout:fixed;">
       <thead><tr style="background:#EAF6F5;">
         <th style="${cellStyle}">Adı Soyadı</th><th style="${cellStyle}">Zimmet Tarihi</th><th style="${cellStyle}">Marka/Model</th><th style="${cellStyle}">Açıklama</th><th style="${cellStyle}">Teslim Tarihi</th>
       </tr></thead>
@@ -2698,8 +2775,8 @@ function renderTopluIcmalTab(main, proj){
   main.innerHTML = `
     <div class="card glass">
       <h2>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 17V9M15 17V5M4 21h16"/></svg>
-        Çalışan Toplu İcmal — <span style="color:var(--aqua-dim)">${esc(proj.name)}</span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
+        Personeller — <span style="color:var(--aqua-dim)">${esc(proj.name)}</span>
       </h2>
       <p class="hint">Seçtiğiniz personel için, belirlediğiniz tarih aralığındaki puantaj, mesai, ödeme (avans) ve hakediş özetini gösterir; "Personel Hak Ediş, Avans ve Dönem Puantaj Ekstresi" olarak PDF indirir.</p>
       <div class="field-grid" style="grid-template-columns:2fr 1fr 1fr;align-items:end;">
@@ -2839,7 +2916,7 @@ async function exportTopluIcmalPdf(proj, p){
   const ATT_COLOR = {X:'#0A5850', Y:'#8a5a00', O:'#7A2B22'};
   const MONTH_NAMES = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
 
-  // Seçilen tarih aralığı bir aydan uzun olabildiği (Toplu İcmal serbest aralık kullanır) için
+  // Seçilen tarih aralığı bir aydan uzun olabildiği (Personeller raporu serbest aralık kullanır) için
   // günleri sabit sayıda (ör. 20'şerli) değil, HER AYI KENDİ TEK SATIRINA alacak şekilde
   // takvim ayına göre grupluyoruz. Bir ay en fazla 31 gün olduğundan (mevcut aylık Puantaj/Mesai
   // raporunda olduğu gibi) bu satır her zaman sayfa genişliğine sığar.
@@ -2900,8 +2977,8 @@ async function exportTopluIcmalPdf(proj, p){
 
   const summaryRow = (label, val, color)=>`
     <tr>
-      <td style="padding:8px 4px; border-bottom:1px solid #dcebea; font-size:11px; color:#345264; font-weight:500;">${esc(label)}</td>
-      <td style="padding:8px 4px; border-bottom:1px solid #dcebea; font-size:11px; text-align:right; font-weight:700; ${color?`color:${color};`:''}">${val}</td>
+      <td style="padding:8px 4px; border-bottom:1px solid #dcebea; font-size:11px; color:#345264; font-weight:500; word-break:break-word;">${esc(label)}</td>
+      <td style="padding:8px 4px; border-bottom:1px solid #dcebea; font-size:11px; text-align:right; font-weight:700; word-break:break-word; ${color?`color:${color};`:''}">${val}</td>
     </tr>`;
 
   const html = `
@@ -2935,8 +3012,8 @@ async function exportTopluIcmalPdf(proj, p){
       <!-- Dönem Mutabakat Özeti -->
       <div style="border:2px solid #1C6E8C; border-radius:10px; padding:16px; background:#f0f7f9;">
         <div style="font-family:'Outfit',sans-serif; font-weight:800; font-size:13px; margin-bottom:12px; color:#1C6E8C; text-transform:uppercase; border-bottom:1px solid #1C6E8C; padding-bottom:6px;">DÖNEM MUTABAKAT ÖZETİ</div>
-        <table style="width:100%; border-collapse:collapse;">
-          <colgroup><col style="width:70%"><col style="width:30%"></colgroup>
+        <table style="width:100%; border-collapse:collapse; table-layout:fixed;">
+          <colgroup><col style="width:58%"><col style="width:42%"></colgroup>
           ${summaryRow('Toplam Tam Gün (X)', `${det.tam} Gün`)}
           ${summaryRow('Toplam Yarım Gün (Y)', `${det.yarim} Gün`)}
           ${summaryRow('İzinli / Yok (O)', `${det.izin} Gün`)}
@@ -2946,7 +3023,7 @@ async function exportTopluIcmalPdf(proj, p){
           ${summaryRow('Düşülen Toplam Avans', `-${fmtMoney(toplamAvans)}`, '#C0392B')}
           <tr>
             <td style="padding:10px 4px 4px 4px; border-top:2px solid #0B2436; font-weight:800; font-size:12px; color:#0B2436;">NET KALAN ÖDEME:</td>
-            <td style="padding:10px 4px 4px 4px; border-top:2px solid #0B2436; font-weight:900; font-size:16px; text-align:right; color:#0B2436; white-space:nowrap;">${fmtMoney(kalanOdeme)}</td>
+            <td style="padding:10px 4px 4px 4px; border-top:2px solid #0B2436; font-weight:900; font-size:14px; text-align:right; color:#0B2436; word-break:break-word;">${fmtMoney(kalanOdeme)}</td>
           </tr>
         </table>
       </div>
@@ -2995,7 +3072,7 @@ async function exportTopluIcmalPdf(proj, p){
     </div>
   `;
   try{
-    await renderNodeToPdf(html, `personel-ekstresi-${p.adSoyad.replace(/[^a-z0-9ığüşöç]+/gi,'_')}-${start}_${end}.pdf`, 'l');
+    await renderNodeToPdf(html, `personel-ekstresi-${p.adSoyad.replace(/[^a-z0-9ığüşöç]+/gi,'_')}-${start}_${end}.pdf`, 'p');
     showToast('Personel ekstresi PDF indirildi.');
   }catch(e){ console.error(e); showToast('PDF oluşturulurken bir sorun oluştu.'); }
 }
@@ -3090,7 +3167,7 @@ async function exportTopluHesapPdf(proj, start, end, rows, totals){
   showToast('PDF hazırlanıyor…');
   const th = 'border:1px solid #0B2436;background:#0B2436;color:#ffffff;padding:6px 6px;font-size:9px;text-align:left;';
   const thNum = th + 'text-align:right;';
-  const td = 'border:1px solid #E4EFEF;padding:5px 6px;font-size:10px;';
+  const td = 'border:1px solid #E4EFEF;padding:5px 6px;font-size:9px;word-break:break-word;';
   const tdNum = td + 'text-align:right;';
   const rowsHtml = rows.map(r=>`
     <tr>
@@ -3106,7 +3183,7 @@ async function exportTopluHesapPdf(proj, start, end, rows, totals){
   const html = `
     ${pdfHeaderHtml(proj, 'Toplu Çalışan Hesabı — Puantaj / Mesai / Avans / Bakiye Özeti')}
     <div style="font-size:11px;color:#345264;margin-bottom:12px;"><b>Dönem:</b> ${fmtDateStr(start)} — ${fmtDateStr(end)}</div>
-    <table style="width:100%;border-collapse:collapse;margin-bottom:8px;">
+    <table style="width:100%;border-collapse:collapse;margin-bottom:8px;table-layout:fixed;">
       <thead><tr>
         <th style="${th}">ADI SOYADI</th><th style="${th}">POZİSYON</th>
         <th style="${thNum}">ÇALIŞILAN GÜN</th><th style="${thNum}">MESAİ (s)</th>
@@ -3127,7 +3204,7 @@ async function exportTopluHesapPdf(proj, start, end, rows, totals){
     <div style="margin-top:24px;font-size:9px;color:#8096A3;">DNZ Metraj &amp; Teklif Yönetimi ile oluşturulmuştur.</div>
   `;
   try{
-    await renderNodeToPdf(html, `toplu-calisan-hesabi-${proj.name.replace(/[^a-z0-9ığüşöç]+/gi,'_')}-${start}_${end}.pdf`, 'l');
+    await renderNodeToPdf(html, `toplu-calisan-hesabi-${proj.name.replace(/[^a-z0-9ığüşöç]+/gi,'_')}-${start}_${end}.pdf`, 'p');
     showToast('Toplu çalışan hesabı PDF indirildi.');
   }catch(e){ console.error(e); showToast('PDF oluşturulurken bir sorun oluştu.'); }
 }
@@ -3291,10 +3368,10 @@ async function exportTahsilatPdf(proj){
   const toplamAlinacak = projeTeklifToplam(proj);
   const alinan = rows.reduce((s,r)=>s+(parseFloat(r.tutar)||0),0);
   const kalan = toplamAlinacak - alinan;
-  const cellStyle = 'border:1px solid #E4EFEF;padding:5px 6px;text-align:left;';
+  const cellStyle = 'border:1px solid #E4EFEF;padding:5px 6px;text-align:left;word-break:break-word;';
   const html = `
     ${pdfHeaderHtml(proj, 'İşveren Ödeme Özeti')}
-    <table style="width:100%;border-collapse:collapse;font-size:10px;margin-bottom:16px;">
+    <table style="width:100%;border-collapse:collapse;font-size:10px;margin-bottom:16px;table-layout:fixed;">
       <thead><tr style="background:#EAF6F5;">
         <th style="${cellStyle}">Tarih</th><th style="${cellStyle}">Ödeme Yapan</th><th style="${cellStyle}">Ödeme Alan</th><th style="${cellStyle}">Ödeme Şekli</th><th style="${cellStyle}">Açıklama</th><th style="${cellStyle}text-align:right;">Tutar</th>
       </tr></thead>
@@ -3480,11 +3557,11 @@ async function exportMasrafPdf(proj){
   showToast('PDF hazırlanıyor…');
   const rows = filteredMasraf(proj);
   if(rows.length===0){ showToast('Listelenecek masraf kaydı yok.'); return; }
-  const cellStyle = 'border:1px solid #E4EFEF;padding:5px 6px;text-align:left;';
+  const cellStyle = 'border:1px solid #E4EFEF;padding:5px 6px;text-align:left;word-break:break-word;';
   const total = rows.reduce((s,r)=>s+(parseFloat(r.tutar)||0),0);
   const html = `
     ${pdfHeaderHtml(proj, 'Masraf Listesi')}
-    <table style="width:100%;border-collapse:collapse;font-size:10px;">
+    <table style="width:100%;border-collapse:collapse;font-size:10px;table-layout:fixed;">
       <thead><tr style="background:#EAF6F5;">
         <th style="${cellStyle}">Masraf Kalemi</th><th style="${cellStyle}">Tarih</th><th style="${cellStyle}">Ödeme Şekli</th><th style="${cellStyle}">Açıklama</th><th style="${cellStyle}text-align:right;">Tutar</th>
       </tr></thead>
@@ -3506,6 +3583,314 @@ async function exportMasrafPdf(proj){
   try{
     await renderNodeToPdf(html, `masraf-listesi-${proj.name.replace(/[^a-z0-9ığüşöç]+/gi,'_')}.pdf`, 'p');
     showToast('Masraf listesi PDF indirildi.');
+  }catch(e){ console.error(e); showToast('PDF oluşturulurken bir sorun oluştu.'); }
+}
+
+/* ======================= YEMEK TAB ======================= */
+function emptyYemekForm(){ return {id:null, tarih: isoToday(), sabah:'', ogle:'', aksam:'', aciklama:'', sabahFiyat:null, ogleFiyat:null, aksamFiyat:null}; }
+let yemekForm = emptyYemekForm();
+
+function projeYemekFiyat(proj){
+  return (proj && proj.yemekFiyat) ? proj.yemekFiyat : MEAL_PRICES;
+}
+
+function yemekRowTutar(r, proj){
+  const fallback = projeYemekFiyat(proj);
+  const sabahFiyat = (r.sabahFiyat!=null && r.sabahFiyat!=='') ? parseFloat(r.sabahFiyat) : (parseFloat(fallback.sabah)||0);
+  const ogleFiyat = (r.ogleFiyat!=null && r.ogleFiyat!=='') ? parseFloat(r.ogleFiyat) : (parseFloat(fallback.ogle)||0);
+  const aksamFiyat = (r.aksamFiyat!=null && r.aksamFiyat!=='') ? parseFloat(r.aksamFiyat) : (parseFloat(fallback.aksam)||0);
+  const sabah = parseInt(r.sabah)||0, ogle = parseInt(r.ogle)||0, aksam = parseInt(r.aksam)||0;
+  return {
+    sabahAdet:sabah, ogleAdet:ogle, aksamAdet:aksam,
+    sabahFiyat, ogleFiyat, aksamFiyat,
+    sabahTutar: sabah*sabahFiyat,
+    ogleTutar: ogle*ogleFiyat,
+    aksamTutar: aksam*aksamFiyat,
+    toplam: sabah*sabahFiyat + ogle*ogleFiyat + aksam*aksamFiyat
+  };
+}
+
+function renderYemekTab(main, proj){
+  const fiyat = projeYemekFiyat(proj);
+  main.innerHTML = `
+    <div class="card glass">
+      <h2>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/></svg>
+        Yemek Birim Fiyatları — <span style="color:var(--aqua-dim)">${esc(proj.name)}</span>
+      </h2>
+      <p class="hint">Bu proje için öğün başına birim fiyatları belirleyin. Fiyatı değiştirdiğinizde sadece BUNDAN SONRA eklenecek yeni yemek kayıtları yeni fiyatı kullanır; daha önce kaydedilmiş kayıtların tutarları olduğu gibi kalır ve değişmez.</p>
+      <div class="field-grid">
+        <div class="field"><label>Sabah Yemeği Fiyatı (TL)</label>
+          <input class="mono" type="number" step="any" min="0" id="yf-sabah" value="${esc(fiyat.sabah)}">
+        </div>
+        <div class="field"><label>Öğlen Yemeği Fiyatı (TL)</label>
+          <input class="mono" type="number" step="any" min="0" id="yf-ogle" value="${esc(fiyat.ogle)}">
+        </div>
+        <div class="field"><label>Akşam Yemeği Fiyatı (TL)</label>
+          <input class="mono" type="number" step="any" min="0" id="yf-aksam" value="${esc(fiyat.aksam)}">
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary" id="btnSaveYemekFiyat">Fiyatları Kaydet</button>
+      </div>
+    </div>
+
+    <div class="card glass">
+      <h2>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 2v7c0 1.1.9 2 2 2h1v11"/><path d="M6 2v10"/><path d="M9 2v10"/><path d="M18 2a5 5 0 00-5 5v6h3v9"/></svg>
+        Yemek Ekle — <span style="color:var(--aqua-dim)">${esc(proj.name)}</span>
+      </h2>
+      <p class="hint">Günlük yenen yemek sayısını (Sabah / Öğlen / Akşam) girin; tutarlar yukarıdaki birim fiyatlar üzerinden otomatik hesaplanır: Sabah ${fmtMoney(fiyat.sabah)}, Öğlen ${fmtMoney(fiyat.ogle)}, Akşam ${fmtMoney(fiyat.aksam)}.</p>
+      <div class="field-grid">
+        <div class="field"><label>Tarih</label>
+          <input type="date" id="ym-tarih" value="${esc(yemekForm.tarih)}">
+        </div>
+        <div class="field"><label>Sabah Yemeği (adet)</label>
+          <input class="mono" type="number" min="0" step="1" id="ym-sabah" value="${esc(yemekForm.sabah)}" placeholder="0">
+        </div>
+        <div class="field"><label>Öğlen Yemeği (adet)</label>
+          <input class="mono" type="number" min="0" step="1" id="ym-ogle" value="${esc(yemekForm.ogle)}" placeholder="0">
+        </div>
+        <div class="field"><label>Akşam Yemeği (adet)</label>
+          <input class="mono" type="number" min="0" step="1" id="ym-aksam" value="${esc(yemekForm.aksam)}" placeholder="0">
+        </div>
+        <div class="field" style="grid-column:span 2;"><label>Açıklama (opsiyonel)</label>
+          <input type="text" id="ym-aciklama" value="${esc(yemekForm.aciklama)}" placeholder="Örn: Şantiye personeli">
+        </div>
+      </div>
+      <div id="ymLivePreview" style="margin-top:4px;"></div>
+      <div class="btn-row" style="margin-top:10px;">
+        <button class="btn btn-primary" id="btnSaveYemek">${yemekForm.id?'Yemek Kaydını Güncelle':'Yemek Kaydet'}</button>
+        <button class="btn btn-ghost" id="btnClearYemek">Formu Temizle</button>
+      </div>
+    </div>
+
+    <div class="card glass">
+      <h2>Yemek Cetveli</h2>
+      <div class="filter-bar" style="margin-bottom:10px;">
+        <div class="field"><label>Başlangıç Tarihi</label>
+          <input type="date" id="ym-filterStart" value="${esc(ui.yemekFilterStart)}">
+        </div>
+        <div class="field"><label>Bitiş Tarihi</label>
+          <input type="date" id="ym-filterEnd" value="${esc(ui.yemekFilterEnd)}">
+        </div>
+        <button class="btn btn-ghost btn-sm" id="btnClearYemekFilter" style="align-self:end;">Filtreyi Temizle</button>
+      </div>
+      <div class="table-scroll" id="yemekTableWrap"></div>
+      <div id="yemekTotals" style="margin-top:10px;"></div>
+      <div class="btn-row" style="margin-top:10px;">
+        <button class="btn btn-ghost" id="btnYemekPdf">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg>
+          Yemek Cetveli PDF
+        </button>
+      </div>
+    </div>
+  `;
+  document.getElementById('btnSaveYemekFiyat').onclick = ()=>{
+    const sabah = parseFloat(document.getElementById('yf-sabah').value)||0;
+    const ogle = parseFloat(document.getElementById('yf-ogle').value)||0;
+    const aksam = parseFloat(document.getElementById('yf-aksam').value)||0;
+    proj.yemekFiyat = { sabah, ogle, aksam };
+    saveState();
+    renderMain();
+    showToast('Yemek birim fiyatları güncellendi.');
+  };
+  ['tarih','sabah','ogle','aksam','aciklama'].forEach(k=>{
+    document.getElementById('ym-'+k).addEventListener('input', ()=>{
+      yemekForm[k]=document.getElementById('ym-'+k).value;
+      renderYemekLivePreview(proj);
+    });
+  });
+  document.getElementById('btnSaveYemek').onclick = ()=>saveYemekRow(proj);
+  document.getElementById('btnClearYemek').onclick = ()=>{ yemekForm = emptyYemekForm(); renderMain(); };
+  document.getElementById('ym-filterStart').addEventListener('change',(e)=>{ ui.yemekFilterStart = e.target.value || isoMonthStart(); renderYemekTable(proj); });
+  document.getElementById('ym-filterEnd').addEventListener('change',(e)=>{ ui.yemekFilterEnd = e.target.value || isoToday(); renderYemekTable(proj); });
+  document.getElementById('btnClearYemekFilter').onclick = ()=>{ ui.yemekFilterStart = isoMonthStart(); ui.yemekFilterEnd = isoToday(); renderMain(); };
+  document.getElementById('btnYemekPdf').onclick = ()=>exportYemekPdf(proj);
+  renderYemekLivePreview(proj);
+  renderYemekTable(proj);
+}
+
+function renderYemekLivePreview(proj){
+  const el = document.getElementById('ymLivePreview');
+  if(!el) return;
+  const fiyat = projeYemekFiyat(proj);
+  const t = yemekRowTutar(yemekForm, proj);
+  el.innerHTML = `
+    <div class="totals-strip">
+      <div class="total-chip"><span class="lbl">Sabah (${t.sabahAdet} x ${fmtMoney(fiyat.sabah)})</span><span class="val">${fmtMoney(t.sabahTutar)}</span></div>
+      <div class="total-chip"><span class="lbl">Öğlen (${t.ogleAdet} x ${fmtMoney(fiyat.ogle)})</span><span class="val">${fmtMoney(t.ogleTutar)}</span></div>
+      <div class="total-chip"><span class="lbl">Akşam (${t.aksamAdet} x ${fmtMoney(fiyat.aksam)})</span><span class="val">${fmtMoney(t.aksamTutar)}</span></div>
+      <div class="total-chip"><span class="lbl">Günlük Toplam</span><span class="val">${fmtMoney(t.toplam)}</span></div>
+    </div>`;
+}
+
+function saveYemekRow(proj){
+  if(!yemekForm.tarih){ showToast('Lütfen tarih girin.'); return; }
+  const sabah = parseInt(yemekForm.sabah)||0, ogle = parseInt(yemekForm.ogle)||0, aksam = parseInt(yemekForm.aksam)||0;
+  if(sabah<=0 && ogle<=0 && aksam<=0){ showToast('Lütfen en az bir öğün için adet girin.'); return; }
+  if(!proj.yemekler) proj.yemekler = [];
+  // Mevcut bir kayıt düzenleniyorsa, o kaydın oluşturulduğu andaki fiyatı korunur;
+  // yeni bir kayıt ekleniyorsa projenin GÜNCEL birim fiyatları kullanılır.
+  let fiyat;
+  const existing = yemekForm.id ? proj.yemekler.find(r=>r.id===yemekForm.id) : null;
+  if(existing){
+    fiyat = { sabah:existing.sabahFiyat, ogle:existing.ogleFiyat, aksam:existing.aksamFiyat };
+  } else {
+    fiyat = projeYemekFiyat(proj);
+  }
+  const row = {
+    id: yemekForm.id || uid(),
+    tarih: yemekForm.tarih,
+    sabah, ogle, aksam,
+    sabahFiyat: parseFloat(fiyat.sabah)||0,
+    ogleFiyat: parseFloat(fiyat.ogle)||0,
+    aksamFiyat: parseFloat(fiyat.aksam)||0,
+    aciklama: (yemekForm.aciklama||'').trim()
+  };
+  if(yemekForm.id){
+    const idx = proj.yemekler.findIndex(r=>r.id===row.id);
+    if(idx>-1) proj.yemekler[idx]=row;
+  } else {
+    proj.yemekler.push(row);
+  }
+  saveState();
+  yemekForm = emptyYemekForm();
+  renderMain();
+  showToast('Yemek kaydı kaydedildi.');
+}
+
+function filteredYemek(proj){
+  const start = ui.yemekFilterStart, end = ui.yemekFilterEnd;
+  return (proj.yemekler||[]).filter(r=> (!start || r.tarih>=start) && (!end || r.tarih<=end))
+    .slice().sort((a,b)=> (b.tarih||'').localeCompare(a.tarih||''));
+}
+function projeYemekToplam(proj){
+  return (proj.yemekler||[]).reduce((s,r)=> s + yemekRowTutar(r, proj).toplam, 0);
+}
+
+function renderYemekTable(proj){
+  const wrap = document.getElementById('yemekTableWrap');
+  const rows = filteredYemek(proj);
+  const totalsEl = document.getElementById('yemekTotals');
+  if(rows.length===0){
+    wrap.innerHTML = `<div class="empty-state">Bu tarih aralığında kayıtlı yemek bulunamadı.</div>`;
+    totalsEl.innerHTML = '';
+    return;
+  }
+  wrap.innerHTML = `
+    <table>
+      <thead><tr>
+        <th>Tarih</th>
+        <th class="num">Sabah (Adet)</th><th class="num">Sabah (Tutar)</th>
+        <th class="num">Öğlen (Adet)</th><th class="num">Öğlen (Tutar)</th>
+        <th class="num">Akşam (Adet)</th><th class="num">Akşam (Tutar)</th>
+        <th class="num">Günlük Toplam</th>
+        <th>Açıklama</th><th></th>
+      </tr></thead>
+      <tbody>
+        ${rows.map(r=>{
+          const t = yemekRowTutar(r, proj);
+          return `
+          <tr data-id="${r.id}">
+            <td>${fmtDateStr(r.tarih)}</td>
+            <td class="num">${t.sabahAdet}</td><td class="num">${fmtMoney(t.sabahTutar)}</td>
+            <td class="num">${t.ogleAdet}</td><td class="num">${fmtMoney(t.ogleTutar)}</td>
+            <td class="num">${t.aksamAdet}</td><td class="num">${fmtMoney(t.aksamTutar)}</td>
+            <td class="num" style="font-weight:700;">${fmtMoney(t.toplam)}</td>
+            <td>${esc(r.aciklama)||'—'}</td>
+            <td>
+              <div class="row-actions">
+                <button class="icon-btn" data-act="edit" title="Düzenle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg></button>
+                <button class="icon-btn danger" data-act="delete" title="Sil"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0l-1 14a2 2 0 01-2 2H7a2 2 0 01-2-2L4 6h16z"/></svg></button>
+              </div>
+            </td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>
+  `;
+  const grand = rows.reduce((s,r)=>{
+    const t = yemekRowTutar(r, proj);
+    return { sabah:s.sabah+t.sabahAdet, ogle:s.ogle+t.ogleAdet, aksam:s.aksam+t.aksamAdet, toplam:s.toplam+t.toplam };
+  }, {sabah:0, ogle:0, aksam:0, toplam:0});
+  totalsEl.innerHTML = `
+    <div class="totals-strip">
+      <div class="total-chip"><span class="lbl">Toplam Sabah</span><span class="val">${grand.sabah} adet</span></div>
+      <div class="total-chip"><span class="lbl">Toplam Öğlen</span><span class="val">${grand.ogle} adet</span></div>
+      <div class="total-chip"><span class="lbl">Toplam Akşam</span><span class="val">${grand.aksam} adet</span></div>
+      <div class="total-chip"><span class="lbl">Alt Toplam</span><span class="val">${fmtMoney(grand.toplam)}</span></div>
+    </div>`;
+  wrap.querySelectorAll('tr[data-id]').forEach(tr=>{
+    tr.addEventListener('click',(e)=>{
+      const act = e.target.closest('[data-act]')?.dataset.act;
+      if(!act) return;
+      const r = proj.yemekler.find(x=>x.id===tr.dataset.id);
+      if(!r) return;
+      if(act==='edit'){
+        yemekForm = {id:r.id, tarih:r.tarih, sabah:String(r.sabah||''), ogle:String(r.ogle||''), aksam:String(r.aksam||''), aciklama:r.aciklama||'', sabahFiyat:r.sabahFiyat, ogleFiyat:r.ogleFiyat, aksamFiyat:r.aksamFiyat};
+        renderMain(); window.scrollTo({top:0, behavior:'smooth'});
+      } else if(act==='delete'){
+        confirmModal('Bu yemek kaydını silmek istediğinize emin misiniz?', ()=>{
+          proj.yemekler = proj.yemekler.filter(x=>x.id!==r.id);
+          saveState(); renderMain();
+          showToast('Yemek kaydı silindi.');
+        });
+      }
+    });
+  });
+}
+
+async function exportYemekPdf(proj){
+  showToast('PDF hazırlanıyor…');
+  const rows = filteredYemek(proj);
+  if(rows.length===0){ showToast('Listelenecek yemek kaydı yok.'); return; }
+  const cellStyle = 'border:1px solid #E4EFEF;padding:5px 4px;text-align:center;word-break:break-word;';
+  const nameStyle = 'border:1px solid #E4EFEF;padding:5px 4px;text-align:left;word-break:break-word;';
+  const grand = rows.reduce((s,r)=>{
+    const t = yemekRowTutar(r, proj);
+    return { sabah:s.sabah+t.sabahAdet, ogle:s.ogle+t.ogleAdet, aksam:s.aksam+t.aksamAdet, toplam:s.toplam+t.toplam };
+  }, {sabah:0, ogle:0, aksam:0, toplam:0});
+  const start = ui.yemekFilterStart, end = ui.yemekFilterEnd;
+  const html = `
+    ${pdfHeaderHtml(proj, 'Yemek Cetveli — ' + fmtDateStr(start) + ' — ' + fmtDateStr(end))}
+    <table style="width:100%;border-collapse:collapse;font-size:9px;table-layout:fixed;">
+      <thead><tr style="background:#EAF6F5;">
+        <th style="${nameStyle}">Tarih</th>
+        <th style="${cellStyle}">Sabah<br>Adet</th><th style="${cellStyle}">Sabah<br>Tutar</th>
+        <th style="${cellStyle}">Öğlen<br>Adet</th><th style="${cellStyle}">Öğlen<br>Tutar</th>
+        <th style="${cellStyle}">Akşam<br>Adet</th><th style="${cellStyle}">Akşam<br>Tutar</th>
+        <th style="${cellStyle}">Günlük<br>Toplam</th>
+        <th style="${nameStyle}">Açıklama</th>
+      </tr></thead>
+      <tbody>
+        ${rows.map(r=>{
+          const t = yemekRowTutar(r, proj);
+          return `<tr>
+            <td style="${nameStyle}">${fmtDateStr(r.tarih)}</td>
+            <td style="${cellStyle}">${t.sabahAdet}</td><td style="${cellStyle}">${fmtMoney(t.sabahTutar)}</td>
+            <td style="${cellStyle}">${t.ogleAdet}</td><td style="${cellStyle}">${fmtMoney(t.ogleTutar)}</td>
+            <td style="${cellStyle}">${t.aksamAdet}</td><td style="${cellStyle}">${fmtMoney(t.aksamTutar)}</td>
+            <td style="${cellStyle}font-weight:700;">${fmtMoney(t.toplam)}</td>
+            <td style="${nameStyle}">${esc(r.aciklama)||'—'}</td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+      <tfoot><tr style="background:#EAF6F5;font-weight:700;">
+        <td style="${nameStyle}">Toplam</td>
+        <td style="${cellStyle}">${grand.sabah}</td><td style="${cellStyle}"></td>
+        <td style="${cellStyle}">${grand.ogle}</td><td style="${cellStyle}"></td>
+        <td style="${cellStyle}">${grand.aksam}</td><td style="${cellStyle}"></td>
+        <td style="${cellStyle}">${fmtMoney(grand.toplam)}</td>
+        <td style="${nameStyle}"></td>
+      </tr></tfoot>
+    </table>
+    <div style="font-size:9px;color:#345264;margin-top:10px;">Birim Fiyatlar: Sabah ${fmtMoney(projeYemekFiyat(proj).sabah)} &nbsp;|&nbsp; Öğlen ${fmtMoney(projeYemekFiyat(proj).ogle)} &nbsp;|&nbsp; Akşam ${fmtMoney(projeYemekFiyat(proj).aksam)}</div>
+    <div style="margin-top:36px;font-size:9px;color:#8096A3;">DNZ Metraj &amp; Teklif Yönetimi ile oluşturulmuştur.</div>
+  `;
+  try{
+    await renderNodeToPdf(html, `yemek-cetveli-${proj.name.replace(/[^a-z0-9ığüşöç]+/gi,'_')}.pdf`, 'p');
+    showToast('Yemek cetveli PDF indirildi.');
   }catch(e){ console.error(e); showToast('PDF oluşturulurken bir sorun oluştu.'); }
 }
 
@@ -3958,14 +4343,16 @@ function pdfBaseStyles(width){
   return `font-family:'Inter',Arial,sans-serif;color:#0B2436;padding:24px;width:${width}px;background:#ffffff;`;
 }
 async function renderNodeToPdf(html, filename, orientation){
-  orientation = orientation || 'p';
-  const width = orientation==='l' ? 1122 : 794;
+  // Varsayılan: dikey (portre). Sadece 'l' (yatay/landscape) açıkça belirtilirse
+  // render genişliği ve PDF sayfası A4 yatay ölçülerine göre ayarlanır.
+  orientation = orientation === 'l' ? 'l' : 'p';
+  const width = orientation === 'l' ? 1123 : 794;
   const root = document.getElementById('pdf-render-root');
   root.style.width = width+'px';
-  root.innerHTML = `<div id="pdf-inner" style="${pdfBaseStyles(width)}">${html}</div>`;
+  root.innerHTML = `<div id="pdf-inner" style="${pdfBaseStyles(width)}overflow:hidden;">${html}</div>`;
   await new Promise(r=>setTimeout(r,60));
   const node = document.getElementById('pdf-inner');
-  const canvas = await html2canvas(node, {scale:2, useCORS:true, backgroundColor:'#ffffff'});
+  const canvas = await html2canvas(node, {scale:2, useCORS:true, backgroundColor:'#ffffff', windowWidth:width});
   const imgData = canvas.toDataURL('image/png');
   const { jsPDF } = window.jspdf;
   const pdf = new jsPDF(orientation,'mm','a4');
@@ -3995,7 +4382,7 @@ async function exportMetrajPdf(proj){
   UNITS.forEach(u=>sums[u]=0);
   rows.forEach(r=>{ sums[r.birim] = (sums[r.birim]||0) + (parseFloat(r.altToplam)||0); });
 
-  const c = 'padding:6px 6px;border-bottom:1px solid #E4EFEF;';
+  const c = 'padding:4px 3px;border-bottom:1px solid #E4EFEF;word-break:break-word;';
   const tableRows = rows.map(r=>`
     <tr>
       <td style="${c}">${esc(r.blok)}</td><td style="${c}">${esc(r.kat)}</td><td style="${c}">${esc(r.daire)}</td><td style="${c}">${esc(r.mekan)}</td>
@@ -4007,7 +4394,7 @@ async function exportMetrajPdf(proj){
       <td style="${c}text-align:right;">${esc(r.minha)}</td>
       <td style="${c}">${UNIT_LABEL[r.birim]||r.birim}</td>
       <td style="${c}text-align:right;">${fmtNum(r.toplam)}</td>
-      <td style="${c}text-align:right;font-weight:700;white-space:nowrap;">${fmtNum(r.altToplam)}</td>
+      <td style="${c}text-align:right;font-weight:700;">${fmtNum(r.altToplam)}</td>
     </tr>
   `).join('');
 
@@ -4020,10 +4407,16 @@ async function exportMetrajPdf(proj){
 
   const html = `
     ${pdfHeaderHtml(proj, 'Metraj Raporu')}
-    <table style="width:100%;border-collapse:collapse;font-size:10px;table-layout:auto;">
+    <table style="width:100%;border-collapse:collapse;font-size:6.5px;table-layout:fixed;">
+      <colgroup>
+        <col style="width:6%"><col style="width:6%"><col style="width:6%"><col style="width:8%">
+        <col style="width:9%"><col style="width:16%">
+        <col style="width:5%"><col style="width:6%"><col style="width:6%"><col style="width:6%">
+        <col style="width:5%"><col style="width:6%"><col style="width:7%"><col style="width:8%">
+      </colgroup>
       <thead>
         <tr style="background:#EAF6F5;">
-          ${['Blok','Kat','Daire','Mekân','Uygulama Yeri','İmalat Cinsi','Adet','K.Kenar','Uzunluk','Yükseklik','Minha','Birim','Toplam','Alt Toplam'].map(h=>`<th style="text-align:left;padding:7px 6px;border-bottom:1.5px solid #1C6E8C;white-space:nowrap;">${h}</th>`).join('')}
+          ${['Blok','Kat','Daire','Mekân','Uyg. Yeri','İmalat Cinsi','Adet','K.Kenar','Uzunluk','Yükseklik','Minha','Birim','Toplam','Alt Toplam'].map(h=>`<th style="text-align:left;padding:5px 3px;border-bottom:1.5px solid #1C6E8C;word-break:break-word;">${h}</th>`).join('')}
         </tr>
       </thead>
       <tbody>${tableRows || '<tr><td colspan="14" style="padding:10px;text-align:center;color:#345264;">Kayıt yok</td></tr>'}</tbody>
@@ -4035,7 +4428,7 @@ async function exportMetrajPdf(proj){
     <div style="margin-top:36px;font-size:9px;color:#8096A3;">DNZ Metraj &amp; Teklif Yönetimi ile oluşturulmuştur.</div>
   `;
   try{
-    await renderNodeToPdf(html, `metraj-${proj.name.replace(/[^a-z0-9ığüşöç]+/gi,'_')}.pdf`, 'l');
+    await renderNodeToPdf(html, `metraj-${proj.name.replace(/[^a-z0-9ığüşöç]+/gi,'_')}.pdf`, 'p');
     showToast('Metraj PDF indirildi.');
   }catch(e){
     console.error(e);
@@ -4049,7 +4442,7 @@ async function exportTeklifPdf(proj, templateTitle){
   const total = proj.teklifRows.reduce((s,r)=>s+(parseFloat(r.tutar)||0),0);
   const tableRows = proj.teklifRows.map(r=>`
     <tr>
-      <td style="max-width:260px;">${esc(r.aciklama)}</td>
+      <td style="word-break:break-word;">${esc(r.aciklama)}</td>
       <td style="text-align:right;">${fmtNum(r.miktar)}</td>
       <td>${UNIT_LABEL[r.birim]||r.birim}</td>
       <td style="text-align:right;">${fmtNum(r.birimFiyat)}</td>
@@ -4060,7 +4453,11 @@ async function exportTeklifPdf(proj, templateTitle){
   const html = `
     ${pdfHeaderHtml(proj)}
     <div style="font-family:'Outfit',sans-serif;font-weight:700;font-size:15px;letter-spacing:1px;margin-bottom:14px;color:#1C6E8C;text-align:center;">${esc(templateTitle)}</div>
-    <table style="width:100%;border-collapse:collapse;font-size:10px;">
+    <table style="width:100%;border-collapse:collapse;font-size:10px;table-layout:fixed;">
+      <colgroup>
+        <col style="width:46%"><col style="width:12%"><col style="width:12%">
+        <col style="width:15%"><col style="width:15%">
+      </colgroup>
       <thead>
         <tr style="background:#EAF6F5;">
           <th style="text-align:left;padding:7px 6px;border-bottom:1.5px solid #1C6E8C;">Açıklama</th>
@@ -4129,6 +4526,15 @@ if('serviceWorker' in navigator){
     if(!p.zimmetler) p.zimmetler = [];
     if(!p.tahsilatlar) p.tahsilatlar = [];
     if(!p.masraflar) p.masraflar = [];
+    if(!p.yemekler) p.yemekler = [];
+    if(!p.yemekFiyat) p.yemekFiyat = { sabah:MEAL_PRICES.sabah, ogle:MEAL_PRICES.ogle, aksam:MEAL_PRICES.aksam };
+    (p.yemekler||[]).forEach(r=>{
+      if(r.tarih) r.tarih = fixLegacyDateStr(r.tarih);
+      if(r.sabahFiyat==null) r.sabahFiyat = parseFloat(p.yemekFiyat.sabah)||0;
+      if(r.ogleFiyat==null) r.ogleFiyat = parseFloat(p.yemekFiyat.ogle)||0;
+      if(r.aksamFiyat==null) r.aksamFiyat = parseFloat(p.yemekFiyat.aksam)||0;
+    });
+    (p.avanslar||[]).forEach(a=>{ if(a.odemeTarihi) a.odemeTarihi = fixLegacyDateStr(a.odemeTarihi); });
   });
   if(state.company.logo && state.company.logo.length > 400000){
     try{
