@@ -438,6 +438,10 @@ footer.appfoot{text-align:center;padding:14px;color:rgba(11,36,54,0.45);font-siz
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
       Teklif
     </button>
+    <button class="tab-btn ripple-el-host" data-tab="imalat">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg>
+      İmalat Sistemleri
+    </button>
     <button class="tab-btn ripple-el-host" data-tab="personel">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
       Personel
@@ -481,7 +485,8 @@ footer.appfoot{text-align:center;padding:14px;color:rgba(11,36,54,0.45);font-siz
 const STORAGE_KEY = 'dnzMetrajData_v1';
 const LS_STORAGE_KEY = 'dnzMetrajData_localCache_v1';
 const UNITS = ['m2','mt','kg','adet','m3','ton'];
-const UNIT_LABEL = {m2:'m²', mt:'mt', kg:'kg', adet:'adet', m3:'m³', ton:'ton'};
+const UNIT_LABEL = {m2:'m²', mt:'mt', kg:'kg', adet:'adet', m3:'m³', ton:'ton', paket:'paket', kutu:'kutu', rulo:'rulo', litre:'litre', 'takım':'takım', torba:'torba'};
+const IMALAT_UNITS = ['adet','mt','m2','kg','m3','ton','paket','kutu','rulo','litre','takım','torba'];
 const MEAL_PRICES = { sabah:100, ogle:200, aksam:200 };
 
 function defaultState(){
@@ -489,6 +494,7 @@ function defaultState(){
     company:{ name:'', logo:'' },
     activeProjectId:null,
     projects:{},
+    imalatSistemleri:[],
     lastBackupAt:null,
     dirtySinceBackup:false
   };
@@ -537,7 +543,23 @@ let ui = {
   yemekFilterStart: isoMonthStart(),
   yemekFilterEnd: isoToday(),
   yemekEditId:null,
-  raporTab:'icmal'
+  raporTab:'icmal',
+  imalatSubTab:'tanim',
+  imalatSelectedId:null,
+  imalatCalcSistemId:null,
+  imalatCalcInput:'',
+  imalatCalcUnit:'m2',
+  imalatCalcMode:'tek', // 'tek' | 'kenar' | 'poligon'
+  imalatCalcMultiKenar:false,
+  imalatCalcKenarlar:['','','','','',''],
+  imalatCalcPoligon:[
+    {uzunluk:'', yon:'sag'},
+    {uzunluk:'', yon:'asagi'},
+    {uzunluk:'', yon:'sol'},
+    {uzunluk:'', yon:'yukari'}
+  ],
+  imalatCalcNot:'',
+  imalatCalcPaketTamamla:{}
 };
 
 /* ======================= PERSISTENCE ======================= */
@@ -928,6 +950,7 @@ function renderMain(){
   const main = document.getElementById('mainContent');
   if(ui.tab==='projeler') return renderProjelerTab(main);
   if(ui.tab==='ayarlar') return renderAyarlarTab(main);
+  if(ui.tab==='imalat') return renderImalatTab(main);
   const proj = activeProject();
   if(!proj){
     main.innerHTML = `
@@ -1739,6 +1762,755 @@ function renderTeklifTotals(proj){
   const el = document.getElementById('teklifTotals');
   const total = proj.teklifRows.reduce((s,r)=>s+(parseFloat(r.tutar)||0),0);
   el.innerHTML = `<div class="total-chip"><span class="lbl">Genel Toplam</span><span class="val">${fmtMoney(total)}</span></div>`;
+}
+
+/* ======================= İMALAT SİSTEMLERİ TAB ======================= */
+// Bu modül projeden bağımsız, genel (tüm projelerde ortak) bir malzeme/reçete
+// kütüphanesidir: önce bir "imalat sistemi" (ör. Alçıpan Asma Tavan) tanımlanır,
+// içine malzeme kalemleri (sarfiyat, ebat, alış/satış fiyatı) eklenir. Ardından
+// "Hesaplama Paneli"nde bir alan/ölçü girilerek malzeme miktarları otomatik hesaplanır.
+function emptyImalatSistemForm(){ return {id:null, ad:''}; }
+let imalatSistemForm = emptyImalatSistemForm();
+function emptyImalatMalzemeForm(){ return {id:null, ad:'', birim:'mt', sarfiyat:'', ebat:'', paketAdet:'', alisFiyat:'', satisFiyat:''}; }
+let imalatMalzemeForm = emptyImalatMalzemeForm();
+
+function renderImalatTab(main){
+  if(!ui.imalatSubTab) ui.imalatSubTab = 'tanim';
+  main.innerHTML = `
+    <div class="card glass">
+      <h2>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg>
+        İmalat Sistemleri
+      </h2>
+      <p class="hint">Önce bir imalat sistemi tanımlayıp içine malzeme listesi ekleyin (sarfiyat, ebat, alış/satış fiyatı). Bu bilgiler tüm projelerde ortak kullanılır. Sonra "Hesaplama Paneli"nden bir alan/ölçü girerek malzeme miktarlarını otomatik hesaplayın.</p>
+      <div class="report-subnav" id="imalatSubnav">
+        <button class="report-subtab-btn ripple-el-host ${ui.imalatSubTab==='tanim'?'active':''}" data-isub="tanim">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+          Sistem &amp; Malzeme Tanımı
+        </button>
+        <button class="report-subtab-btn ripple-el-host ${ui.imalatSubTab==='hesap'?'active':''}" data-isub="hesap">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M8 6h8M8 10h8M8 14h5"/></svg>
+          Hesaplama Paneli
+        </button>
+      </div>
+    </div>
+    <div id="imalatSubContent"></div>
+  `;
+  document.getElementById('imalatSubnav').addEventListener('click',(e)=>{
+    const btn = e.target.closest('.report-subtab-btn');
+    if(!btn) return;
+    ui.imalatSubTab = btn.dataset.isub;
+    renderImalatTab(main);
+  });
+  const sub = document.getElementById('imalatSubContent');
+  if(ui.imalatSubTab==='tanim') renderImalatTanimSection(sub);
+  else renderImalatHesapSection(sub);
+}
+
+/* ---- Bölüm 1: Sistem ve malzeme tanımı ---- */
+function renderImalatTanimSection(sub){
+  const sistemler = state.imalatSistemleri.slice().sort((a,b)=>a.ad.localeCompare(b.ad,'tr'));
+  const selected = sistemler.find(s=>s.id===ui.imalatSelectedId) || null;
+  sub.innerHTML = `
+    <div class="card glass">
+      <h2>İmalat Sistemi Ekle</h2>
+      <div class="field-grid">
+        <div class="field" style="grid-column:span 3;"><label>İmalat Sistemi Adı</label>
+          <input type="text" id="is-ad" value="${esc(imalatSistemForm.ad)}" placeholder="Örn: Alçıpan Asma Tavan">
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary ripple-el-host" id="btnSaveSistem">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+          ${imalatSistemForm.id? 'Sistemi Güncelle':'Sistemi Kaydet'}
+        </button>
+        ${imalatSistemForm.id? `<button class="btn btn-ghost" id="btnClearSistem">Vazgeç</button>` : ''}
+      </div>
+    </div>
+    <div class="card glass">
+      <h2>Tanımlı İmalat Sistemleri <span class="badge">${sistemler.length}</span></h2>
+      <div class="project-list" id="imalatSistemList">
+        ${sistemler.length===0 ? `<div class="empty-state">Henüz imalat sistemi eklenmedi.</div>` : sistemler.map(s=>`
+          <div class="project-item ${s.id===ui.imalatSelectedId?'active':''}" data-id="${s.id}">
+            <div class="pinfo">
+              <b>${esc(s.ad)}</b>
+              <span>${s.malzemeler.length} malzeme kalemi</span>
+            </div>
+            <button class="icon-btn" data-act="select" title="Malzeme Listesini Aç/Kapat">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+            </button>
+            <button class="icon-btn" data-act="edit" title="Adını Güncelle">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+            </button>
+            <button class="icon-btn danger" data-act="delete" title="Sil">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0l-1 14a2 2 0 01-2 2H7a2 2 0 01-2-2L4 6h16z"/></svg>
+            </button>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+    ${selected ? renderImalatMalzemeSectionHtml(selected) : ''}
+  `;
+  document.getElementById('is-ad').addEventListener('input', e=>{ imalatSistemForm.ad = e.target.value; });
+  document.getElementById('btnSaveSistem').onclick = ()=>saveImalatSistem();
+  const clearBtn = document.getElementById('btnClearSistem');
+  if(clearBtn) clearBtn.onclick = ()=>{ imalatSistemForm = emptyImalatSistemForm(); renderImalatTab(document.getElementById('mainContent')); };
+  document.getElementById('imalatSistemList').addEventListener('click',(e)=>{
+    const item = e.target.closest('.project-item');
+    if(!item) return;
+    const id = item.dataset.id;
+    const act = e.target.closest('[data-act]')?.dataset.act || 'select';
+    if(act==='select'){
+      ui.imalatSelectedId = (ui.imalatSelectedId===id ? null : id);
+      imalatMalzemeForm = emptyImalatMalzemeForm();
+      renderImalatTab(document.getElementById('mainContent'));
+    } else if(act==='edit'){
+      const s = state.imalatSistemleri.find(x=>x.id===id);
+      imalatSistemForm = {id:s.id, ad:s.ad};
+      renderImalatTab(document.getElementById('mainContent'));
+      window.scrollTo({top:0, behavior:'smooth'});
+    } else if(act==='delete'){
+      const s = state.imalatSistemleri.find(x=>x.id===id);
+      confirmModal(`"${s.ad}" imalat sistemini ve malzeme listesini silmek istediğinize emin misiniz? Bu işlem geri alınamaz.`, ()=>{
+        state.imalatSistemleri = state.imalatSistemleri.filter(x=>x.id!==id);
+        if(ui.imalatSelectedId===id) ui.imalatSelectedId = null;
+        if(ui.imalatCalcSistemId===id) ui.imalatCalcSistemId = null;
+        saveState(); renderImalatTab(document.getElementById('mainContent'));
+        showToast('İmalat sistemi silindi.');
+      });
+    }
+  });
+  if(selected) bindImalatMalzemeSectionEvents(selected);
+}
+
+function renderImalatMalzemeSectionHtml(sistem){
+  return `
+    <div class="card glass">
+      <h2>Malzeme Ekle — <span style="color:var(--aqua-dim)">${esc(sistem.ad)}</span></h2>
+      <p class="hint">Sarfiyat, 1 m² (ya da girdiğiniz ölçü 1 mt ise 1 mt) başına düşen tüketim miktarıdır. Örn: "100 m²'de 255 mt profil gider" ise sarfiyat <b>2,55</b> yazılır. Profil/boru gibi parça halinde satılan ürünlerde "Ebat" (parça boyu) girilirse, hesaplama panelinde miktar otomatik tam parça sayısına yuvarlanır ve altında adet olarak not düşülür. "Paket İçi Adet" girilirse (örn. bir pakette 12 adet varsa), Hesaplama Paneli'nde "Paket Tamamla" işaretlendiğinde hesaplanan adet otomatik olarak paket katına (12, 24, 36 ...) yuvarlanır.</p>
+      <div class="field-grid">
+        <div class="field" style="grid-column:span 2;"><label>Malzeme Adı</label>
+          <input type="text" id="m-ad" value="${esc(imalatMalzemeForm.ad)}" placeholder="Örn: Tavan C Profili">
+        </div>
+        <div class="field"><label>Birim</label>
+          <input list="dl-imalatBirim" id="m-birim" value="${esc(imalatMalzemeForm.birim)}" placeholder="mt / adet / kg ...">
+          <datalist id="dl-imalatBirim">${IMALAT_UNITS.map(u=>`<option value="${u}">`).join('')}</datalist>
+        </div>
+        <div class="field"><label>Sarfiyat (birim ölçü başına)</label><input class="mono" type="number" step="any" id="m-sarfiyat" value="${esc(imalatMalzemeForm.sarfiyat)}" placeholder="Örn: 2.55"></div>
+        <div class="field"><label>Ebat (parça ölçüsü, opsiyonel)</label><input class="mono" type="number" step="any" id="m-ebat" value="${esc(imalatMalzemeForm.ebat)}" placeholder="Örn: 3"></div>
+        <div class="field"><label>Paket İçi Adet (opsiyonel)</label><input class="mono" type="number" step="any" id="m-paketAdet" value="${esc(imalatMalzemeForm.paketAdet)}" placeholder="Örn: 12"></div>
+        <div class="field"><label>Alış Fiyatı (TL)</label><input class="mono" type="number" step="any" id="m-alisFiyat" value="${esc(imalatMalzemeForm.alisFiyat)}"></div>
+        <div class="field"><label>Satış Fiyatı (TL)</label><input class="mono" type="number" step="any" id="m-satisFiyat" value="${esc(imalatMalzemeForm.satisFiyat)}"></div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary ripple-el-host" id="btnSaveMalzeme">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+          ${imalatMalzemeForm.id? 'Malzemeyi Güncelle':'Malzemeyi Ekle'}
+        </button>
+        ${imalatMalzemeForm.id? `<button class="btn btn-ghost" id="btnClearMalzeme">Vazgeç</button>` : ''}
+      </div>
+    </div>
+    <div class="card glass">
+      <h2>Malzeme Listesi <span class="badge">${sistem.malzemeler.length}</span></h2>
+      <div class="table-scroll" id="malzemeTableWrap">${renderMalzemeTableHtml(sistem)}</div>
+    </div>
+  `;
+}
+
+function renderMalzemeTableHtml(sistem){
+  if(sistem.malzemeler.length===0) return `<div class="empty-state">Henüz malzeme eklenmedi.</div>`;
+  return `
+    <table>
+      <thead><tr><th>Malzeme</th><th>Birim</th><th class="num">Sarfiyat</th><th class="num">Ebat</th><th class="num">Paket İçi Adet</th><th class="num">Alış Fiyatı</th><th class="num">Satış Fiyatı</th><th></th></tr></thead>
+      <tbody>
+        ${sistem.malzemeler.map(m=>`
+          <tr data-id="${m.id}">
+            <td>${esc(m.ad)}</td>
+            <td>${esc(UNIT_LABEL[m.birim]||m.birim)}</td>
+            <td class="num">${fmtNum(m.sarfiyat)}</td>
+            <td class="num">${m.ebat? fmtNum(m.ebat) : '—'}</td>
+            <td class="num">${m.paketAdet? fmtNum(m.paketAdet) : '—'}</td>
+            <td class="num">${fmtMoney(m.alisFiyat)}</td>
+            <td class="num">${fmtMoney(m.satisFiyat)}</td>
+            <td>
+              <div class="row-actions">
+                <button class="icon-btn" data-act="edit" title="Düzenle">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                </button>
+                <button class="icon-btn danger" data-act="delete" title="Sil">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0l-1 14a2 2 0 01-2 2H7a2 2 0 01-2-2L4 6h16z"/></svg>
+                </button>
+              </div>
+            </td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `;
+}
+
+function bindImalatMalzemeSectionEvents(sistem){
+  ['ad','birim','sarfiyat','ebat','paketAdet','alisFiyat','satisFiyat'].forEach(k=>{
+    const el = document.getElementById('m-'+k);
+    if(el) el.addEventListener('input', ()=>{ imalatMalzemeForm[k] = el.value; });
+  });
+  const saveBtn = document.getElementById('btnSaveMalzeme');
+  if(saveBtn) saveBtn.onclick = ()=>saveImalatMalzeme(sistem);
+  const clearBtn = document.getElementById('btnClearMalzeme');
+  if(clearBtn) clearBtn.onclick = ()=>{ imalatMalzemeForm = emptyImalatMalzemeForm(); renderImalatTab(document.getElementById('mainContent')); };
+  const wrap = document.getElementById('malzemeTableWrap');
+  if(wrap) wrap.querySelectorAll('tr[data-id]').forEach(tr=>{
+    tr.addEventListener('click',(e)=>{
+      const act = e.target.closest('[data-act]')?.dataset.act;
+      if(!act) return;
+      const id = tr.dataset.id;
+      if(act==='edit'){
+        const m = sistem.malzemeler.find(x=>x.id===id);
+        imalatMalzemeForm = Object.assign({}, m);
+        renderImalatTab(document.getElementById('mainContent'));
+        window.scrollTo({top:0, behavior:'smooth'});
+      } else if(act==='delete'){
+        confirmModal('Bu malzemeyi silmek istediğinize emin misiniz?', ()=>{
+          sistem.malzemeler = sistem.malzemeler.filter(x=>x.id!==id);
+          saveState(); renderImalatTab(document.getElementById('mainContent'));
+          showToast('Malzeme silindi.');
+        });
+      }
+    });
+  });
+}
+
+function saveImalatSistem(){
+  const ad = (imalatSistemForm.ad||'').trim();
+  if(!ad){ showToast('Lütfen imalat sistemi adı girin.'); return; }
+  if(imalatSistemForm.id){
+    const s = state.imalatSistemleri.find(x=>x.id===imalatSistemForm.id);
+    if(s) s.ad = ad;
+  } else {
+    const s = { id: uid(), ad, createdAt: Date.now(), malzemeler: [] };
+    state.imalatSistemleri.push(s);
+    ui.imalatSelectedId = s.id;
+  }
+  saveState();
+  imalatSistemForm = emptyImalatSistemForm();
+  renderImalatTab(document.getElementById('mainContent'));
+  showToast('İmalat sistemi kaydedildi.');
+}
+
+function saveImalatMalzeme(sistem){
+  const ad = (imalatMalzemeForm.ad||'').trim();
+  const birim = (imalatMalzemeForm.birim||'').trim() || 'adet';
+  const sarfiyat = parseFloat(String(imalatMalzemeForm.sarfiyat).replace(',','.'));
+  if(!ad){ showToast('Lütfen malzeme adı girin.'); return; }
+  if(isNaN(sarfiyat)){ showToast('Lütfen sarfiyat değeri girin.'); return; }
+  const ebatRaw = imalatMalzemeForm.ebat;
+  const ebatVal = (ebatRaw!==''&&ebatRaw!==null&&ebatRaw!==undefined) ? parseFloat(String(ebatRaw).replace(',','.')) : NaN;
+  const paketRaw = imalatMalzemeForm.paketAdet;
+  const paketVal = (paketRaw!==''&&paketRaw!==null&&paketRaw!==undefined) ? parseFloat(String(paketRaw).replace(',','.')) : NaN;
+  const row = {
+    id: imalatMalzemeForm.id || uid(),
+    ad, birim, sarfiyat,
+    ebat: (!isNaN(ebatVal) && ebatVal>0) ? ebatVal : null,
+    paketAdet: (!isNaN(paketVal) && paketVal>0) ? paketVal : null,
+    alisFiyat: parseFloat(String(imalatMalzemeForm.alisFiyat).replace(',','.'))||0,
+    satisFiyat: parseFloat(String(imalatMalzemeForm.satisFiyat).replace(',','.'))||0
+  };
+  if(imalatMalzemeForm.id){
+    const idx = sistem.malzemeler.findIndex(x=>x.id===row.id);
+    if(idx>-1) sistem.malzemeler[idx] = row;
+  } else {
+    sistem.malzemeler.push(row);
+  }
+  saveState();
+  imalatMalzemeForm = emptyImalatMalzemeForm();
+  renderImalatTab(document.getElementById('mainContent'));
+  showToast('Malzeme kaydedildi.');
+}
+
+/* ---- Bölüm 2: Hesaplama paneli ---- */
+// "3x5" / "3*5" / "3×5" gibi bir girişi genişlik x uzunluk kabul edip m² olarak
+// hesaplar; aksi halde girilen sayıyı, seçilen birime (m² ya da mt) göre doğrudan kullanır.
+function parseAlanInput(str, unit){
+  const s = (str==null?'':String(str)).trim().toLowerCase().replace(/,/g,'.');
+  if(!s) return {value:null, unit, isArea:false};
+  const m = s.match(/^(\d+(?:\.\d+)?)\s*[x×*]\s*(\d+(?:\.\d+)?)$/);
+  if(m){
+    const w = parseFloat(m[1]), l = parseFloat(m[2]);
+    return {value: Math.round(w*l*100)/100, unit:'m2', isArea:true};
+  }
+  const num = parseFloat(s);
+  if(isNaN(num)) return {value:null, unit, isArea:false};
+  return {value: Math.round(num*100)/100, unit, isArea:false};
+}
+
+// Bir oda/mekanın birden fazla kenarı (duvarı) olabilir. Kullanıcı her kenarı ayrı ayrı
+// girer (en fazla 6 kenar), sistem doldurulmuş olan kenarları toplayıp tek bir
+// alan/uzunluk değeri olarak hesaplama motoruna verir. Örn: 3, 4, 3, 4 girilirse toplam 14
+// (girilen birime göre m² ya da mt) olarak hesaplanır; her kenar hücresine "3x5" gibi
+// genişlik x uzunluk de girilebilir.
+function computeKenarToplam(kenarlar, unit){
+  const detay = [];
+  let toplam = 0;
+  (kenarlar||[]).forEach((k,i)=>{
+    const p = parseAlanInput(k, unit);
+    if(p.value!=null){ toplam += p.value; detay.push({index:i, girdi:k, value:p.value}); }
+  });
+  return { toplam: detay.length? Math.round(toplam*100)/100 : null, detay };
+}
+
+// Bir malzeme kalemi için, girilen ölçü (deger) üzerinden gereken miktarı hesaplar.
+// Ebat (parça boyu) tanımlıysa sonucu yukarı yuvarlayıp tam parça sayısını da döndürür.
+// Örnek: sarfiyat 2.55, deger 50 -> ham 127.5; ebat 3 -> 43 parça -> 129 (mt).
+function computeMalzemeSonuc(malzeme, deger, opts){
+  opts = opts || {};
+  const sarfiyat = parseFloat(malzeme.sarfiyat)||0;
+  const raw = (deger!=null) ? sarfiyat*deger : 0;
+  let miktar = raw, adetNote = null, paketNote = null;
+  const paketAdet = parseFloat(malzeme.paketAdet)||0;
+  if(malzeme.ebat && malzeme.ebat>0){
+    let parca = Math.ceil((raw - 1e-9)/malzeme.ebat);
+    if(opts.paketTamamla && paketAdet>0){
+      parca = Math.ceil((parca - 1e-9)/paketAdet)*paketAdet;
+      paketNote = parca/paketAdet;
+    }
+    miktar = Math.round(parca*malzeme.ebat*100)/100;
+    adetNote = parca;
+  } else if(String(malzeme.birim).toLowerCase()==='adet'){
+    let parca = Math.ceil(raw - 1e-9);
+    if(opts.paketTamamla && paketAdet>0){
+      parca = Math.ceil((parca - 1e-9)/paketAdet)*paketAdet;
+      paketNote = parca/paketAdet;
+    }
+    miktar = parca;
+  } else {
+    miktar = Math.round(raw*100)/100;
+  }
+  const tutar = miktar*(parseFloat(malzeme.satisFiyat)||0);
+  const maliyet = miktar*(parseFloat(malzeme.alisFiyat)||0);
+  return { raw: Math.round(raw*100)/100, miktar, adetNote, paketNote, tutar: Math.round(tutar*100)/100, maliyet: Math.round(maliyet*100)/100 };
+}
+
+// ---- Poligon (köşeli / L-T-U-Z şeklinde oda) alan hesaplama — AutoCAD'deki "AREA"
+// komutuna benzer şekilde çalışır. Kullanıcı fotoğraftaki gibi her kenarın uzunluğunu ve
+// yönünü (sağa/sola/yukarı/aşağı) sırayla girer; sistem (0,0) noktasından başlayarak
+// köşe noktalarını çıkarır ve kapalı şeklin alanını "ayakkabı bağcığı" (shoelace)
+// formülüyle hesaplar. Bu yöntem, iç içe geçmiş/basamaklı (L, T, U, Z) odalarda
+// dikdörtgenleri tek tek toplamanın aksine ortak alanları bir kez sayar.
+function tracePoligonVertices(edges){
+  let x=0, y=0;
+  const points = [{x,y}];
+  (edges||[]).forEach(e=>{
+    const len = parseFloat(String(e.uzunluk).replace(',','.'));
+    if(!len || len<=0 || isNaN(len)) return;
+    if(e.yon==='sag') x += len;
+    else if(e.yon==='sol') x -= len;
+    else if(e.yon==='yukari') y += len;
+    else if(e.yon==='asagi') y -= len;
+    points.push({x,y});
+  });
+  return points;
+}
+function computePoligonAlan(edges){
+  const points = tracePoligonVertices(edges);
+  const kenarSayisi = points.length-1;
+  if(kenarSayisi < 3) return { alan:null, points, kapali:false, kenarSayisi };
+  let sum = 0;
+  for(let i=0;i<points.length;i++){
+    const p1 = points[i];
+    const p2 = points[(i+1)%points.length];
+    sum += (p1.x*p2.y - p2.x*p1.y);
+  }
+  const alan = Math.round(Math.abs(sum/2)*100)/100;
+  const last = points[points.length-1];
+  const kapali = Math.abs(last.x)<0.02 && Math.abs(last.y)<0.02;
+  return { alan, points, kapali, kenarSayisi };
+}
+// Girilen kenarlardan oluşan şeklin küçük bir SVG önizlemesini üretir (canlı taslak çizimi).
+function renderPoligonSvgPreview(points){
+  const valid = (points||[]).filter(p=>!(p.x===0&&p.y===0)) ;
+  if(!points || points.length<2 || valid.length===0){
+    return `<div class="empty-state">Kenar uzunluğu ve yönlerini girdikçe şekil burada canlı olarak çizilecek.</div>`;
+  }
+  const xs = points.map(p=>p.x), ys = points.map(p=>p.y);
+  const minX=Math.min(...xs), maxX=Math.max(...xs), minY=Math.min(...ys), maxY=Math.max(...ys);
+  const w = Math.max(maxX-minX, 0.5), h = Math.max(maxY-minY, 0.5);
+  const pad = Math.max(w,h)*0.18 || 1;
+  const vbW = w+pad*2, vbH = h+pad*2;
+  const sw = Math.max(vbW,vbH)*0.012;
+  // SVG'de y ekseni aşağı doğru arttığından, doğal (yukarı=yukarı) görünmesi için ters çeviriyoruz.
+  const toSvg = p => ({ x:(p.x-minX+pad), y:(vbH-(p.y-minY+pad)) });
+  const pts = points.map(toSvg);
+  const polyStr = pts.map(p=>`${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(' ');
+  const startDot = pts[0];
+  const endDot = pts[pts.length-1];
+  return `
+    <svg viewBox="0 0 ${vbW.toFixed(2)} ${vbH.toFixed(2)}" style="width:100%;max-width:360px;height:auto;background:rgba(255,255,255,0.55);border-radius:12px;display:block;margin:0 auto;">
+      <polygon points="${polyStr}" fill="rgba(47,211,199,0.30)" stroke="#1C6E8C" stroke-width="${sw.toFixed(3)}"/>
+      <circle cx="${startDot.x.toFixed(2)}" cy="${startDot.y.toFixed(2)}" r="${(sw*1.6).toFixed(3)}" fill="#22A99F"/>
+      <circle cx="${endDot.x.toFixed(2)}" cy="${endDot.y.toFixed(2)}" r="${(sw*1.6).toFixed(3)}" fill="#E8776B"/>
+    </svg>
+  `;
+}
+
+function renderImalatHesapSection(sub){
+  const sistemler = state.imalatSistemleri.slice().sort((a,b)=>a.ad.localeCompare(b.ad,'tr'));
+  if(ui.imalatCalcSistemId && !sistemler.find(s=>s.id===ui.imalatCalcSistemId)) ui.imalatCalcSistemId = null;
+  if(!ui.imalatCalcMode) ui.imalatCalcMode = ui.imalatCalcMultiKenar ? 'kenar' : 'tek';
+  const mode = ui.imalatCalcMode;
+  const YON_OPTS = [
+    {v:'sag', l:'Sağa →'},
+    {v:'sol', l:'Sola ←'},
+    {v:'yukari', l:'Yukarı ↑'},
+    {v:'asagi', l:'Aşağı ↓'}
+  ];
+  sub.innerHTML = `
+    <div class="card glass">
+      <h2>Hesaplama Paneli</h2>
+      <p class="hint">İmalat sistemini seçin, ardından ölçüyü girin. m² değerini doğrudan yazabilir, "3x5" gibi genişlik x uzunluk girip otomatik m² hesaplatabilir ya da mt cinsinden doğrudan uzunluk girebilirsiniz.</p>
+      <div class="field-grid">
+        <div class="field" style="grid-column:span 2;"><label>İmalat Sistemi</label>
+          <select id="h-sistem">
+            <option value="">— Seçiniz —</option>
+            ${sistemler.map(s=>`<option value="${s.id}" ${s.id===ui.imalatCalcSistemId?'selected':''}>${esc(s.ad)}</option>`).join('')}
+          </select>
+        </div>
+        <div class="field"><label>Girilen Değerin Birimi</label>
+          <select id="h-birim" ${mode==='poligon'?'disabled':''}>
+            <option value="m2" ${ui.imalatCalcUnit==='m2'?'selected':''}>m² (alan)</option>
+            <option value="mt" ${ui.imalatCalcUnit==='mt'?'selected':''}>mt (uzunluk)</option>
+          </select>
+        </div>
+        <div class="field"><label>Hesaplanan Değer</label>
+          <div class="mono" id="hesapDegerDisplay" style="padding:9px 10px;border-radius:10px;background:rgba(255,255,255,0.55);font-weight:700;">—</div>
+        </div>
+      </div>
+
+      <div class="report-subnav" id="hesapModeNav" style="margin-top:2px;">
+        <button class="report-subtab-btn ripple-el-host ${mode==='tek'?'active':''}" data-mode="tek">Tekli Ölçü</button>
+        <button class="report-subtab-btn ripple-el-host ${mode==='kenar'?'active':''}" data-mode="kenar">Çoklu Kenar Toplamı</button>
+        <button class="report-subtab-btn ripple-el-host ${mode==='poligon'?'active':''}" data-mode="poligon">Poligon Alan (Köşeli Oda)</button>
+      </div>
+
+      ${mode==='tek' ? `
+      <div class="field"><label>Ölçü / Alan Girişi</label>
+        <input type="text" id="h-alan" value="${esc(ui.imalatCalcInput)}" placeholder="Örn: 15  veya  3x5">
+      </div>
+      ` : ''}
+
+      ${mode==='kenar' ? `
+      <p class="hint">Odanın/mekânın birden fazla kenarı (duvarı) varsa her birini ayrı girin, sistem toplamını otomatik hesaplar (en fazla 6 kenar).</p>
+      <div class="field-grid" id="hesapKenarGrid">
+        ${[0,1,2,3,4,5].map(i=>`
+          <div class="field"><label>Kenar ${i+1}${i>=2?' (opsiyonel)':''}</label>
+            <input class="mono" type="text" data-kenar-idx="${i}" value="${esc(ui.imalatCalcKenarlar[i]||'')}" placeholder="Örn: 4  veya  3x5">
+          </div>
+        `).join('')}
+      </div>
+      ` : ''}
+
+      ${mode==='poligon' ? `
+      <p class="hint">Fotoğraftaki gibi köşeli (L, T, U, Z şekilli) bir oda/mekânın alanını CAD programlarındaki "alan" komutuna benzer şekilde hesaplar. Kenarları sırayla, duvarı takip eder gibi uzunluk ve yön (sağa/sola/yukarı/aşağı) girerek ekleyin; şekil otomatik kapanır ve alanı hesaplanır.</p>
+      <div id="hesapPoligonList" style="display:flex;flex-direction:column;gap:8px;">
+        ${ui.imalatCalcPoligon.map((e,i)=>`
+          <div style="display:flex;gap:8px;align-items:center;">
+            <span class="mono" style="min-width:18px;color:var(--ink-soft);font-size:0.78rem;">${i+1}.</span>
+            <input class="mono" type="text" data-pol-len="${i}" value="${esc(e.uzunluk)}" placeholder="Uzunluk (m)" style="flex:1;padding:9px 10px;border-radius:10px;border:1px solid rgba(11,36,54,0.15);background:rgba(255,255,255,0.6);min-width:0;">
+            <select data-pol-yon="${i}" style="flex:1;padding:9px 10px;border-radius:10px;border:1px solid rgba(11,36,54,0.15);background:rgba(255,255,255,0.6);min-width:0;">
+              ${YON_OPTS.map(y=>`<option value="${y.v}" ${e.yon===y.v?'selected':''}>${y.l}</option>`).join('')}
+            </select>
+            <button type="button" class="btn btn-ghost" data-pol-del="${i}" style="padding:8px 10px;" title="Bu kenarı sil">✕</button>
+          </div>
+        `).join('')}
+      </div>
+      <div class="btn-row">
+        <button type="button" class="btn btn-ghost" id="btnPolAddKenar">+ Kenar Ekle</button>
+      </div>
+      <div id="hesapPoligonPreview" style="margin-top:6px;"></div>
+      ` : ''}
+
+      <p class="hint" id="hesapAlanNote" style="min-height:1.1em;"></p>
+
+      <div class="field-grid" style="margin-top:4px;border-top:1px solid rgba(11,36,54,0.1);padding-top:14px;">
+        <div class="field" style="grid-column:span 2;"><label>Birim Maliyet (Toplam Satış Tutarı ÷ Hesaplanan Değer)</label>
+          <div class="mono" id="hesapBirimMaliyetDisplay" style="padding:9px 10px;border-radius:10px;background:rgba(255,255,255,0.55);font-weight:700;">—</div>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Not / Açıklama (müşteriyi bilgilendirmek için — çıktıda görünür)</label>
+        <textarea id="h-not" rows="2" style="width:100%;padding:9px 10px;border-radius:10px;border:1px solid rgba(11,36,54,0.15);background:rgba(255,255,255,0.6);font-family:var(--font-body);font-size:0.85rem;color:var(--ink);resize:vertical;" placeholder="Örn: Fiyata montaj dahildir, KDV hariçtir vb.">${esc(ui.imalatCalcNot)}</textarea>
+      </div>
+    </div>
+    <div class="card glass">
+      <h2>Malzeme Sonuç Paneli <span id="hesapSistemAdi" style="color:var(--aqua-dim)"></span></h2>
+      <div class="table-scroll" id="hesapSonucWrap"></div>
+      <div class="totals-strip" id="hesapTotals"></div>
+      <div class="btn-row">
+        <button class="btn btn-primary" id="btnHesapCiktiPdf">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M9 15h6M9 11h2"/></svg>
+          Teklif Analizi Çıktısı Al (PDF)
+        </button>
+      </div>
+    </div>
+  `;
+  document.getElementById('h-sistem').addEventListener('change', e=>{
+    ui.imalatCalcSistemId = e.target.value || null;
+    updateHesapPanel();
+  });
+  const birimEl = document.getElementById('h-birim');
+  if(birimEl){
+    birimEl.addEventListener('change', e=>{
+      ui.imalatCalcUnit = e.target.value;
+      updateHesapPanel();
+    });
+  }
+  document.getElementById('hesapModeNav').addEventListener('click', e=>{
+    const btn = e.target.closest('[data-mode]');
+    if(!btn) return;
+    ui.imalatCalcMode = btn.dataset.mode;
+    ui.imalatCalcMultiKenar = (ui.imalatCalcMode==='kenar');
+    renderImalatHesapSection(sub);
+  });
+  const alanEl = document.getElementById('h-alan');
+  if(alanEl){
+    alanEl.addEventListener('input', e=>{
+      ui.imalatCalcInput = e.target.value;
+      updateHesapPanel();
+    });
+  }
+  sub.querySelectorAll('[data-kenar-idx]').forEach(inp=>{
+    inp.addEventListener('input', e=>{
+      const idx = parseInt(e.target.dataset.kenarIdx,10);
+      ui.imalatCalcKenarlar[idx] = e.target.value;
+      updateHesapPanel();
+    });
+  });
+  sub.querySelectorAll('[data-pol-len]').forEach(inp=>{
+    inp.addEventListener('input', e=>{
+      const idx = parseInt(e.target.dataset.polLen,10);
+      ui.imalatCalcPoligon[idx].uzunluk = e.target.value;
+      updateHesapPanel();
+    });
+  });
+  sub.querySelectorAll('[data-pol-yon]').forEach(sel=>{
+    sel.addEventListener('change', e=>{
+      const idx = parseInt(e.target.dataset.polYon,10);
+      ui.imalatCalcPoligon[idx].yon = e.target.value;
+      updateHesapPanel();
+    });
+  });
+  sub.querySelectorAll('[data-pol-del]').forEach(btn=>{
+    btn.addEventListener('click', e=>{
+      const idx = parseInt(e.target.closest('[data-pol-del]').dataset.polDel,10);
+      if(ui.imalatCalcPoligon.length<=3){ showToast('En az 3 kenar gerekir.'); return; }
+      ui.imalatCalcPoligon.splice(idx,1);
+      renderImalatHesapSection(sub);
+    });
+  });
+  const addKenarBtn = document.getElementById('btnPolAddKenar');
+  if(addKenarBtn){
+    addKenarBtn.onclick = ()=>{
+      if(ui.imalatCalcPoligon.length>=20){ showToast('En fazla 20 kenar eklenebilir.'); return; }
+      ui.imalatCalcPoligon.push({uzunluk:'', yon:'sag'});
+      renderImalatHesapSection(sub);
+    };
+  }
+  document.getElementById('h-not').addEventListener('input', e=>{
+    ui.imalatCalcNot = e.target.value;
+  });
+  document.getElementById('btnHesapCiktiPdf').onclick = ()=> exportHesapAnalizPdf();
+  updateHesapPanel();
+}
+
+// Aktif ui durumuna göre (tekli ölçü / çoklu kenar toplamı / poligon alan) hesaplamada
+// kullanılacak değeri ve birimini döndürür. exportHesapAnalizPdf da aynı fonksiyonu
+// kullanır, böylece ekrandaki sonuç ile PDF çıktısı her zaman birebir aynı olur.
+function getHesapDeger(){
+  if(ui.imalatCalcMode==='poligon'){
+    const {alan, points, kapali, kenarSayisi} = computePoligonAlan(ui.imalatCalcPoligon);
+    return { value: alan, unit:'m2', isArea:false, isKenar:false, isPoligon:true, poligonKapali:kapali, poligonPoints:points, poligonKenarSayisi:kenarSayisi };
+  }
+  if(ui.imalatCalcMode==='kenar'){
+    const {toplam, detay} = computeKenarToplam(ui.imalatCalcKenarlar, ui.imalatCalcUnit);
+    return { value: toplam, unit: ui.imalatCalcUnit, isArea:false, isKenar:true, kenarDetay:detay };
+  }
+  const parsed = parseAlanInput(ui.imalatCalcInput, ui.imalatCalcUnit);
+  return { value: parsed.value, unit: parsed.unit, isArea: parsed.isArea, isKenar:false };
+}
+
+function updateHesapPanel(){
+  const sistem = state.imalatSistemleri.find(s=>s.id===ui.imalatCalcSistemId) || null;
+  const parsed = getHesapDeger();
+  const dispEl = document.getElementById('hesapDegerDisplay');
+  if(dispEl) dispEl.textContent = parsed.value!=null ? fmtNum(parsed.value)+' '+(parsed.unit==='m2'?'m²':'mt') : '—';
+  const noteEl = document.getElementById('hesapAlanNote');
+  if(noteEl){
+    if(parsed.isPoligon){
+      if(parsed.poligonKenarSayisi<3){
+        noteEl.textContent = 'Alan hesaplanabilmesi için en az 3 kenar uzunluğu girin.';
+      } else if(parsed.value!=null){
+        noteEl.textContent = `${parsed.poligonKenarSayisi} kenarlı şeklin alanı: ${fmtNum(parsed.value)} m² olarak hesaplandı.` + (parsed.poligonKapali ? '' : ' Uyarı: girilen kenarlarla şekil tam kapanmıyor, ölçüleri kontrol edin (yine de en yakın kapalı şekle göre hesaplandı).');
+      } else {
+        noteEl.textContent = '';
+      }
+    } else if(parsed.isKenar && parsed.value!=null){
+      const ifade = parsed.kenarDetay.map(d=>fmtNum(d.value)).join(' + ');
+      noteEl.textContent = `${parsed.kenarDetay.length} kenar toplamı: ${ifade} = ${fmtNum(parsed.value)} ${parsed.unit==='m2'?'m²':'mt'} olarak hesaplandı.`;
+    } else if(parsed.isArea && parsed.value!=null){
+      noteEl.textContent = `Girilen ölçü "${ui.imalatCalcInput}" → ${fmtNum(parsed.value)} m² olarak hesaplandı.`;
+    } else {
+      noteEl.textContent = '';
+    }
+  }
+  const polWrap = document.getElementById('hesapPoligonPreview');
+  if(polWrap) polWrap.innerHTML = renderPoligonSvgPreview(parsed.poligonPoints);
+  const titleEl = document.getElementById('hesapSistemAdi');
+  if(titleEl) titleEl.textContent = sistem ? '— '+sistem.ad : '';
+  const wrap = document.getElementById('hesapSonucWrap');
+  if(wrap) wrap.innerHTML = renderHesapSonucHtml(sistem, parsed.value, parsed.unit);
+  const tot = document.getElementById('hesapTotals');
+  if(tot) tot.innerHTML = renderHesapTotalsHtml(sistem, parsed.value);
+  const bmEl = document.getElementById('hesapBirimMaliyetDisplay');
+  if(bmEl){
+    const {toplamTutar} = computeHesapToplamlar(sistem, parsed.value);
+    const bm = computeBirimMaliyet(toplamTutar, parsed.value);
+    bmEl.textContent = bm!=null ? `${fmtMoney(bm)} / ${parsed.unit==='m2'?'m²':'mt'}` : '—';
+  }
+  if(sistem) bindHesapSonucEvents(sistem, parsed.value, parsed.unit);
+}
+
+// Malzeme Sonuç Paneli'ndeki "Birim Fiyat" alanlarını (kendi fiyatınızı girebilmeniz için)
+// ve "Paket Tamamla" onay kutularını dinler. Fiyat değiştikçe ilgili satırın Tutar'ı ve
+// alttaki toplamlar anında güncellenir; tabloyu baştan çizmediğimiz için yazarken odak
+// (focus) kaybolmaz. Değişiklik saveState() ile kalıcı olarak kaydedilir.
+function bindHesapSonucEvents(sistem, deger, unit){
+  const wrap = document.getElementById('hesapSonucWrap');
+  if(!wrap) return;
+  const refreshTotals = ()=>{
+    const tot = document.getElementById('hesapTotals');
+    if(tot) tot.innerHTML = renderHesapTotalsHtml(sistem, deger);
+    const bmEl = document.getElementById('hesapBirimMaliyetDisplay');
+    if(bmEl){
+      const {toplamTutar} = computeHesapToplamlar(sistem, deger);
+      const bm = computeBirimMaliyet(toplamTutar, deger);
+      bmEl.textContent = bm!=null ? `${fmtMoney(bm)} / ${unit==='m2'?'m²':'mt'}` : '—';
+    }
+  };
+  wrap.querySelectorAll('[data-fiyat-id]').forEach(inp=>{
+    inp.addEventListener('input', e=>{
+      const id = e.target.dataset.fiyatId;
+      const m = sistem.malzemeler.find(x=>x.id===id);
+      if(!m) return;
+      m.satisFiyat = parseFloat(String(e.target.value).replace(',','.'))||0;
+      const r = computeMalzemeSonuc(m, deger, getPaketOpts(id));
+      const tutarCell = wrap.querySelector(`[data-tutar-id="${id}"]`);
+      if(tutarCell) tutarCell.textContent = fmtMoney(r.tutar);
+      refreshTotals();
+    });
+    inp.addEventListener('change', ()=>{ saveState(); });
+  });
+  wrap.querySelectorAll('[data-paket-id]').forEach(chk=>{
+    chk.addEventListener('change', e=>{
+      const id = e.target.dataset.paketId;
+      if(!ui.imalatCalcPaketTamamla) ui.imalatCalcPaketTamamla = {};
+      ui.imalatCalcPaketTamamla[id] = e.target.checked;
+      updateHesapPanel();
+    });
+  });
+}
+
+// Toplam satış tutarını, hesaplanan metraja (m² ya da mt) bölerek birim maliyeti verir.
+// Örnek: Toplam Satış Tutarı 10000 TL, Hesaplanan Değer 1000 m² -> birim maliyet 10 TL/m².
+function computeBirimMaliyet(toplamTutar, metraj){
+  const t = parseFloat(toplamTutar);
+  if(isNaN(t) || !metraj || metraj<=0) return null;
+  return Math.round((t/metraj)*100)/100;
+}
+
+// Bir malzeme için "Paket Tamamla" kutusu işaretlenmiş mi kontrol eder ve
+// computeMalzemeSonuc'a geçilecek opts nesnesini döndürür.
+function getPaketOpts(malzemeId){
+  return { paketTamamla: !!(ui.imalatCalcPaketTamamla && ui.imalatCalcPaketTamamla[malzemeId]) };
+}
+
+// Hesaplanan tam parça/adet sayısını, malzemenin paket içi adedine göre
+// "7 paket 1 adet" gibi paket + kalan adet ifadesine çevirir. Paket içi adet
+// tanımlı değilse düz "85 adet" olarak döner.
+function formatPaketAdetNote(pieceCount, paketAdet){
+  if(pieceCount==null) return null;
+  const pa = parseFloat(paketAdet)||0;
+  if(pa>0){
+    const paket = Math.floor(pieceCount + 1e-9)/pa;
+    const paketTam = Math.floor(paket + 1e-9);
+    const kalan = Math.round((pieceCount - paketTam*pa)*100)/100;
+    if(paketTam>0 && kalan>0) return `${paketTam} paket ${kalan} adet`;
+    if(paketTam>0 && kalan<=0) return `${paketTam} paket`;
+    return `${kalan} adet`;
+  }
+  return `${pieceCount} adet`;
+}
+
+function renderHesapSonucHtml(sistem, deger, basisUnit){
+  if(!sistem) return `<div class="empty-state">Lütfen bir imalat sistemi seçin.</div>`;
+  if(!sistem.malzemeler.length) return `<div class="empty-state">Bu sistemde henüz malzeme tanımlı değil. Önce "Sistem &amp; Malzeme Tanımı" bölümünden malzeme ekleyin.</div>`;
+  if(deger==null) return `<div class="empty-state">Hesaplama için yukarıya bir ölçü/alan girin.</div>`;
+  const basisLabel = basisUnit==='mt' ? 'mt' : 'm²';
+  return `
+    <table>
+      <thead><tr><th>Malzeme</th><th>Sarfiyat</th><th class="num">Ebat</th><th>Ürün Satış Birimi</th><th class="num">Birim Fiyat</th><th class="num">Hesaplanan Miktar</th><th class="num">Tutar</th><th class="num">Paket Tamamla</th></tr></thead>
+      <tbody>
+        ${sistem.malzemeler.map(m=>{
+          const opts = getPaketOpts(m.id);
+          const r = computeMalzemeSonuc(m, deger, opts);
+          const birimLabel = UNIT_LABEL[m.birim]||m.birim;
+          const isAdetBirim = String(birimLabel).toLowerCase()==='adet';
+          const pieceCount = r.adetNote!=null ? r.adetNote : (isAdetBirim ? r.miktar : null);
+          let adetNoteHtml = '';
+          if(pieceCount!=null && !(isAdetBirim && !m.paketAdet)){
+            adetNoteHtml = `<div style="font-size:0.72rem;font-weight:500;color:var(--ink-soft);">(${formatPaketAdetNote(pieceCount, m.paketAdet)})</div>`;
+          }
+          return `<tr>
+            <td>${esc(m.ad)}</td>
+            <td>${fmtNum(m.sarfiyat)} ${esc(birimLabel)}/${basisLabel}</td>
+            <td class="num">${m.ebat? fmtNum(m.ebat)+' '+esc(birimLabel) : '—'}</td>
+            <td>${esc(birimLabel)}</td>
+            <td class="num">
+              <input class="mono" type="number" step="any" data-fiyat-id="${m.id}" value="${esc(m.satisFiyat)}" style="width:92px;text-align:right;padding:6px 8px;border-radius:8px;border:1px solid rgba(11,36,54,0.15);background:rgba(255,255,255,0.7);">
+            </td>
+            <td class="num" style="font-weight:700;">
+              <span data-miktar-id="${m.id}">${fmtNum(r.miktar)} ${esc(birimLabel)}</span>
+              <div data-adetnote-id="${m.id}">${adetNoteHtml}</div>
+            </td>
+            <td class="num" data-tutar-id="${m.id}">${fmtMoney(r.tutar)}</td>
+            <td class="num">${m.paketAdet? `<label style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;white-space:nowrap;"><input type="checkbox" data-paket-id="${m.id}" ${opts.paketTamamla?'checked':''}> <span style="font-size:0.72rem;color:var(--ink-soft);">${fmtNum(m.paketAdet)}/paket</span></label>` : '—'}</td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>
+  `;
+}
+
+// Sistem malzemelerinden toplam maliyet/satış tutarı/kâr hesaplar. Birim Maliyet de
+// buradaki Toplam Satış Tutarı'na göre türetildiği için hem ekran hem PDF çıktısı
+// (Malzeme Sonuç Paneli ile Teklif Analizi) her zaman aynı rakamı gösterir.
+function computeHesapToplamlar(sistem, deger){
+  if(!sistem || deger==null || !sistem.malzemeler.length) return { toplamTutar:0, toplamMaliyet:0, kar:0 };
+  let toplamTutar=0, toplamMaliyet=0;
+  sistem.malzemeler.forEach(m=>{
+    const r = computeMalzemeSonuc(m, deger, getPaketOpts(m.id));
+    toplamTutar += r.tutar; toplamMaliyet += r.maliyet;
+  });
+  return { toplamTutar, toplamMaliyet, kar: toplamTutar-toplamMaliyet };
+}
+
+function renderHesapTotalsHtml(sistem, deger){
+  if(!sistem || deger==null || !sistem.malzemeler.length) return '';
+  const {toplamTutar, toplamMaliyet, kar} = computeHesapToplamlar(sistem, deger);
+  return `
+    <div class="total-chip"><span class="lbl">Toplam Maliyet</span><span class="val">${fmtMoney(toplamMaliyet)}</span></div>
+    <div class="total-chip"><span class="lbl">Toplam Satış Tutarı</span><span class="val">${fmtMoney(toplamTutar)}</span></div>
+    <div class="total-chip"><span class="lbl">Tahmini Kâr</span><span class="val">${fmtMoney(kar)}</span></div>
+  `;
 }
 
 /* ======================= PERSONEL TAB ======================= */
@@ -4339,6 +5111,26 @@ function pdfHeaderHtml(proj, subtitle){
     </div>
   </div>`;
 }
+// Proje/işveren bilgisine ihtiyaç duymayan çıktılar (ör. Hesaplama Paneli'ndeki
+// "Teklif Analizi" çıktısı) için sadece firma bilgisi ve tarih gösteren sade başlık.
+function pdfHeaderHtmlSimple(subtitle){
+  const logo = state.company.logo ? `<img src="${state.company.logo}" style="max-height:56px;max-width:180px;object-fit:contain;">` : '';
+  const nameLine = state.company.name ? `<div style="font-family:'Outfit',sans-serif;font-weight:800;font-size:18px;color:#0B2436;">${esc(state.company.name)}</div>` : '';
+  const subLine = subtitle ? `<div style="font-size:11px;color:#345264;">${esc(subtitle)}</div>` : '';
+  return `
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #1C6E8C;padding-bottom:14px;margin-bottom:16px;">
+    <div style="display:flex;flex-direction:column;align-items:flex-start;gap:6px;">
+      ${logo}
+      <div>
+        ${nameLine}
+        ${subLine}
+      </div>
+    </div>
+    <div style="text-align:right;font-size:11px;color:#345264;">
+      <div><b>Tarih:</b> ${todayStr()}</div>
+    </div>
+  </div>`;
+}
 function pdfBaseStyles(width){
   return `font-family:'Inter',Arial,sans-serif;color:#0B2436;padding:24px;width:${width}px;background:#ffffff;`;
 }
@@ -4491,6 +5283,96 @@ async function exportTeklifPdf(proj, templateTitle){
   try{
     const fnamePrefix = templateTitle==='YAPILAN HAKEDİŞ LİSTESİ' ? 'hakedis' : 'teklif';
     await renderNodeToPdf(html, `${fnamePrefix}-${proj.name.replace(/[^a-z0-9ığüşöç]+/gi,'_')}.pdf`);
+    showToast('PDF indirildi.');
+  }catch(e){
+    console.error(e);
+    showToast('PDF oluşturulurken bir sorun oluştu.');
+  }
+}
+
+// Hesaplama Paneli / Malzeme Sonuç Paneli'nden, müşteriye gösterilebilecek sade bir
+// "Teklif Analizi" çıktısı üretir. Ekrandaki panelden farklı olarak burada sarfiyat,
+// ebat, toplam maliyet ve tahmini kâr gibi iç maliyet/analiz bilgileri GÖSTERİLMEZ;
+// sadece malzeme, miktar, birim, birim fiyat, tutar ve serbest bir açıklama alanı yer alır.
+async function exportHesapAnalizPdf(){
+  const sistem = state.imalatSistemleri.find(s=>s.id===ui.imalatCalcSistemId) || null;
+  if(!sistem){ showToast('Lütfen önce bir imalat sistemi seçin.'); return; }
+  if(!sistem.malzemeler.length){ showToast('Bu sistemde henüz malzeme tanımlı değil.'); return; }
+  const parsed = getHesapDeger();
+  if(parsed.value==null){ showToast('Lütfen hesaplama için bir ölçü/alan girin.'); return; }
+
+  showToast('PDF hazırlanıyor…');
+  const deger = parsed.value;
+  const basisLabel = parsed.unit==='mt' ? 'mt' : 'm²';
+  const tableRows = sistem.malzemeler.map(m=>{
+    const opts = getPaketOpts(m.id);
+    const r = computeMalzemeSonuc(m, deger, opts);
+    const birimLabel = UNIT_LABEL[m.birim]||m.birim;
+    const isAdetBirim = String(birimLabel).toLowerCase()==='adet';
+    const pieceCount = r.adetNote!=null ? r.adetNote : (isAdetBirim ? r.miktar : null);
+    let miktarText = fmtNum(r.miktar);
+    if(pieceCount!=null && !(isAdetBirim && !m.paketAdet)){
+      miktarText += ` (${formatPaketAdetNote(pieceCount, m.paketAdet)})`;
+    }
+    return `
+      <tr>
+        <td style="word-break:break-word;">${esc(m.ad)}</td>
+        <td style="text-align:right;">${miktarText}</td>
+        <td>${esc(birimLabel)}</td>
+        <td style="text-align:right;">${fmtMoney(m.satisFiyat)}</td>
+        <td style="text-align:right;font-weight:700;">${fmtMoney(r.tutar)}</td>
+      </tr>
+    `;
+  }).join('');
+  const genelToplam = sistem.malzemeler.reduce((s,m)=>s+computeMalzemeSonuc(m,deger,getPaketOpts(m.id)).tutar,0);
+  const olcuAciklama = parsed.isPoligon
+    ? `${parsed.poligonKenarSayisi} kenarlı köşeli alan hesaplaması`
+    : parsed.isKenar
+    ? `${parsed.kenarDetay.length} kenar toplamı (${parsed.kenarDetay.map(d=>fmtNum(d.value)).join(' + ')})`
+    : (parsed.isArea ? `Girilen ölçü: ${esc(ui.imalatCalcInput)}` : '');
+  const birimMaliyet = computeBirimMaliyet(genelToplam, deger);
+
+  const html = `
+    ${pdfHeaderHtmlSimple('Teklif Analizi')}
+    <div style="font-family:'Outfit',sans-serif;font-weight:700;font-size:15px;letter-spacing:1px;margin-bottom:6px;color:#1C6E8C;text-align:center;">TEKLİF ANALİZİ</div>
+    <div style="text-align:center;font-size:10px;color:#345264;margin-bottom:14px;">
+      ${esc(sistem.ad)} &nbsp;•&nbsp; Hesaplanan Ölçü: ${fmtNum(deger)} ${basisLabel}${olcuAciklama? ' &nbsp;('+olcuAciklama+')' : ''}
+    </div>
+    <table style="width:100%;border-collapse:collapse;font-size:10px;table-layout:fixed;">
+      <colgroup>
+        <col style="width:32%"><col style="width:18%"><col style="width:14%">
+        <col style="width:18%"><col style="width:18%">
+      </colgroup>
+      <thead>
+        <tr style="background:#EAF6F5;">
+          <th style="text-align:left;padding:7px 6px;border-bottom:1.5px solid #1C6E8C;">Malzeme</th>
+          <th style="text-align:right;padding:7px 6px;border-bottom:1.5px solid #1C6E8C;">Miktar</th>
+          <th style="text-align:left;padding:7px 6px;border-bottom:1.5px solid #1C6E8C;">Birim</th>
+          <th style="text-align:right;padding:7px 6px;border-bottom:1.5px solid #1C6E8C;">Birim Fiyat</th>
+          <th style="text-align:right;padding:7px 6px;border-bottom:1.5px solid #1C6E8C;">Tutar</th>
+        </tr>
+      </thead>
+      <tbody>${tableRows || '<tr><td colspan="5" style="padding:10px;text-align:center;color:#345264;">Kayıt yok</td></tr>'}</tbody>
+    </table>
+    <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:14px;flex-wrap:wrap;">
+      ${birimMaliyet!=null ? `
+      <div style="min-width:180px;border:1.5px solid #1C6E8C55;border-radius:8px;padding:12px 16px;text-align:right;">
+        <div style="font-size:10px;color:#345264;font-weight:700;text-transform:uppercase;">Birim Maliyet</div>
+        <div style="font-size:15px;font-weight:800;color:#0B2436;">${fmtMoney(birimMaliyet)} / ${basisLabel}</div>
+      </div>` : ''}
+      <div style="min-width:220px;border:1.5px solid #1C6E8C;border-radius:8px;padding:12px 16px;text-align:right;">
+        <div style="font-size:10px;color:#345264;font-weight:700;text-transform:uppercase;">Genel Toplam</div>
+        <div style="font-size:18px;font-weight:800;color:#0B2436;">${fmtMoney(genelToplam)}</div>
+      </div>
+    </div>
+    ${ui.imalatCalcNot && ui.imalatCalcNot.trim() ? `
+    <div style="margin-top:20px;padding:12px 14px;background:#F4FBFA;border:1px solid #1C6E8C55;border-radius:8px;font-size:10px;color:#345264;white-space:pre-wrap;">
+      <b style="color:#0B2436;">Not:</b> ${esc(ui.imalatCalcNot)}
+    </div>` : ''}
+    <div style="margin-top:36px;font-size:9px;color:#8096A3;">DNZ Metraj &amp; Teklif Yönetimi ile oluşturulmuştur.</div>
+  `;
+  try{
+    await renderNodeToPdf(html, `teklif-analizi-${sistem.ad.replace(/[^a-z0-9ığüşöç]+/gi,'_')}.pdf`);
     showToast('PDF indirildi.');
   }catch(e){
     console.error(e);
