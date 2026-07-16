@@ -496,7 +496,8 @@ function defaultState(){
     projects:{},
     imalatSistemleri:[],
     lastBackupAt:null,
-    dirtySinceBackup:false
+    dirtySinceBackup:false,
+    metrajPdfFont:{ baslik:6, metin:6.5, rakam:7.5 }
   };
 }
 function newProject(name, employer){
@@ -4897,6 +4898,7 @@ function openTeklifTemplateModal(proj){
 }
 
 function renderAyarlarTab(main){
+  const fnt0 = Object.assign({baslik:6, metin:6.5, rakam:7.5}, state.metrajPdfFont||{});
   main.innerHTML = `
     <div class="card glass">
       <h2>
@@ -4970,6 +4972,29 @@ function renderAyarlarTab(main){
     </div>
 
     <div class="card glass">
+      <h2>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7V4h16v3M9 20h6M12 4v16"/></svg>
+        Metraj Listesi PDF Yazı Boyutu
+      </h2>
+      <p class="hint">Metraj Listesi çıktısında (PDF) tablo başlığı, metin hücreleri ve rakam/ölçü sütunlarının yazı boyutunu ayrı ayrı buradan ayarlayabilirsiniz. Değişiklik bir sonraki PDF alımında uygulanır.</p>
+      <div class="field-grid">
+        <div class="field"><label>Tablo Başlığı (Blok, Kat, İmalat Cinsi vb.) — <span id="s-mfBaslikVal">${fnt0.baslik}</span>px</label>
+          <input type="range" id="s-mfBaslik" min="4" max="10" step="0.5" value="${fnt0.baslik}" style="width:100%;">
+        </div>
+        <div class="field"><label>Metin Hücreleri (yazı içerikleri) — <span id="s-mfMetinVal">${fnt0.metin}</span>px</label>
+          <input type="range" id="s-mfMetin" min="4" max="10" step="0.5" value="${fnt0.metin}" style="width:100%;">
+        </div>
+        <div class="field"><label>Rakam/Ölçü Sütunları (Adet, Uzunluk, Toplam vb.) — <span id="s-mfRakamVal">${fnt0.rakam}</span>px</label>
+          <input type="range" id="s-mfRakam" min="4" max="12" step="0.5" value="${fnt0.rakam}" style="width:100%;">
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary" id="btnSaveMetrajFont">Kaydet</button>
+        <button class="btn btn-ghost" id="btnResetMetrajFont">Varsayılana Sıfırla</button>
+      </div>
+    </div>
+
+    <div class="card glass">
       <h2>Tehlikeli Bölge</h2>
       <p class="hint">Bu işlem tüm projeleri, metraj kayıtlarını ve teklifleri kalıcı olarak siler.</p>
       <div class="btn-row">
@@ -5012,6 +5037,29 @@ function renderAyarlarTab(main){
   if(chooseAutoBtn) chooseAutoBtn.onclick = chooseAutoBackupLocation;
   const clearAutoBtn = document.getElementById('btnClearAutoBackup');
   if(clearAutoBtn) clearAutoBtn.onclick = clearAutoBackupLocation;
+
+  const mfBaslik = document.getElementById('s-mfBaslik');
+  const mfMetin = document.getElementById('s-mfMetin');
+  const mfRakam = document.getElementById('s-mfRakam');
+  mfBaslik.oninput = ()=>{ document.getElementById('s-mfBaslikVal').textContent = mfBaslik.value; };
+  mfMetin.oninput = ()=>{ document.getElementById('s-mfMetinVal').textContent = mfMetin.value; };
+  mfRakam.oninput = ()=>{ document.getElementById('s-mfRakamVal').textContent = mfRakam.value; };
+  document.getElementById('btnSaveMetrajFont').onclick = ()=>{
+    state.metrajPdfFont = {
+      baslik: parseFloat(mfBaslik.value)||6,
+      metin: parseFloat(mfMetin.value)||6.5,
+      rakam: parseFloat(mfRakam.value)||7.5
+    };
+    saveState();
+    showToast('Metraj Listesi PDF yazı boyutu kaydedildi.');
+  };
+  document.getElementById('btnResetMetrajFont').onclick = ()=>{
+    state.metrajPdfFont = {baslik:6, metin:6.5, rakam:7.5};
+    saveState();
+    renderAyarlarTab(main);
+    showToast('Varsayılan yazı boyutlarına dönüldü.');
+  };
+
   document.getElementById('btnResetAll').onclick = ()=>{
     confirmModal('TÜM projeler, metraj ve teklif verileri silinecek. Devam edilsin mi?', ()=>{
       state = defaultState();
@@ -5323,19 +5371,21 @@ async function exportMetrajPdf(proj){
   UNITS.forEach(u=>sums[u]=0);
   rows.forEach(r=>{ sums[r.birim] = (sums[r.birim]||0) + (parseFloat(r.altToplam)||0); });
 
-  const c = 'padding:4px 3px;border-bottom:1px solid #E4EFEF;word-break:break-word;';
+  const fnt = Object.assign({baslik:6, metin:6.5, rakam:7.5}, state.metrajPdfFont||{});
+  const c = `padding:4px 3px;border-bottom:1px solid #E4EFEF;word-break:break-word;font-size:${fnt.metin}px;`;
+  const cNum = `padding:4px 3px;border-bottom:1px solid #E4EFEF;word-break:break-word;text-align:right;font-size:${fnt.rakam}px;font-family:'JetBrains Mono',monospace;`;
   const tableRows = rows.map(r=>`
     <tr>
       <td style="${c}">${esc(r.blok)}</td><td style="${c}">${esc(r.kat)}</td><td style="${c}">${esc(r.daire)}</td><td style="${c}">${esc(r.mekan)}</td>
       <td style="${c}">${esc(r.eleman)}</td><td style="${c}">${esc(r.imalat)}</td>
-      <td style="${c}text-align:right;">${esc(r.adet)}</td>
-      <td style="${c}text-align:right;">${esc(r.kisaKenar)}</td>
-      <td style="${c}text-align:right;">${esc(r.uzunluk)}</td>
-      <td style="${c}text-align:right;">${esc(r.yukseklik)}</td>
-      <td style="${c}text-align:right;">${esc(r.minha)}</td>
+      <td style="${cNum}">${esc(r.adet)}</td>
+      <td style="${cNum}">${esc(r.kisaKenar)}</td>
+      <td style="${cNum}">${esc(r.uzunluk)}</td>
+      <td style="${cNum}">${esc(r.yukseklik)}</td>
+      <td style="${cNum}">${esc(r.minha)}</td>
       <td style="${c}">${UNIT_LABEL[r.birim]||r.birim}</td>
-      <td style="${c}text-align:right;">${fmtNum(r.toplam)}</td>
-      <td style="${c}text-align:right;font-weight:700;">${fmtNum(r.altToplam)}</td>
+      <td style="${cNum}">${fmtNum(r.toplam)}</td>
+      <td style="${cNum}font-weight:700;">${fmtNum(r.altToplam)}</td>
     </tr>
   `).join('');
 
@@ -5348,7 +5398,7 @@ async function exportMetrajPdf(proj){
 
   const html = `
     ${pdfHeaderHtml(proj, 'Metraj Raporu')}
-    <table style="width:100%;border-collapse:collapse;font-size:6.5px;table-layout:fixed;">
+    <table style="width:100%;border-collapse:collapse;font-size:${fnt.metin}px;table-layout:fixed;">
       <colgroup>
         <col style="width:6%"><col style="width:6%"><col style="width:6%"><col style="width:8%">
         <col style="width:9%"><col style="width:16%">
@@ -5357,10 +5407,10 @@ async function exportMetrajPdf(proj){
       </colgroup>
       <thead>
         <tr style="background:#EAF6F5;">
-          ${['Blok','Kat','Daire','Mekân','Uyg. Yeri','İmalat Cinsi','Adet','K.Kenar','Uzunluk','Yükseklik','Minha','Birim','Toplam','Alt Toplam'].map(h=>`<th style="text-align:left;padding:5px 3px;border-bottom:1.5px solid #1C6E8C;word-break:break-word;">${h}</th>`).join('')}
+          ${['Blok','Kat','Daire','Mekân','Uyg. Yeri','İmalat Cinsi','Adet','K.Kenar','Uzunluk','Yükseklik','Minha','Birim','Toplam','Alt Toplam'].map(h=>`<th style="text-align:left;padding:5px 3px;border-bottom:1.5px solid #1C6E8C;word-break:break-word;font-size:${fnt.baslik}px;">${h}</th>`).join('')}
         </tr>
       </thead>
-      <tbody>${tableRows || '<tr><td colspan="14" style="padding:10px;text-align:center;color:#345264;">Kayıt yok</td></tr>'}</tbody>
+      <tbody>${tableRows || `<tr><td colspan="14" style="padding:10px;text-align:center;color:#345264;font-size:${fnt.metin}px;">Kayıt yok</td></tr>`}</tbody>
     </table>
     <div style="margin-top:18px;">
       <div style="font-size:11px;font-weight:700;margin-bottom:4px;">Genel Toplamlar</div>
