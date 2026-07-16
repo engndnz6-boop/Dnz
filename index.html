@@ -16,6 +16,157 @@
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script type="module">
+  // Import the functions you need from the SDKs you need
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+  import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-analytics.js";
+  import {
+    getAuth,
+    onAuthStateChanged,
+    signInWithEmailAndPassword,
+    createUserWithEmailAndPassword,
+    signOut
+  } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+  import {
+    getDatabase,
+    ref,
+    set,
+    get,
+    onValue
+  } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+  // TODO: Add SDKs for Firebase products that you want to use
+  // https://firebase.google.com/docs/web/setup#available-libraries
+
+  // Your web app's Firebase configuration
+  // For Firebase JS SDK v7.20.0 and later, measurementId is optional
+  const firebaseConfig = {
+    apiKey: "AIzaSyDDf6nEFNiJb1jubQX5ZF8XxOAol8K6laE",
+    authDomain: "dnzhesap-b2d0f.firebaseapp.com",
+    databaseURL: "https://dnzhesap-b2d0f-default-rtdb.europe-west1.firebasedatabase.app",
+    projectId: "dnzhesap-b2d0f",
+    storageBucket: "dnzhesap-b2d0f.firebasestorage.app",
+    messagingSenderId: "1004452565327",
+    appId: "1:1004452565327:web:68d781a9c6936d1c9af53a",
+    measurementId: "G-P0YLSXF3J0"
+  };
+
+  // Initialize Firebase
+  const app = initializeApp(firebaseConfig);
+  const analytics = getAnalytics(app);
+  const auth = getAuth(app);
+  const db = getDatabase(app);
+
+  // Ana uygulama kodu (klasik script) doğrudan ES modül import'u kullanamadığı için,
+  // Realtime Database okuma/yazma işlemlerini bu iki global fonksiyon üzerinden yapıyoruz.
+  // Tüm state tek bir JSON metni olarak saklanıyor (uygulamanın kendi localStorage
+  // katmanıyla birebir aynı format), böylece Realtime Database'in anahtar (key) isimleri
+  // için getirdiği kısıtlamalarla (., #, $, [, ]) uğraşmaya gerek kalmıyor.
+  window.dnzDbSaveState = async function(jsonString){
+    const user = auth.currentUser;
+    if(!user) return false;
+    try{
+      await set(ref(db, 'users/' + user.uid + '/stateJson'), jsonString);
+      return true;
+    }catch(e){
+      console.error('Realtime Database kayıt hatası', e);
+      return false;
+    }
+  };
+  window.dnzDbLoadState = async function(){
+    const user = auth.currentUser;
+    if(!user) return null;
+    try{
+      const snap = await get(ref(db, 'users/' + user.uid + '/stateJson'));
+      return snap.exists() ? snap.val() : null;
+    }catch(e){
+      console.error('Realtime Database okuma hatası', e);
+      return null;
+    }
+  };
+
+  // --- Basit e-posta/şifre giriş ekranı mantığı ---
+  const gate = document.getElementById('authGate');
+  const appEl = document.getElementById('app');
+  const emailInput = document.getElementById('authEmail');
+  const passInput = document.getElementById('authPass');
+  const msgEl = document.getElementById('authMsg');
+  const loginBtn = document.getElementById('authLoginBtn');
+  const registerBtn = document.getElementById('authRegisterBtn');
+
+  function authErrTr(err){
+    const c = err && err.code || '';
+    if(c.includes('invalid-email')) return 'Geçersiz e-posta adresi.';
+    if(c.includes('user-not-found') || c.includes('invalid-credential') || c.includes('wrong-password')) return 'E-posta veya şifre hatalı.';
+    if(c.includes('email-already-in-use')) return 'Bu e-posta zaten kayıtlı.';
+    if(c.includes('weak-password')) return 'Şifre en az 6 karakter olmalı.';
+    if(c.includes('too-many-requests')) return 'Çok fazla deneme yapıldı, lütfen biraz bekleyin.';
+    return 'Bir hata oluştu: ' + (err && err.message ? err.message : '');
+  }
+
+  loginBtn.addEventListener('click', ()=>{
+    msgEl.textContent = '';
+    const email = emailInput.value.trim();
+    const pass = passInput.value;
+    if(!email || !pass){ msgEl.textContent = 'E-posta ve şifre girin.'; return; }
+    loginBtn.disabled = true;
+    signInWithEmailAndPassword(auth, email, pass)
+      .catch(err=>{ msgEl.textContent = authErrTr(err); })
+      .finally(()=>{ loginBtn.disabled = false; });
+  });
+
+  registerBtn.addEventListener('click', ()=>{
+    msgEl.textContent = '';
+    const email = emailInput.value.trim();
+    const pass = passInput.value;
+    if(!email || !pass){ msgEl.textContent = 'E-posta ve şifre girin.'; return; }
+    registerBtn.disabled = true;
+    createUserWithEmailAndPassword(auth, email, pass)
+      .catch(err=>{ msgEl.textContent = authErrTr(err); })
+      .finally(()=>{ registerBtn.disabled = false; });
+  });
+
+  // Diğer script (klasik, module olmayan) bu fonksiyonu çağırabilsin diye global yapıyoruz.
+  window.dnzLogout = ()=> signOut(auth);
+
+  // --- Gerçek zamanlı senkron ---
+  // Bu kullanıcıya ait bulut verisi her değiştiğinde (bu cihazdan ya da BAŞKA bir
+  // cihazdan/oturumdan) otomatik olarak tetiklenir ve ekranı günceller.
+  let realtimeUnsub = null;
+  function startRealtimeSync(uid){
+    if(realtimeUnsub){ realtimeUnsub(); realtimeUnsub = null; }
+    const stateRef = ref(db, 'users/' + uid + '/stateJson');
+    realtimeUnsub = onValue(stateRef, (snapshot)=>{
+      if(!snapshot.exists()) return;
+      const val = snapshot.val();
+      if(typeof window.dnzApplyRemoteState === 'function'){
+        window.dnzApplyRemoteState(val);
+      }
+    }, (err)=>{
+      console.error('Gerçek zamanlı senkron hatası', err);
+    });
+  }
+  function stopRealtimeSync(){
+    if(realtimeUnsub){ realtimeUnsub(); realtimeUnsub = null; }
+  }
+
+  onAuthStateChanged(auth, (user)=>{
+    if(user){
+      window.__dnzUserAlreadySignedIn = true;
+      gate.style.display = 'none';
+      appEl.style.display = '';
+      if(typeof window.__dnzInitApp === 'function' && !window.__dnzInitStarted){
+        window.__dnzInitStarted = true;
+        window.__dnzInitApp();
+      }
+      startRealtimeSync(user.uid);
+    }else{
+      window.__dnzUserAlreadySignedIn = false;
+      gate.style.display = 'flex';
+      appEl.style.display = 'none';
+      stopRealtimeSync();
+    }
+  });
+</script>
 <style>
 :root{
   --abyss:#08202E;
@@ -390,7 +541,18 @@ footer.appfoot{text-align:center;padding:14px;color:rgba(11,36,54,0.45);font-siz
 </style>
 </head>
 <body>
-<div id="app">
+<div id="authGate" style="position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;background:linear-gradient(160deg,#0F3B4C,#08202E);font-family:'Inter',sans-serif;padding:16px;">
+  <div style="width:100%;max-width:340px;background:rgba(234,246,245,0.96);border-radius:18px;padding:28px 24px;box-shadow:0 8px 32px rgba(4,20,28,0.35);box-sizing:border-box;">
+    <div style="font-family:'Outfit',sans-serif;font-weight:800;font-size:1.3rem;color:#0B2436;margin-bottom:4px;text-align:center;">DNZ</div>
+    <div style="font-size:0.8rem;color:#345264;text-align:center;margin-bottom:18px;">Devam etmek için giriş yapın</div>
+    <input id="authEmail" type="email" placeholder="E-posta" autocomplete="username" style="width:100%;padding:11px 12px;margin-bottom:10px;border:1px solid rgba(11,36,54,0.2);border-radius:10px;font-size:0.9rem;box-sizing:border-box;">
+    <input id="authPass" type="password" placeholder="Şifre" autocomplete="current-password" style="width:100%;padding:11px 12px;margin-bottom:14px;border:1px solid rgba(11,36,54,0.2);border-radius:10px;font-size:0.9rem;box-sizing:border-box;">
+    <button id="authLoginBtn" type="button" style="width:100%;padding:12px;border:none;border-radius:10px;background:linear-gradient(135deg,#2FD3C7,#22A99F);color:#08202E;font-weight:700;font-size:0.9rem;cursor:pointer;margin-bottom:8px;">Giriş Yap</button>
+    <button id="authRegisterBtn" type="button" style="width:100%;padding:12px;border:1px solid #1C6E8C;border-radius:10px;background:transparent;color:#1C6E8C;font-weight:600;font-size:0.85rem;cursor:pointer;">Hesap Oluştur</button>
+    <div id="authMsg" style="min-height:18px;font-size:0.78rem;color:#E8776B;margin-top:10px;text-align:center;"></div>
+  </div>
+</div>
+<div id="app" style="display:none;">
 
   <header class="topbar glass">
     <button class="icon-btn ripple-el-host" id="btnMenuToggle" title="Modülleri Aç">
@@ -411,6 +573,10 @@ footer.appfoot{text-align:center;padding:14px;color:rgba(11,36,54,0.45);font-siz
       </button>
     </div>
   </header>
+
+  <button type="button" id="dnzLogoutBtn" onclick="if(confirm('Çıkış yapmak istediğinize emin misiniz?')) dnzLogout();" title="Çıkış Yap" style="position:fixed;top:12px;right:12px;z-index:41;width:38px;height:38px;border-radius:12px;border:1px solid rgba(255,255,255,0.55);background:rgba(234,246,245,0.75);backdrop-filter:blur(10px);display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 4px 14px rgba(8,32,46,0.18);">
+    <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="#0B2436" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>
+  </button>
 
   <div id="backupBanner" class="backup-banner" style="display:none;">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4M12 17h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
@@ -525,6 +691,10 @@ function currentYm(){
 function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,8); }
 
 let state = defaultState();
+// Bu cihazdan buluta en son gönderdiğimiz JSON metni: gerçek zamanlı dinleyici (onValue)
+// kendi yazdığımız veriyi "başka bir cihazdan gelen değişiklik" sanıp gereksiz yere
+// ekranı yeniden çizmesin diye kullanılır.
+let lastCloudJsonSent = null;
 let ui = {
   tab:'projeler',
   metrajEditId:null,
@@ -625,7 +795,39 @@ async function persistStateRaw(){
   //    o dosyayı da güncelle. Bu isteğe bağlı bir ek güvencedir (özellikle masaüstünde);
   //    desteklenmiyorsa veya izin yoksa sessizce atlanır, hata göstermez.
   await writeAutoBackup(json);
+  // 4) Firebase Realtime Database: hesabınıza bağlı, cihazlar arasında senkron olan
+  //    bulut kopyası. Böylece bir cihazda girdiğiniz veri, aynı hesapla giriş yaptığınız
+  //    diğer cihazlarda da görünür.
+  if(typeof window.dnzDbSaveState === 'function'){
+    try{
+      lastCloudJsonSent = json;
+      await window.dnzDbSaveState(json);
+    }catch(e){
+      console.error('Bulut kaydetme hatası', e);
+    }
+  }
 }
+// Gerçek zamanlı senkron: Realtime Database'de veri değiştiğinde (bu cihazdan ya da
+// BAŞKA bir cihazdan) Firebase auth module script'i bu fonksiyonu çağırır. Kendi
+// yazdığımız veri "yankı" olarak geri geldiyse ya da ekrandaki veriyle zaten aynıysa
+// gereksiz yeniden çizimden kaçınırız; gerçekten farklı (uzak) bir değişiklikse state'i
+// güncelleyip arayüzü yeniden çizeriz.
+window.dnzApplyRemoteState = function(jsonString){
+  if(jsonString === lastCloudJsonSent) return;
+  if(jsonString === JSON.stringify(state)) return;
+  try{
+    const parsed = JSON.parse(jsonString);
+    state = Object.assign(defaultState(), parsed);
+    if(!state.projects) state.projects = {};
+    try{ localStorage.setItem(LS_STORAGE_KEY, jsonString); }catch(e){ /* yoksay */ }
+    lastCloudJsonSent = jsonString;
+    renderAll();
+    updateBackupBanner();
+    showToast('Veriler başka bir cihazdan güncellendi.');
+  }catch(e){
+    console.error('Uzak veri uygulama hatası', e);
+  }
+};
 // Normal veri değişikliklerinde çağrılır: veri değiştiği için "yedeklenmemiş değişiklik var" işaretlenir.
 async function saveState(){
   state.dirtySinceBackup = true;
@@ -633,6 +835,21 @@ async function saveState(){
   updateBackupBanner();
 }
 async function loadState(){
+  // 0) Öncelik: Firebase hesabınıza bağlı bulut verisi (Realtime Database). Böylece
+  //    farklı bir cihazda/tarayıcıda giriş yaptığınızda da aynı veriler karşınıza çıkar.
+  try{
+    if(typeof window.dnzDbLoadState === 'function'){
+      const cloudRaw = await window.dnzDbLoadState();
+      if(cloudRaw){
+        const parsed = JSON.parse(cloudRaw);
+        state = Object.assign(defaultState(), parsed);
+        if(!state.projects) state.projects = {};
+        state.dirtySinceBackup = false;
+        return;
+      }
+    }
+  }catch(e){ /* buluttan okunamazsa aşağıdaki yerel akışlara düş */ }
+
   // 1) Önce, kullanıcının seçtiği otomatik yedekleme dosyası var mı ve izin hâlâ
   //    geçerli mi diye bak. Varsa bu dosya ARTIK ana kaynaktır; doğrudan oradan yükle.
   try{
@@ -646,6 +863,7 @@ async function loadState(){
           state = Object.assign(defaultState(), parsed);
           if(!state.projects) state.projects = {};
           state.dirtySinceBackup = false;
+          await syncStateToCloud();
           return;
         }
       }
@@ -702,6 +920,19 @@ async function loadState(){
         }
       }
     }catch(e){ /* otomatik geri yükleme başarısız olursa sessizce geç, normal state kalır */ }
+  }
+  // Bulutta (Realtime Database) henüz veri yoktu (yeni cihaz/ilk giriş) ama bu cihazda
+  // yerelde veri bulunduysa: bu cihazdaki veriyi buluta gönderelim ki bundan sonra
+  // hangi cihazdan girilirse girilsin aynı veriler görünsün.
+  await syncStateToCloud();
+}
+// state'i (mevcut değişikliğe dokunmadan, sadece "gönder") Realtime Database'e yazar.
+async function syncStateToCloud(){
+  if(typeof window.dnzDbSaveState !== 'function') return;
+  try{
+    await window.dnzDbSaveState(JSON.stringify(state));
+  }catch(e){
+    console.error('Bulut ilk senkron hatası', e);
   }
 }
 function hasAnyData(){
@@ -5592,7 +5823,9 @@ if('serviceWorker' in navigator){
 }
 
 /* ======================= INIT ======================= */
-(async function init(){
+// Not: Bu fonksiyon artık sayfa yüklenir yüklenmez değil, kullanıcı Firebase ile
+// giriş yaptıktan SONRA (bkz. yukarıdaki Firebase auth module script'i) çalıştırılır.
+window.__dnzInitApp = async function init(){
   await loadState();
   await refreshAutoBackupInfo();
   // Eski kayıtlarda (bu modüller eklenmeden önce oluşturulmuş projelerde) eksik
@@ -5627,7 +5860,16 @@ if('serviceWorker' in navigator){
     state.activeProjectId = Object.keys(state.projects)[0];
   }
   renderAll();
-})();
+};
+</script>
+<script>
+  // Sayfa module script'ten önce açılmış olabileceği ihtimaline karşı: eğer bu satır
+  // çalıştığında kullanıcı zaten oturum açmış durumdaysa (onAuthStateChanged bu script'ten
+  // önce tetiklenmiş olabilir), uygulamayı burada başlat.
+  if(window.__dnzUserAlreadySignedIn && !window.__dnzInitStarted){
+    window.__dnzInitStarted = true;
+    window.__dnzInitApp();
+  }
 </script>
 </body>
 </html>
