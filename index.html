@@ -341,6 +341,10 @@ main{flex:1;min-width:0;width:100%;padding:0 10px 40px 10px;display:flex;flex-di
   grid-template-columns:repeat(auto-fill,minmax(130px,1fr));
 }
 .field{display:flex;flex-direction:column;gap:4px;min-width:0;}
+.sg-list{position:absolute;top:100%;left:0;right:0;z-index:60;background:var(--card,#fff);border:1px solid rgba(11,36,54,0.15);border-radius:10px;margin-top:4px;max-height:190px;overflow-y:auto;box-shadow:0 10px 24px rgba(8,32,46,0.22);}
+.sg-item{padding:10px 12px;font-size:0.88rem;color:var(--ink,#0B2436);cursor:pointer;border-bottom:1px solid rgba(11,36,54,0.07);}
+.sg-item:last-child{border-bottom:none;}
+.sg-item:hover,.sg-item:active{background:rgba(47,211,199,0.16);}
 .field label{font-size:0.7rem;font-weight:600;color:var(--ink-soft);letter-spacing:0.2px;}
 .field input,.field select{
   width:100%;padding:9px 10px;border-radius:10px;
@@ -1499,31 +1503,36 @@ function renderMetrajTab(main, proj){
 
 function renderMetrajFieldGrid(proj){
   const grid = document.getElementById('metrajFieldGrid');
-  const dl = (field)=> (proj.memory[field]||[]).map(v=>`<option value="${esc(v)}">`).join('');
   grid.innerHTML = `
-    <div class="field"><label>Blok</label>
-      <input list="dl-blok" id="f-blok" value="${esc(metrajForm.blok)}" placeholder="Örn: A Blok">
-      <datalist id="dl-blok">${dl('blok')}</datalist>
+    <div class="field" style="position:relative;">
+      <label>Blok</label>
+      <input id="f-blok" value="${esc(metrajForm.blok)}" placeholder="Örn: A Blok" autocomplete="off">
+      <div class="sg-list" id="sg-blok" style="display:none;"></div>
     </div>
-    <div class="field"><label>Kat</label>
-      <input list="dl-kat" id="f-kat" value="${esc(metrajForm.kat)}" placeholder="Örn: 1. Kat">
-      <datalist id="dl-kat">${dl('kat')}</datalist>
+    <div class="field" style="position:relative;">
+      <label>Kat</label>
+      <input id="f-kat" value="${esc(metrajForm.kat)}" placeholder="Örn: 1. Kat" autocomplete="off">
+      <div class="sg-list" id="sg-kat" style="display:none;"></div>
     </div>
-    <div class="field"><label>Daire</label>
-      <input list="dl-daire" id="f-daire" value="${esc(metrajForm.daire)}" placeholder="Örn: 1. Daire">
-      <datalist id="dl-daire">${dl('daire')}</datalist>
+    <div class="field" style="position:relative;">
+      <label>Daire</label>
+      <input id="f-daire" value="${esc(metrajForm.daire)}" placeholder="Örn: 1. Daire" autocomplete="off">
+      <div class="sg-list" id="sg-daire" style="display:none;"></div>
     </div>
-    <div class="field"><label>Mekân</label>
-      <input list="dl-mekan" id="f-mekan" value="${esc(metrajForm.mekan)}" placeholder="Örn: Salon">
-      <datalist id="dl-mekan">${dl('mekan')}</datalist>
+    <div class="field" style="position:relative;">
+      <label>Mekân</label>
+      <input id="f-mekan" value="${esc(metrajForm.mekan)}" placeholder="Örn: Salon" autocomplete="off">
+      <div class="sg-list" id="sg-mekan" style="display:none;"></div>
     </div>
-    <div class="field"><label>Uygulama Yeri</label>
-      <input list="dl-eleman" id="f-eleman" value="${esc(metrajForm.eleman)}" placeholder="Örn: Duvar / Tavan">
-      <datalist id="dl-eleman">${dl('eleman')}</datalist>
+    <div class="field" style="position:relative;">
+      <label>Uygulama Yeri</label>
+      <input id="f-eleman" value="${esc(metrajForm.eleman)}" placeholder="Örn: Duvar / Tavan" autocomplete="off">
+      <div class="sg-list" id="sg-eleman" style="display:none;"></div>
     </div>
-    <div class="field" style="grid-column:span 2;"><label>İmalat Cinsi</label>
-      <input list="dl-imalat" id="f-imalat" value="${esc(metrajForm.imalat)}" placeholder="Örn: Bölme Duvar İmalatı">
-      <datalist id="dl-imalat">${dl('imalat')}</datalist>
+    <div class="field" style="grid-column:span 2;position:relative;">
+      <label>İmalat Cinsi</label>
+      <input id="f-imalat" value="${esc(metrajForm.imalat)}" placeholder="Örn: Bölme Duvar İmalatı" autocomplete="off">
+      <div class="sg-list" id="sg-imalat" style="display:none;"></div>
     </div>
     <div class="field"><label>Adet</label><input class="mono" type="number" step="any" id="f-adet" value="${esc(metrajForm.adet)}"></div>
     <div class="field"><label>Kısa Kenar</label><input class="mono" type="number" step="any" id="f-kisaKenar" value="${esc(metrajForm.kisaKenar)}"></div>
@@ -1545,6 +1554,34 @@ function renderMetrajFieldGrid(proj){
       document.getElementById('f-toplamDisplay').value = fmtNum(c.toplam);
       document.getElementById('f-altToplamDisplay').value = fmtNum(c.altToplam);
     });
+  });
+  // Daha önce girilmiş Blok/Kat/Daire/Mekân/Uygulama Yeri/İmalat Cinsi değerlerini,
+  // tarayıcının native <datalist>'ine güvenmeden (bazı mobil tarayıcılarda dokunma ile
+  // seçim çalışmıyor), kendi açılır liste kutumuzla gösteriyoruz. Bir öneriye dokunulduğunda
+  // değer doğrudan kutuya yazılır.
+  ['blok','kat','daire','mekan','eleman','imalat'].forEach(k=>{
+    const inputEl = document.getElementById('f-'+k);
+    const listEl = document.getElementById('sg-'+k);
+    const values = (proj.memory[k]||[]).filter(Boolean);
+    function showSuggestions(){
+      const q = (inputEl.value||'').toLocaleLowerCase('tr');
+      const matches = values.filter(v=> v.toLocaleLowerCase('tr').includes(q)).slice(0,8);
+      if(matches.length===0){ listEl.style.display='none'; listEl.innerHTML=''; return; }
+      listEl.innerHTML = matches.map(v=>`<div class="sg-item">${esc(v)}</div>`).join('');
+      listEl.style.display = 'block';
+      [...listEl.children].forEach((item,i)=>{
+        const pick = ()=>{
+          inputEl.value = matches[i];
+          inputEl.dispatchEvent(new Event('input', {bubbles:true}));
+          listEl.style.display = 'none';
+        };
+        item.addEventListener('mousedown', (e)=>{ e.preventDefault(); pick(); });
+        item.addEventListener('touchstart', (e)=>{ e.preventDefault(); pick(); }, {passive:false});
+      });
+    }
+    inputEl.addEventListener('focus', showSuggestions);
+    inputEl.addEventListener('input', showSuggestions);
+    inputEl.addEventListener('blur', ()=>{ setTimeout(()=>{ listEl.style.display='none'; }, 150); });
   });
 }
 
