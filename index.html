@@ -16,6 +16,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script type="module">
   // Import the functions you need from the SDKs you need
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
@@ -25,6 +26,7 @@
     onAuthStateChanged,
     signInWithEmailAndPassword,
     createUserWithEmailAndPassword,
+    sendEmailVerification,
     signOut
   } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
   import {
@@ -56,16 +58,93 @@
   const auth = getAuth(app);
   const db = getDatabase(app);
 
+  // ---- Uygulama düzeyinde ek şifreleme (AES-GCM) ----
+  // Firebase zaten aktarım sırasında (TLS) ve diskte (rest) şifreleme sağlıyor. Ancak
+  // T.C. kimlik no ve IBAN gibi hassas alanlar içeren state JSON'u, veritabanı
+  // konsolundan bakan biri için düz metin olarak görünüyordu. Buluta yazmadan önce
+  // TÜM state JSON'unu, tarayıcının yerleşik Web Crypto API'siyle (AES-GCM) şifreliyoruz.
+  // Anahtar, kullanıcının Firebase UID'sinden türetiliyor ve hiçbir yerde ayrıca
+  // saklanmıyor; kullanıcı hangi cihazdan giriş yaparsa yapsın aynı anahtar yeniden
+  // türetilebiliyor.
+  // NOT (dürüst sınır): Anahtar türetme formülü bu dosyanın (herkese açık) kaynağında
+  // yer aldığı için bu, sunucu tarafı bir sırra dayanan askeri düzeyde bir koruma
+  // DEĞİLDİR. Asıl amacı; veritabanına doğrudan erişimi olan (ör. Firebase konsolünü
+  // açan biri, ya da güvenlik kuralları yanlış yapılandırılırsa ortaya çıkabilecek bir
+  // sızıntı) birinin verileri kolayca okuyamamasını sağlamaktır.
+  const ENC_PREFIX = 'dnzenc1:';
+  const ENC_SALT = 'DNZ-app-level-enc-salt-v1';
+  let dnzKeyCache = { uid:null, keyPromise:null };
+  function deriveDnzKey(uid){
+    if(dnzKeyCache.uid === uid && dnzKeyCache.keyPromise) return dnzKeyCache.keyPromise;
+    const keyPromise = (async ()=>{
+      const enc = new TextEncoder();
+      const baseKey = await crypto.subtle.importKey('raw', enc.encode(uid), 'PBKDF2', false, ['deriveKey']);
+      return crypto.subtle.deriveKey(
+        { name:'PBKDF2', salt: enc.encode(ENC_SALT), iterations: 100000, hash:'SHA-256' },
+        baseKey,
+        { name:'AES-GCM', length:256 },
+        false,
+        ['encrypt','decrypt']
+      );
+    })();
+    dnzKeyCache = { uid, keyPromise };
+    return keyPromise;
+  }
+  function dnzBufToB64(buf){
+    let bin = '';
+    const bytes = new Uint8Array(buf);
+    for(let i=0;i<bytes.length;i++) bin += String.fromCharCode(bytes[i]);
+    return btoa(bin);
+  }
+  function dnzB64ToBuf(b64){
+    const bin = atob(b64);
+    const bytes = new Uint8Array(bin.length);
+    for(let i=0;i<bin.length;i++) bytes[i] = bin.charCodeAt(i);
+    return bytes.buffer;
+  }
+  async function dnzEncryptState(uid, plainJson){
+    try{
+      const key = await deriveDnzKey(uid);
+      const iv = crypto.getRandomValues(new Uint8Array(12));
+      const enc = new TextEncoder();
+      const cipherBuf = await crypto.subtle.encrypt({name:'AES-GCM', iv}, key, enc.encode(plainJson));
+      return ENC_PREFIX + dnzBufToB64(iv) + ':' + dnzBufToB64(cipherBuf);
+    }catch(e){
+      console.error('Şifreleme hatası, veri düz metin olarak gönderiliyor', e);
+      return plainJson; // şifreleme başarısız olursa veriyi hiç göndermemek yerine düz metne düş
+    }
+  }
+  async function dnzDecryptState(uid, raw){
+    // Bu güncellemeden ÖNCE buluta yazılmış eski kayıtlar düz JSON'dur (ENC_PREFIX yok);
+    // geriye dönük uyumluluk için bunları olduğu gibi döndürüyoruz.
+    if(typeof raw !== 'string' || !raw.startsWith(ENC_PREFIX)) return raw;
+    try{
+      const key = await deriveDnzKey(uid);
+      const rest = raw.slice(ENC_PREFIX.length);
+      const sep = rest.indexOf(':');
+      const iv = new Uint8Array(dnzB64ToBuf(rest.slice(0, sep)));
+      const cipherBuf = dnzB64ToBuf(rest.slice(sep + 1));
+      const plainBuf = await crypto.subtle.decrypt({name:'AES-GCM', iv}, key, cipherBuf);
+      return new TextDecoder().decode(plainBuf);
+    }catch(e){
+      console.error('Şifre çözme hatası', e);
+      return null;
+    }
+  }
+
   // Ana uygulama kodu (klasik script) doğrudan ES modül import'u kullanamadığı için,
   // Realtime Database okuma/yazma işlemlerini bu iki global fonksiyon üzerinden yapıyoruz.
   // Tüm state tek bir JSON metni olarak saklanıyor (uygulamanın kendi localStorage
   // katmanıyla birebir aynı format), böylece Realtime Database'in anahtar (key) isimleri
-  // için getirdiği kısıtlamalarla (., #, $, [, ]) uğraşmaya gerek kalmıyor.
+  // için getirdiği kısıtlamalarla (., #, $, [, ]) uğraşmaya gerek kalmıyor. Buluta
+  // yazmadan/okumadan önce yukarıdaki AES-GCM katmanından geçiyor; klasik script bu
+  // şifreleme detayından tamamen habersiz, sadece düz JSON metniyle çalışmaya devam ediyor.
   window.dnzDbSaveState = async function(jsonString){
     const user = auth.currentUser;
     if(!user) return false;
     try{
-      await set(ref(db, 'users/' + user.uid + '/stateJson'), jsonString);
+      const encrypted = await dnzEncryptState(user.uid, jsonString);
+      await set(ref(db, 'users/' + user.uid + '/stateJson'), encrypted);
       return true;
     }catch(e){
       console.error('Realtime Database kayıt hatası', e);
@@ -77,7 +156,8 @@
     if(!user) return null;
     try{
       const snap = await get(ref(db, 'users/' + user.uid + '/stateJson'));
-      return snap.exists() ? snap.val() : null;
+      if(!snap.exists()) return null;
+      return await dnzDecryptState(user.uid, snap.val());
     }catch(e){
       console.error('Realtime Database okuma hatası', e);
       return null;
@@ -121,12 +201,52 @@
     if(!email || !pass){ msgEl.textContent = 'E-posta ve şifre girin.'; return; }
     registerBtn.disabled = true;
     createUserWithEmailAndPassword(auth, email, pass)
+      .then((cred)=>{
+        // E-posta doğrulaması ZORUNLU değil (hesap yine de oluşturulup kullanılabilir
+        // durumda kalır, böylece mevcut kullanıcı akışı bozulmaz); ama gerçek olmayan
+        // bir e-postayla kayıt olunmasını caydırmak için doğrulama bağlantısı gönderilir
+        // ve uygulama içinde doğrulanmamış hesaplar için hatırlatma banner'ı gösterilir.
+        return sendEmailVerification(cred.user).catch(e=>{
+          console.error('Doğrulama e-postası gönderilemedi', e);
+        });
+      })
       .catch(err=>{ msgEl.textContent = authErrTr(err); })
       .finally(()=>{ registerBtn.disabled = false; });
   });
 
   // Diğer script (klasik, module olmayan) bu fonksiyonu çağırabilsin diye global yapıyoruz.
   window.dnzLogout = ()=> signOut(auth);
+
+  // --- E-posta doğrulama hatırlatma banner'ı ---
+  // Zorunlu bir e-posta doğrulaması UYGULAMIYORUZ (mevcut/az önce kayıt olmuş
+  // kullanıcıların erişimini kesmemek için), sadece doğrulanmamışsa nazik bir
+  // hatırlatma gösteriyor ve tekrar gönderme imkânı sunuyoruz.
+  function updateEmailVerifyBanner(user){
+    const el = document.getElementById('emailVerifyBanner');
+    if(!el) return;
+    if(user && !user.emailVerified){
+      el.style.display = 'flex';
+    } else {
+      el.style.display = 'none';
+    }
+  }
+  window.dnzResendVerification = function(){
+    const user = auth.currentUser;
+    if(!user) return;
+    const btn = document.getElementById('btnResendVerify');
+    if(btn) btn.disabled = true;
+    sendEmailVerification(user)
+      .then(()=>{
+        const msg = document.getElementById('emailVerifyMsg');
+        if(msg) msg.textContent = 'Doğrulama e-postası tekrar gönderildi.';
+      })
+      .catch((e)=>{
+        console.error('Doğrulama e-postası gönderilemedi', e);
+        const msg = document.getElementById('emailVerifyMsg');
+        if(msg) msg.textContent = 'Gönderilemedi, lütfen daha sonra tekrar deneyin.';
+      })
+      .finally(()=>{ if(btn) btn.disabled = false; });
+  };
 
   // --- Gerçek zamanlı senkron ---
   // Bu kullanıcıya ait bulut verisi her değiştiğinde (bu cihazdan ya da BAŞKA bir
@@ -138,9 +258,11 @@
     realtimeUnsub = onValue(stateRef, (snapshot)=>{
       if(!snapshot.exists()) return;
       const val = snapshot.val();
-      if(typeof window.dnzApplyRemoteState === 'function'){
-        window.dnzApplyRemoteState(val);
-      }
+      dnzDecryptState(uid, val).then((decrypted)=>{
+        if(decrypted!=null && typeof window.dnzApplyRemoteState === 'function'){
+          window.dnzApplyRemoteState(decrypted);
+        }
+      });
     }, (err)=>{
       console.error('Gerçek zamanlı senkron hatası', err);
     });
@@ -166,12 +288,14 @@
         window.__dnzInitApp();
       }
       startRealtimeSync(user.uid);
+      updateEmailVerifyBanner(user);
     }else{
       window.__dnzUserAlreadySignedIn = false;
       window.dnzCurrentUid = null;
       gate.style.display = 'flex';
       appEl.style.display = 'none';
       stopRealtimeSync();
+      updateEmailVerifyBanner(null);
     }
   });
 </script>
@@ -451,6 +575,20 @@ td.num,th.num{font-family:var(--font-mono);text-align:right;}
 .modal h3{margin:0 0 4px 0;font-family:var(--font-display);font-size:1rem;}
 .modal .field-grid{margin-top:6px;}
 
+/* PDF/Excel önizleme modalı */
+.modal-pdf-preview{max-width:900px;}
+.pdf-preview-scroll{background:#DCE7E9;border-radius:10px;padding:14px;overflow:auto;max-height:56vh;}
+.pdf-preview-scale-wrap{margin:0 auto;}
+#pdfPreviewNode{box-shadow:0 6px 24px rgba(0,0,0,0.18);}
+
+/* Dosya eki (özgeçmiş / masraf fişi vb.) */
+.file-attach-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.file-attach-chip{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:20px;background:rgba(28,110,140,0.12);color:#0B2436;font-size:0.72rem;font-weight:600;max-width:100%;}
+.file-attach-chip svg{width:13px;height:13px;flex-shrink:0;}
+.file-attach-chip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.file-attach-chip button{background:none;border:none;color:#B3392C;cursor:pointer;font-weight:800;padding:0 2px;flex-shrink:0;}
+.icon-btn.attach-active{color:#1C6E8C;}
+
 .badge{
   display:inline-flex;padding:3px 9px;border-radius:20px;font-size:0.68rem;font-weight:700;
   background:rgba(47,211,199,0.22);color:#0A5850;
@@ -504,6 +642,10 @@ footer.appfoot{text-align:center;padding:14px;color:rgba(11,36,54,0.45);font-siz
 .backup-banner svg{flex-shrink:0;width:20px;height:20px;color:#c77700;}
 .backup-banner span{flex:1;min-width:200px;}
 .backup-banner .btn{white-space:nowrap;}
+.backup-banner.verify-banner{
+  background:rgba(28,110,140,0.14);border:1px solid rgba(28,110,140,0.5);color:#0F3B4C;
+}
+.backup-banner.verify-banner svg{color:#1C6E8C;}
 
 /* personel durum rozeti */
 .status-badge{display:inline-flex;padding:3px 9px;border-radius:20px;font-size:0.66rem;font-weight:700;white-space:nowrap;}
@@ -594,6 +736,12 @@ footer.appfoot{text-align:center;padding:14px;color:rgba(11,36,54,0.45);font-siz
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4M12 17h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
     <span>Kaydedilmemiş yedeğiniz var. Verilerinizi kaybetmemek için Ayarlar &gt; "Yedeği İndir" ile yedek alın.</span>
     <button class="btn btn-sm btn-primary" id="bannerBackupBtn">Şimdi Yedekle</button>
+  </div>
+
+  <div id="emailVerifyBanner" class="backup-banner verify-banner" style="display:none;">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 6l-10 7L2 6"/></svg>
+    <span id="emailVerifyMsg">E-posta adresiniz henüz doğrulanmadı. Hesabınızın güvenliği için gelen kutunuzdaki doğrulama bağlantısına tıklayın.</span>
+    <button class="btn btn-sm btn-primary" id="btnResendVerify" onclick="window.dnzResendVerification && window.dnzResendVerification();">Doğrulama E-postasını Tekrar Gönder</button>
   </div>
 
   <div class="nav-backdrop" id="navBackdrop"></div>
@@ -1085,6 +1233,86 @@ function resizeImageDataUrl(dataUrl, maxDim=320, quality=0.82){
   });
 }
 
+/* ======================= DOSYA EKLERİ (Özgeçmiş / Masraf Fişi vb.) ======================= */
+// Personel kartına özgeçmiş, masraf kaydına fiş/fatura gibi TEK bir dosya eklenebilmesi
+// için genel yardımcı fonksiyonlar. Dosya, state içinde base64 (data URL) olarak saklanır
+// (tıpkı firma logosu gibi); resimler otomatik küçültülüp sıkıştırılır, diğer dosyalar
+// (PDF vb.) olduğu gibi saklanır ama makul bir boyut sınırı uygulanır.
+const MAX_ATTACHMENT_MB = 4;
+function readFileAsDataUrl(file){
+  return new Promise((resolve,reject)=>{
+    const reader = new FileReader();
+    reader.onload = ()=>resolve(reader.result);
+    reader.onerror = ()=>reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
+async function buildAttachmentFromFile(file){
+  if(!file) return null;
+  if(file.size > MAX_ATTACHMENT_MB*1024*1024){
+    showToast(`Dosya çok büyük. En fazla ${MAX_ATTACHMENT_MB} MB yükleyebilirsiniz.`);
+    return null;
+  }
+  let dataUrl;
+  try{ dataUrl = await readFileAsDataUrl(file); }
+  catch(e){ console.error(e); showToast('Dosya okunurken bir sorun oluştu.'); return null; }
+  if(file.type && file.type.startsWith('image/')){
+    try{ dataUrl = await resizeImageDataUrl(dataUrl, 1600, 0.85); }catch(e){ /* yoksay, orijinali kullan */ }
+  }
+  return { name: file.name, type: file.type||'', dataUrl, size: file.size, addedAt: Date.now() };
+}
+// Bir eki yeni sekmede açar (görsel/PDF önizlemesi için) — mobil tarayıcılarda doğrudan
+// data URL yerine Blob URL kullanmak daha güvenilir çalışır.
+function openAttachment(att){
+  if(!att || !att.dataUrl) return;
+  try{
+    const parts = att.dataUrl.split(',');
+    const byteChars = atob(parts[1]);
+    const byteNumbers = new Array(byteChars.length);
+    for(let i=0;i<byteChars.length;i++) byteNumbers[i]=byteChars.charCodeAt(i);
+    const blob = new Blob([new Uint8Array(byteNumbers)], {type: att.type||'application/octet-stream'});
+    const url = URL.createObjectURL(blob);
+    window.open(url, '_blank');
+    setTimeout(()=>URL.revokeObjectURL(url), 60000);
+  }catch(e){
+    console.error(e);
+    window.open(att.dataUrl, '_blank');
+  }
+}
+function attachmentIconSvg(att){
+  const isImg = att && att.type && att.type.startsWith('image/');
+  return isImg
+    ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>`
+    : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg>`;
+}
+// Form içindeki "seçili dosya" göstergesini (kaldır butonuyla) üretir.
+function attachmentChipHtml(att){
+  if(!att) return '<span class="hint" style="font-size:0.72rem;">Dosya seçilmedi.</span>';
+  return `<span class="file-attach-chip" id="attachChipView">${attachmentIconSvg(att)}<span>${esc(att.name)}</span><button type="button" id="attachChipRemove" title="Kaldır">×</button></span>`;
+}
+// Genel: bir "form.dosya" alanına bağlı dosya seçme input'unu bağlar. `getForm`/`onChange`
+// ile hem personel hem masraf formunda aynı kod tekrar tekrar yazılmadan kullanılabilir.
+function wireAttachmentInput({inputId, chipWrapId, getForm, onChange}){
+  const input = document.getElementById(inputId);
+  const chipWrap = document.getElementById(chipWrapId);
+  if(!input || !chipWrap) return;
+  const refreshChip = ()=>{ chipWrap.innerHTML = attachmentChipHtml(getForm().dosya); bindRemove(); };
+  const bindRemove = ()=>{
+    const rm = document.getElementById('attachChipRemove');
+    if(rm) rm.onclick = ()=>{ getForm().dosya = null; input.value=''; refreshChip(); };
+  };
+  input.onchange = async ()=>{
+    const file = input.files[0];
+    if(!file) return;
+    showToast('Dosya ekleniyor…');
+    const att = await buildAttachmentFromFile(file);
+    if(att){ getForm().dosya = att; if(onChange) onChange(att); }
+    input.value = '';
+    refreshChip();
+  };
+  refreshChip();
+}
+
 /* ======================= RIPPLE ======================= */
 document.addEventListener('pointerdown', (e)=>{
   const target = e.target.closest('.glass, .btn, .icon-btn, .tab-btn, .project-item, select, .card');
@@ -1459,6 +1687,62 @@ function confirmModal(msg, onYes){
   document.getElementById('cCancel').onclick = closeModal;
   document.getElementById('modalBackdrop').addEventListener('click',(e)=>{ if(e.target.id==='modalBackdrop') closeModal(); });
   document.getElementById('cYes').onclick = ()=>{ closeModal(); onYes(); };
+}
+
+// KVKK / gizlilik bilgilendirme modalı. Bu, bir hukuki metin değil; kullanıcıya
+// verilerin nerede/nasıl tutulduğuna dair şeffaf, sade bir özet sunar. Firma bu
+// metni kendi KVKK Aydınlatma Metni / gizlilik politikasıyla değiştirebilir ya da
+// genişletebilir.
+function openPrivacyModal(){
+  const modalRoot = document.getElementById('modalRoot');
+  modalRoot.innerHTML = `
+    <div class="modal-backdrop" id="modalBackdrop">
+      <div class="modal glass-strong glass" style="max-width:560px;max-height:82vh;overflow-y:auto;">
+        <h3>Gizlilik ve Veri Saklama Politikası</h3>
+        <p class="hint" style="margin-bottom:10px;">
+          Bu uygulama; proje, metraj, teklif, puantaj, avans/zimmet ve <b>personel</b> (ad-soyad,
+          baba adı, T.C. kimlik no, IBAN/banka hesap bilgisi dahil) kayıtlarınızı tutar.
+          6698 sayılı Kişisel Verilerin Korunması Kanunu (KVKK) kapsamında aşağıdaki bilgileri
+          şeffaflık amacıyla sunuyoruz.
+        </p>
+        <div style="font-size:0.82rem;line-height:1.55;color:var(--ink-soft);">
+          <p><b>Veriler nerede saklanıyor?</b><br>
+          Verileriniz, Google'ın Firebase altyapısı üzerinde (Realtime Database, Avrupa/Frankfurt
+          bölgesi) hesabınıza bağlı olarak tutulur; ayrıca cihazınızın tarayıcı önbelleğinde
+          (localStorage) ve tercihen seçtiğiniz bir otomatik yedekleme dosyasında bir kopyası bulunur.</p>
+          <p><b>Veriler nasıl korunuyor?</b><br>
+          Firebase, verileri aktarım sırasında (TLS/HTTPS) ve sunucularda diskte (rest) şifreler.
+          Bunun üzerine, bu uygulama personel/finansal verileri içeren tüm kayıtları buluta
+          göndermeden önce cihazınızda ek olarak AES-GCM ile şifreler; şifre çözme anahtarı yalnızca
+          sizin hesap oturumunuzdan türetilir ve ayrıca hiçbir yerde saklanmaz. Bu, veritabanına
+          doğrudan bakan birinin verileri düz metin olarak görmesini engeller; ancak uygulamanın
+          kaynak koduna erişimi olan biri için mutlak bir garanti değildir — asıl güvence hesabınızın
+          şifresini gizli tutmanızdır.</p>
+          <p><b>Kimler erişebilir?</b><br>
+          Verileriniz yalnızca kendi hesabınızla (e-posta/şifre) giriş yaptığınızda görüntülenebilir.
+          Firebase projesinin yöneticileri (ör. bu uygulamayı işleten firma) teknik olarak
+          veritabanına erişebilir; bu nedenle hesabınızı güçlü bir şifreyle koruyun ve
+          şifrenizi kimseyle paylaşmayın.</p>
+          <p><b>Veriler ne amaçla işleniyor?</b><br>
+          T.C. kimlik no ve IBAN bilgileri; personel özlük, puantaj ve ücret/ödeme (bordro benzeri)
+          süreçlerinin yürütülmesi amacıyla, işveren sıfatıyla uygulamayı kullanan firma tarafından
+          işlenir.</p>
+          <p><b>Haklarınız (KVKK md. 11):</b><br>
+          Kişisel verisi işlenen personel; verisinin işlenip işlenmediğini öğrenme, işlenmişse
+          buna ilişkin bilgi talep etme, düzeltilmesini veya silinmesini isteme ve işlemenin
+          amacına uygun kullanılıp kullanılmadığını öğrenme haklarına sahiptir. Bu haklarınızı
+          kullanmak için uygulamayı işleten firma ile iletişime geçebilirsiniz.</p>
+          <p><b>Verilerin silinmesi:</b><br>
+          Ayarlar &gt; Tehlikeli Bölge üzerinden tüm veriler kalıcı olarak silinebilir; bir
+          personel kaydının tek başına silinmesi de Personel sekmesinden yapılabilir.</p>
+        </div>
+        <div class="btn-row" style="margin-top:14px;justify-content:flex-end;">
+          <button class="btn btn-primary" id="privacyClose">Kapat</button>
+        </div>
+      </div>
+    </div>`;
+  document.getElementById('privacyClose').onclick = closeModal;
+  document.getElementById('modalBackdrop').addEventListener('click',(e)=>{ if(e.target.id==='modalBackdrop') closeModal(); });
 }
 
 /* ======================= METRAJ TAB ======================= */
@@ -1896,13 +2180,7 @@ async function exportIcmalPdf(proj){
     </div>
     <div style="margin-top:36px;font-size:9px;color:#8096A3;">DNZ Metraj &amp; Teklif Yönetimi ile oluşturulmuştur.</div>
   `;
-  try{
-    await renderNodeToPdf(html, `icmal-${proj.name.replace(/[^a-z0-9ığüşöç]+/gi,'_')}.pdf`, 'p');
-    showToast('İcmal PDF indirildi.');
-  }catch(e){
-    console.error(e);
-    showToast('PDF oluşturulurken bir sorun oluştu.');
-  }
+  showPdfPreview(html, `icmal-${proj.name.replace(/[^a-z0-9ığüşöç]+/gi,'_')}.pdf`, 'p');
 }
 
 /* ======================= TEKLIF TAB ======================= */
@@ -2961,7 +3239,7 @@ function renderHesapTotalsHtml(sistem, deger){
 
 /* ======================= PERSONEL TAB ======================= */
 function emptyPersonelForm(){
-  return {id:null, adSoyad:'', babaAdi:'', kimlikNo:'', banka:'', girisTarihi:'', cikisTarihi:'', pozisyon:'', yevmiye:''};
+  return {id:null, adSoyad:'', babaAdi:'', kimlikNo:'', banka:'', girisTarihi:'', cikisTarihi:'', pozisyon:'', yevmiye:'', dosya:null};
 }
 let personelForm = emptyPersonelForm();
 
@@ -2997,6 +3275,12 @@ function renderPersonelTab(main, proj){
         <div class="field"><label>Yevmiye (TL)</label>
           <input class="mono" type="number" step="any" id="p-yevmiye" value="${esc(personelForm.yevmiye)}">
         </div>
+        <div class="field" style="grid-column:span 2;"><label>Özgeçmiş / Kimlik Dosyası (isteğe bağlı)</label>
+          <div class="file-attach-row">
+            <input type="file" id="p-dosya" accept="image/*,application/pdf" style="font-size:0.75rem;max-width:220px;">
+            <span id="p-dosyaChip"></span>
+          </div>
+        </div>
       </div>
       <div class="btn-row">
         <button class="btn btn-primary" id="btnSavePersonel">${personelForm.id?'Kartı Güncelle':'Kartı Ekle'}</button>
@@ -3016,6 +3300,7 @@ function renderPersonelTab(main, proj){
   });
   document.getElementById('btnSavePersonel').onclick = ()=>savePersonelRow(proj);
   document.getElementById('btnClearPersonel').onclick = ()=>{ personelForm = emptyPersonelForm(); renderMain(); };
+  wireAttachmentInput({inputId:'p-dosya', chipWrapId:'p-dosyaChip', getForm:()=>personelForm});
   renderPersonelTable(proj);
 }
 
@@ -3035,6 +3320,7 @@ function savePersonelRow(proj){
     girisTarihi: personelForm.girisTarihi,
     cikisTarihi: personelForm.cikisTarihi,
     yevmiye: parseFloat(personelForm.yevmiye)||0,
+    dosya: personelForm.dosya || null,
     puantaj: (proj.personel.find(p=>p.id===personelForm.id)||{}).puantaj || {},
     mesai: (proj.personel.find(p=>p.id===personelForm.id)||{}).mesai || {}
   };
@@ -3085,6 +3371,7 @@ function renderPersonelTable(proj){
             <td><span class="status-badge ${st.cls}">${st.text}</span></td>
             <td>
               <div class="row-actions">
+                ${p.dosya ? `<button class="icon-btn attach-active" data-act="dosya" title="Ekli dosyayı görüntüle: ${esc(p.dosya.name)}">${attachmentIconSvg(p.dosya)}</button>` : ''}
                 <button class="icon-btn" data-act="pdf" title="Kart PDF">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg>
                 </button>
@@ -3109,7 +3396,7 @@ function renderPersonelTable(proj){
       const p = proj.personel.find(x=>x.id===id);
       if(!p) return;
       if(act==='edit'){
-        personelForm = {id:p.id, adSoyad:p.adSoyad, babaAdi:p.babaAdi, kimlikNo:p.kimlikNo, banka:p.banka, girisTarihi:p.girisTarihi, cikisTarihi:p.cikisTarihi, pozisyon:p.pozisyon, yevmiye:String(p.yevmiye)};
+        personelForm = {id:p.id, adSoyad:p.adSoyad, babaAdi:p.babaAdi, kimlikNo:p.kimlikNo, banka:p.banka, girisTarihi:p.girisTarihi, cikisTarihi:p.cikisTarihi, pozisyon:p.pozisyon, yevmiye:String(p.yevmiye), dosya:p.dosya||null};
         renderMain(); window.scrollTo({top:0, behavior:'smooth'});
       } else if(act==='delete'){
         confirmModal(`"${p.adSoyad}" adlı personel kartını silmek istediğinize emin misiniz? (Puantaj/mesai kayıtları da silinir.)`, ()=>{
@@ -3119,6 +3406,8 @@ function renderPersonelTable(proj){
         });
       } else if(act==='pdf'){
         exportPersonelPdf(proj, p);
+      } else if(act==='dosya'){
+        openAttachment(p.dosya);
       }
     });
   });
@@ -3150,13 +3439,7 @@ async function exportPersonelPdf(proj, p){
     </table>
     <div style="margin-top:36px;font-size:9px;color:#8096A3;">DNZ Metraj &amp; Teklif Yönetimi ile oluşturulmuştur.</div>
   `;
-  try{
-    await renderNodeToPdf(html, `personel-${p.adSoyad.replace(/[^a-z0-9ığüşöç]+/gi,'_')}.pdf`, 'p');
-    showToast('Personel kartı PDF indirildi.');
-  }catch(e){
-    console.error(e);
-    showToast('PDF oluşturulurken bir sorun oluştu.');
-  }
+  showPdfPreview(html, `personel-${p.adSoyad.replace(/[^a-z0-9ığüşöç]+/gi,'_')}.pdf`, 'p');
 }
 
 /* ======================= PUANTAJ / MESAİ TAB ======================= */
@@ -3603,13 +3886,7 @@ async function exportPuantajMesaiPdf(proj){
 
     <div style="margin-top:36px;font-size:9px;color:#8096A3;">DNZ Metraj &amp; Teklif Yönetimi ile oluşturulmuştur.</div>
   `;
-  try{
-    await renderNodeToPdf(html, `puantaj-mesai-${ym}-${proj.name.replace(/[^a-z0-9ığüşöç]+/gi,'_')}.pdf`, 'l');
-    showToast('Puantaj & Mesai PDF indirildi.');
-  }catch(e){
-    console.error(e);
-    showToast('PDF oluşturulurken bir sorun oluştu.');
-  }
+  showPdfPreview(html, `puantaj-mesai-${ym}-${proj.name.replace(/[^a-z0-9ığüşöç]+/gi,'_')}.pdf`, 'l');
 }
 
 /* ======================= AVANS / ZİMMET TAB ======================= */
@@ -3929,10 +4206,7 @@ async function exportAvansPdf(proj){
     </table>
     <div style="margin-top:36px;font-size:9px;color:#8096A3;">DNZ Metraj &amp; Teklif Yönetimi ile oluşturulmuştur.</div>
   `;
-  try{
-    await renderNodeToPdf(html, `avans-listesi-${proj.name.replace(/[^a-z0-9ığüşöç]+/gi,'_')}.pdf`, 'p');
-    showToast('Avans listesi PDF indirildi.');
-  }catch(e){ console.error(e); showToast('PDF oluşturulurken bir sorun oluştu.'); }
+  showPdfPreview(html, `avans-listesi-${proj.name.replace(/[^a-z0-9ığüşöç]+/gi,'_')}.pdf`, 'p');
 }
 
 async function exportZimmetPdf(proj){
@@ -3958,10 +4232,7 @@ async function exportZimmetPdf(proj){
     </table>
     <div style="margin-top:36px;font-size:9px;color:#8096A3;">DNZ Metraj &amp; Teklif Yönetimi ile oluşturulmuştur.</div>
   `;
-  try{
-    await renderNodeToPdf(html, `zimmet-listesi-${proj.name.replace(/[^a-z0-9ığüşöç]+/gi,'_')}.pdf`, 'p');
-    showToast('Zimmet listesi PDF indirildi.');
-  }catch(e){ console.error(e); showToast('PDF oluşturulurken bir sorun oluştu.'); }
+  showPdfPreview(html, `zimmet-listesi-${proj.name.replace(/[^a-z0-9ığüşöç]+/gi,'_')}.pdf`, 'p');
 }
 
 /* ======================= TOPLU İCMAL TAB ======================= */
@@ -4289,10 +4560,7 @@ async function exportTopluIcmalPdf(proj, p){
       </div>
     </div>
   `;
-  try{
-    await renderNodeToPdf(html, `personel-ekstresi-${p.adSoyad.replace(/[^a-z0-9ığüşöç]+/gi,'_')}-${start}_${end}.pdf`, 'p');
-    showToast('Personel ekstresi PDF indirildi.');
-  }catch(e){ console.error(e); showToast('PDF oluşturulurken bir sorun oluştu.'); }
+  showPdfPreview(html, `personel-ekstresi-${p.adSoyad.replace(/[^a-z0-9ığüşöç]+/gi,'_')}-${start}_${end}.pdf`, 'p');
 }
 
 /* ======================= TOPLU ÇALIŞAN HESABI (TÜM PERSONEL — TARİH ARALIĞI) ======================= */
@@ -4421,10 +4689,7 @@ async function exportTopluHesapPdf(proj, start, end, rows, totals){
     </table>
     <div style="margin-top:24px;font-size:9px;color:#8096A3;">DNZ Metraj &amp; Teklif Yönetimi ile oluşturulmuştur.</div>
   `;
-  try{
-    await renderNodeToPdf(html, `toplu-calisan-hesabi-${proj.name.replace(/[^a-z0-9ığüşöç]+/gi,'_')}-${start}_${end}.pdf`, 'p');
-    showToast('Toplu çalışan hesabı PDF indirildi.');
-  }catch(e){ console.error(e); showToast('PDF oluşturulurken bir sorun oluştu.'); }
+  showPdfPreview(html, `toplu-calisan-hesabi-${proj.name.replace(/[^a-z0-9ığüşöç]+/gi,'_')}-${start}_${end}.pdf`, 'p');
 }
 
 /* ======================= TAHSİLAT (İŞVERENDEN ÖDEME) TAB ======================= */
@@ -4614,14 +4879,11 @@ async function exportTahsilatPdf(proj){
     </table>
     <div style="margin-top:36px;font-size:9px;color:#8096A3;">DNZ Metraj &amp; Teklif Yönetimi ile oluşturulmuştur.</div>
   `;
-  try{
-    await renderNodeToPdf(html, `odeme-ozeti-${proj.name.replace(/[^a-z0-9ığüşöç]+/gi,'_')}.pdf`, 'p');
-    showToast('Ödeme özeti PDF indirildi.');
-  }catch(e){ console.error(e); showToast('PDF oluşturulurken bir sorun oluştu.'); }
+  showPdfPreview(html, `odeme-ozeti-${proj.name.replace(/[^a-z0-9ığüşöç]+/gi,'_')}.pdf`, 'p');
 }
 
 /* ======================= MASRAF TAB ======================= */
-function emptyMasrafForm(){ return {id:null, masrafKalemi:'', odemeTarihi: todayStr(), odemeSekli:'Nakit', aciklama:'', tutar:''}; }
+function emptyMasrafForm(){ return {id:null, masrafKalemi:'', odemeTarihi: todayStr(), odemeSekli:'Nakit', aciklama:'', tutar:'', dosya:null}; }
 let masrafForm = emptyMasrafForm();
 
 function renderMasrafTab(main, proj){
@@ -4648,6 +4910,12 @@ function renderMasrafTab(main, proj){
         </div>
         <div class="field"><label>Tutar (TL)</label>
           <input class="mono" type="number" step="any" id="ms-tutar" value="${esc(masrafForm.tutar)}">
+        </div>
+        <div class="field" style="grid-column:span 2;"><label>Fiş / Fatura Dosyası (isteğe bağlı)</label>
+          <div class="file-attach-row">
+            <input type="file" id="ms-dosya" accept="image/*,application/pdf" style="font-size:0.75rem;max-width:220px;">
+            <span id="ms-dosyaChip"></span>
+          </div>
         </div>
       </div>
       <div class="btn-row">
@@ -4683,6 +4951,7 @@ function renderMasrafTab(main, proj){
   document.getElementById('ms-filterKalemi').addEventListener('change',(e)=>{ ui.masrafFilterKalemi = e.target.value; renderMasrafTable(proj); });
   document.getElementById('btnClearMasrafFilter').onclick = ()=>{ ui.masrafFilterKalemi=''; renderMain(); };
   document.getElementById('btnMasrafPdf').onclick = ()=>exportMasrafPdf(proj);
+  wireAttachmentInput({inputId:'ms-dosya', chipWrapId:'ms-dosyaChip', getForm:()=>masrafForm});
   renderMasrafTable(proj);
 }
 
@@ -4697,7 +4966,8 @@ function saveMasrafRow(proj){
     odemeTarihi: masrafForm.odemeTarihi,
     odemeSekli: masrafForm.odemeSekli,
     aciklama: masrafForm.aciklama.trim(),
-    tutar
+    tutar,
+    dosya: masrafForm.dosya || null
   };
   if(masrafForm.id){
     const idx = proj.masraflar.findIndex(r=>r.id===row.id);
@@ -4741,6 +5011,7 @@ function renderMasrafTable(proj){
             <td class="num">${fmtMoney(r.tutar)}</td>
             <td>
               <div class="row-actions">
+                ${r.dosya ? `<button class="icon-btn attach-active" data-act="dosya" title="Ekli dosyayı görüntüle: ${esc(r.dosya.name)}">${attachmentIconSvg(r.dosya)}</button>` : ''}
                 <button class="icon-btn" data-act="edit" title="Düzenle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg></button>
                 <button class="icon-btn danger" data-act="delete" title="Sil"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0l-1 14a2 2 0 01-2 2H7a2 2 0 01-2-2L4 6h16z"/></svg></button>
               </div>
@@ -4758,7 +5029,7 @@ function renderMasrafTable(proj){
       const r = proj.masraflar.find(x=>x.id===tr.dataset.id);
       if(!r) return;
       if(act==='edit'){
-        masrafForm = {id:r.id, masrafKalemi:r.masrafKalemi, odemeTarihi:r.odemeTarihi, odemeSekli:r.odemeSekli, aciklama:r.aciklama, tutar:String(r.tutar)};
+        masrafForm = {id:r.id, masrafKalemi:r.masrafKalemi, odemeTarihi:r.odemeTarihi, odemeSekli:r.odemeSekli, aciklama:r.aciklama, tutar:String(r.tutar), dosya:r.dosya||null};
         renderMain(); window.scrollTo({top:0, behavior:'smooth'});
       } else if(act==='delete'){
         confirmModal('Bu masraf kaydını silmek istediğinize emin misiniz?', ()=>{
@@ -4766,6 +5037,8 @@ function renderMasrafTable(proj){
           saveState(); renderMain();
           showToast('Masraf kaydı silindi.');
         });
+      } else if(act==='dosya'){
+        openAttachment(r.dosya);
       }
     });
   });
@@ -4798,10 +5071,7 @@ async function exportMasrafPdf(proj){
     </table>
     <div style="margin-top:36px;font-size:9px;color:#8096A3;">DNZ Metraj &amp; Teklif Yönetimi ile oluşturulmuştur.</div>
   `;
-  try{
-    await renderNodeToPdf(html, `masraf-listesi-${proj.name.replace(/[^a-z0-9ığüşöç]+/gi,'_')}.pdf`, 'p');
-    showToast('Masraf listesi PDF indirildi.');
-  }catch(e){ console.error(e); showToast('PDF oluşturulurken bir sorun oluştu.'); }
+  showPdfPreview(html, `masraf-listesi-${proj.name.replace(/[^a-z0-9ığüşöç]+/gi,'_')}.pdf`, 'p');
 }
 
 /* ======================= YEMEK TAB ======================= */
@@ -5106,10 +5376,7 @@ async function exportYemekPdf(proj){
     <div style="font-size:9px;color:#345264;margin-top:10px;">Birim Fiyatlar: Sabah ${fmtMoney(projeYemekFiyat(proj).sabah)} &nbsp;|&nbsp; Öğlen ${fmtMoney(projeYemekFiyat(proj).ogle)} &nbsp;|&nbsp; Akşam ${fmtMoney(projeYemekFiyat(proj).aksam)}</div>
     <div style="margin-top:36px;font-size:9px;color:#8096A3;">DNZ Metraj &amp; Teklif Yönetimi ile oluşturulmuştur.</div>
   `;
-  try{
-    await renderNodeToPdf(html, `yemek-cetveli-${proj.name.replace(/[^a-z0-9ığüşöç]+/gi,'_')}.pdf`, 'p');
-    showToast('Yemek cetveli PDF indirildi.');
-  }catch(e){ console.error(e); showToast('PDF oluşturulurken bir sorun oluştu.'); }
+  showPdfPreview(html, `yemek-cetveli-${proj.name.replace(/[^a-z0-9ığüşöç]+/gi,'_')}.pdf`, 'p');
 }
 
 function groupMetrajForPicker(proj){
@@ -5291,6 +5558,17 @@ function renderAyarlarTab(main){
     </div>
 
     <div class="card glass">
+      <h2>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+        Gizlilik ve KVKK
+      </h2>
+      <p class="hint">Bu uygulamada personel T.C. kimlik no ve IBAN gibi kişisel/finansal veriler işlenmektedir. Bu verilerin nerede ve nasıl saklandığı, kimlerin erişebileceği ve haklarınız hakkında bilgi almak için aşağıdaki metni inceleyebilirsiniz.</p>
+      <div class="btn-row">
+        <button class="btn btn-ghost" id="btnOpenPrivacy">Gizlilik ve Veri Saklama Politikasını Görüntüle</button>
+      </div>
+    </div>
+
+    <div class="card glass">
       <h2>Tehlikeli Bölge</h2>
       <p class="hint">Bu işlem tüm projeleri, metraj kayıtlarını ve teklifleri kalıcı olarak siler.</p>
       <div class="btn-row">
@@ -5355,6 +5633,8 @@ function renderAyarlarTab(main){
     renderAyarlarTab(main);
     showToast('Varsayılan yazı boyutlarına dönüldü.');
   };
+
+  document.getElementById('btnOpenPrivacy').onclick = openPrivacyModal;
 
   document.getElementById('btnResetAll').onclick = ()=>{
     confirmModal('TÜM projeler, metraj ve teklif verileri silinecek. Devam edilsin mi?', ()=>{
@@ -5627,7 +5907,7 @@ function pdfHeaderHtmlSimple(subtitle){
 function pdfBaseStyles(width){
   return `font-family:'Inter',Arial,sans-serif;color:#0B2436;padding:24px;width:${width}px;background:#ffffff;`;
 }
-async function renderNodeToPdf(html, filename, orientation){
+async function generateAndSavePdf(html, filename, orientation){
   // Varsayılan: dikey (portre). Sadece 'l' (yatay/landscape) açıkça belirtilirse
   // render genişliği ve PDF sayfası A4 yatay ölçülerine göre ayarlanır.
   orientation = orientation === 'l' ? 'l' : 'p';
@@ -5658,6 +5938,97 @@ async function renderNodeToPdf(html, filename, orientation){
   pdf.save(filename);
   root.innerHTML = '';
   root.style.width = '';
+}
+
+// PDF dosya adından aynı isimde bir Excel (.xlsx) dosya adı türetir.
+function excelFilenameFromPdf(filename){
+  return filename.replace(/\.pdf$/i, '') + '.xlsx';
+}
+
+// Önizlemede gösterilen belgedeki TÜM <table> etiketlerini bulup her birini ayrı bir
+// çalışma sayfası (sheet) olarak tek bir Excel (.xlsx) dosyasına aktarır. Bu sayede,
+// kod tekrarı olmadan UYGULAMADAKİ TÜM PDF çıktıları için "Excel'e Aktar" tek bir
+// noktadan çalışır: her export fonksiyonu zaten bir HTML <table> üretiyor, biz de
+// önizlemede DOM'a basılmış olan o tabloyu SheetJS ile doğrudan okuyoruz.
+function exportHtmlTablesToExcel(previewNode, filename){
+  const tables = previewNode.querySelectorAll('table');
+  if(!tables.length){
+    showToast('Bu belgede Excel\u2019e aktarılacak bir tablo bulunamadı.');
+    return;
+  }
+  try{
+    const wb = XLSX.utils.book_new();
+    tables.forEach((table, i)=>{
+      const ws = XLSX.utils.table_to_sheet(table);
+      const sheetName = (tables.length>1 ? `Tablo ${i+1}` : 'Veri').slice(0,31);
+      XLSX.utils.book_append_sheet(wb, ws, sheetName);
+    });
+    XLSX.writeFile(wb, excelFilenameFromPdf(filename));
+    showToast('Excel dosyası indirildi.');
+  }catch(e){
+    console.error('Excel aktarım hatası', e);
+    showToast('Excel\u2019e aktarılırken bir sorun oluştu.');
+  }
+}
+
+// TÜM PDF çıktıları artık doğrudan indirmek yerine bu ÖN İZLEME penceresinden geçer.
+// Kullanıcı içeriği gözden geçirir, ardından dilerse "PDF İndir" ya da "Excel'e Aktar"
+// butonuna basar. html2canvas/jsPDF ile gerçek PDF üretimi yalnızca "PDF İndir"e
+// basıldığında (generateAndSavePdf ile) yapılır; önizleme anında sadece HTML gösterilir.
+function showPdfPreview(html, filename, orientation){
+  orientation = orientation === 'l' ? 'l' : 'p';
+  const width = orientation === 'l' ? 1123 : 794;
+  const modalRoot = document.getElementById('modalRoot');
+  modalRoot.innerHTML = `
+    <div class="modal-backdrop" id="modalBackdrop">
+      <div class="modal glass-strong glass modal-pdf-preview">
+        <h3>Belge Önizleme</h3>
+        <p class="hint">İndirmeden önce çıktıyı kontrol edin.</p>
+        <div class="pdf-preview-scroll" id="pdfPreviewScroll">
+          <div class="pdf-preview-scale-wrap" id="pdfPreviewScaleWrap">
+            <div id="pdfPreviewNode" style="${pdfBaseStyles(width)}">${html}</div>
+          </div>
+        </div>
+        <div class="btn-row" style="margin-top:14px;justify-content:flex-end;flex-wrap:wrap;">
+          <button class="btn btn-ghost" id="pvClose">Kapat</button>
+          <button class="btn btn-ghost" id="pvExcel">Excel'e Aktar</button>
+          <button class="btn btn-primary" id="pvDownload">PDF İndir</button>
+        </div>
+      </div>
+    </div>
+  `;
+  const previewNode = document.getElementById('pdfPreviewNode');
+  const scaleWrap = document.getElementById('pdfPreviewScaleWrap');
+  // Dar ekranlarda (mobil) sabit genişlikli (794/1123px) belgeyi modal genişliğine
+  // sığdırmak için ölçekliyoruz; böylece yatay kaydırmadan tüm sayfa görülebiliyor.
+  const fitScale = ()=>{
+    const available = scaleWrap.parentElement.clientWidth - 4;
+    const scale = Math.min(1, available / width);
+    previewNode.style.transform = `scale(${scale})`;
+    previewNode.style.transformOrigin = 'top left';
+    scaleWrap.style.height = (previewNode.offsetHeight * scale) + 'px';
+    scaleWrap.style.width = (width * scale) + 'px';
+  };
+  requestAnimationFrame(fitScale);
+  window.addEventListener('resize', fitScale);
+  const cleanupAndClose = ()=>{ window.removeEventListener('resize', fitScale); closeModal(); };
+
+  document.getElementById('modalBackdrop').addEventListener('click',(e)=>{ if(e.target.id==='modalBackdrop') cleanupAndClose(); });
+  document.getElementById('pvClose').onclick = cleanupAndClose;
+  document.getElementById('pvExcel').onclick = ()=> exportHtmlTablesToExcel(previewNode, filename);
+  document.getElementById('pvDownload').onclick = async ()=>{
+    const btn = document.getElementById('pvDownload');
+    btn.disabled = true; btn.textContent = 'Hazırlanıyor…';
+    try{
+      await generateAndSavePdf(html, filename, orientation);
+      showToast('PDF indirildi.');
+    }catch(e){
+      console.error(e);
+      showToast('PDF oluşturulurken bir sorun oluştu.');
+    }finally{
+      btn.disabled = false; btn.textContent = 'PDF İndir';
+    }
+  };
 }
 
 async function exportMetrajPdf(proj){
@@ -5714,13 +6085,7 @@ async function exportMetrajPdf(proj){
     </div>
     <div style="margin-top:36px;font-size:9px;color:#8096A3;">DNZ Metraj &amp; Teklif Yönetimi ile oluşturulmuştur.</div>
   `;
-  try{
-    await renderNodeToPdf(html, `metraj-${proj.name.replace(/[^a-z0-9ığüşöç]+/gi,'_')}.pdf`, 'p');
-    showToast('Metraj PDF indirildi.');
-  }catch(e){
-    console.error(e);
-    showToast('PDF oluşturulurken bir sorun oluştu.');
-  }
+  showPdfPreview(html, `metraj-${proj.name.replace(/[^a-z0-9ığüşöç]+/gi,'_')}.pdf`, 'p');
 }
 
 async function exportTeklifPdf(proj, templateTitle){
@@ -5775,14 +6140,8 @@ async function exportTeklifPdf(proj, templateTitle){
       </div>
     </div>
   `;
-  try{
-    const fnamePrefix = templateTitle==='YAPILAN HAKEDİŞ LİSTESİ' ? 'hakedis' : 'teklif';
-    await renderNodeToPdf(html, `${fnamePrefix}-${proj.name.replace(/[^a-z0-9ığüşöç]+/gi,'_')}.pdf`);
-    showToast('PDF indirildi.');
-  }catch(e){
-    console.error(e);
-    showToast('PDF oluşturulurken bir sorun oluştu.');
-  }
+  const fnamePrefix = templateTitle==='YAPILAN HAKEDİŞ LİSTESİ' ? 'hakedis' : 'teklif';
+  showPdfPreview(html, `${fnamePrefix}-${proj.name.replace(/[^a-z0-9ığüşöç]+/gi,'_')}.pdf`);
 }
 
 // Hesaplama Paneli / Malzeme Sonuç Paneli'nden, müşteriye gösterilebilecek sade bir
@@ -5866,13 +6225,7 @@ async function exportHesapAnalizPdf(){
     </div>` : ''}
     <div style="margin-top:36px;font-size:9px;color:#8096A3;">DNZ Metraj &amp; Teklif Yönetimi ile oluşturulmuştur.</div>
   `;
-  try{
-    await renderNodeToPdf(html, `teklif-analizi-${sistem.ad.replace(/[^a-z0-9ığüşöç]+/gi,'_')}.pdf`);
-    showToast('PDF indirildi.');
-  }catch(e){
-    console.error(e);
-    showToast('PDF oluşturulurken bir sorun oluştu.');
-  }
+  showPdfPreview(html, `teklif-analizi-${sistem.ad.replace(/[^a-z0-9ığüşöç]+/gi,'_')}.pdf`);
 }
 
 /* ======================= PWA / OFFLINE ======================= */
