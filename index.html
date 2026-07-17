@@ -150,6 +150,12 @@
   }
 
   onAuthStateChanged(auth, (user)=>{
+    // Hesap değiştiğinde (giriş/çıkış), önceki hesaba ait bellekte tutulan dosya
+    // handle önbelleğini temizliyoruz. Aksi halde bir önceki hesapla seçilmiş olan
+    // otomatik yedekleme dosyası, RAM'de kaldığı için yeni hesaba da uygulanabilir.
+    if(typeof window.dnzResetAutoBackupCache === 'function'){
+      window.dnzResetAutoBackupCache();
+    }
     if(user){
       window.__dnzUserAlreadySignedIn = true;
       window.dnzCurrentUid = user.uid;
@@ -663,6 +669,18 @@ const LS_STORAGE_KEY = 'dnzMetrajData_localCache_v1';
 function currentLsCacheKey(){
   return window.dnzCurrentUid ? (LS_STORAGE_KEY + ':' + window.dnzCurrentUid) : LS_STORAGE_KEY;
 }
+// ÖNEMLİ GÜVENLİK DÜZELTMESİ: Otomatik yedekleme / "yedekten geri yükle" dosya
+// handle'ları (File System Access API) daha önce SABİT bir anahtar altında
+// saklanıyordu (hesaptan bağımsız). Bu yüzden bir cihazda bir hesapla dosya seçilince,
+// o cihazda BAŞKA bir hesapla giriş yapıldığında da aynı dosya sessizce okunup o hesabın
+// verisiymiş gibi işleniyor (ve hatta buluta yazılıyordu). Aşağıdaki fonksiyonlar bu
+// anahtarları da (localStorage cache key'i gibi) uid'e göre ayırır.
+function currentAutoBackupHandleKey(){
+  return window.dnzCurrentUid ? (FS_AUTO_BACKUP_HANDLE_KEY + ':' + window.dnzCurrentUid) : FS_AUTO_BACKUP_HANDLE_KEY;
+}
+function currentBackupHandleKey(){
+  return window.dnzCurrentUid ? (FS_BACKUP_HANDLE_KEY + ':' + window.dnzCurrentUid) : FS_BACKUP_HANDLE_KEY;
+}
 const UNITS = ['m2','mt','kg','adet','m3','ton'];
 const UNIT_LABEL = {m2:'m²', mt:'mt', kg:'kg', adet:'adet', m3:'m³', ton:'ton', paket:'paket', kutu:'kutu', rulo:'rulo', litre:'litre', 'takım':'takım', torba:'torba'};
 const IMALAT_UNITS = ['adet','mt','m2','kg','m3','ton','paket','kutu','rulo','litre','takım','torba'];
@@ -752,10 +770,11 @@ let ui = {
 // seçildikten sonra HER veri değişikliğinde bu dosyaya otomatik yazılır ve uygulama HER
 // açılışında öncelikle bu dosyadan okunur. Böylece "kendim yükledim" derdi ortadan kalkar.
 let autoBackupHandleCache = null;
+window.dnzResetAutoBackupCache = function(){ autoBackupHandleCache = null; };
 let autoBackupInfo = { name:null, active:false };
 async function getAutoBackupHandle(){
   if(autoBackupHandleCache !== null) return autoBackupHandleCache;
-  autoBackupHandleCache = await fsIdbGet(FS_AUTO_BACKUP_HANDLE_KEY);
+  autoBackupHandleCache = await fsIdbGet(currentAutoBackupHandleKey());
   return autoBackupHandleCache;
 }
 async function refreshAutoBackupInfo(){
@@ -919,7 +938,7 @@ async function loadState(){
   //    dosya hafızası varsa ve normal depo boşsa, izin istemeden otomatik dene.
   if(!state.activeProjectId && Object.keys(state.projects).length===0){
     try{
-      const handle = await fsIdbGet(FS_BACKUP_HANDLE_KEY);
+      const handle = await fsIdbGet(currentBackupHandleKey());
       if(handle){
         const perm = await handle.queryPermission({mode:'read'});
         if(perm==='granted'){
@@ -5458,7 +5477,7 @@ async function handleImportBackupClick(){
     return;
   }
   try{
-    let handle = await fsIdbGet(FS_BACKUP_HANDLE_KEY);
+    let handle = await fsIdbGet(currentBackupHandleKey());
     if(handle){
       let perm = await handle.queryPermission({mode:'read'});
       if(perm!=='granted') perm = await handle.requestPermission({mode:'read'});
@@ -5468,7 +5487,7 @@ async function handleImportBackupClick(){
       [handle] = await window.showOpenFilePicker({
         types: [{ description:'JSON Yedek Dosyası', accept:{'application/json':['.json']} }]
       });
-      await fsIdbSet(FS_BACKUP_HANDLE_KEY, handle);
+      await fsIdbSet(currentBackupHandleKey(), handle);
     }
     const text = await readBackupFromHandle(handle);
     processBackupText(text);
@@ -5520,7 +5539,7 @@ async function chooseAutoBackupLocation(){
     return;
   }
   try{
-    await fsIdbSet(FS_AUTO_BACKUP_HANDLE_KEY, handle);
+    await fsIdbSet(currentAutoBackupHandleKey(), handle);
     autoBackupHandleCache = handle;
     // Dosya boş kalmasın diye mevcut veriyi hemen o dosyaya yazıyoruz.
     const writable = await handle.createWritable();
@@ -5538,7 +5557,7 @@ async function chooseAutoBackupLocation(){
   }
 }
 async function clearAutoBackupLocation(){
-  await fsIdbSet(FS_AUTO_BACKUP_HANDLE_KEY, null);
+  await fsIdbSet(currentAutoBackupHandleKey(), null);
   autoBackupHandleCache = null;
   await refreshAutoBackupInfo();
   renderMain();
@@ -5554,7 +5573,7 @@ async function chooseNewBackupFile(){
     const [handle] = await window.showOpenFilePicker({
       types: [{ description:'JSON Yedek Dosyası', accept:{'application/json':['.json']} }]
     });
-    await fsIdbSet(FS_BACKUP_HANDLE_KEY, handle);
+    await fsIdbSet(currentBackupHandleKey(), handle);
     const text = await readBackupFromHandle(handle);
     processBackupText(text);
   }catch(e){
