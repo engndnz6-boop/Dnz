@@ -152,6 +152,7 @@
   onAuthStateChanged(auth, (user)=>{
     if(user){
       window.__dnzUserAlreadySignedIn = true;
+      window.dnzCurrentUid = user.uid;
       gate.style.display = 'none';
       appEl.style.display = '';
       if(typeof window.__dnzInitApp === 'function' && !window.__dnzInitStarted){
@@ -161,6 +162,7 @@
       startRealtimeSync(user.uid);
     }else{
       window.__dnzUserAlreadySignedIn = false;
+      window.dnzCurrentUid = null;
       gate.style.display = 'flex';
       appEl.style.display = 'none';
       stopRealtimeSync();
@@ -650,6 +652,13 @@ footer.appfoot{text-align:center;padding:14px;color:rgba(11,36,54,0.45);font-siz
 /* ======================= STATE ======================= */
 const STORAGE_KEY = 'dnzMetrajData_v1';
 const LS_STORAGE_KEY = 'dnzMetrajData_localCache_v1';
+// Yerel önbellek (localStorage) artık Firebase hesabına göre AYRI tutulur. Böylece aynı
+// cihazda/tarayıcıda farklı bir hesapla giriş yapıldığında, önceki hesabın verisi
+// yanlışlıkla yeni hesaba "sızmaz". Giriş yapılmamışsa (auth henüz hazır değilse) eski
+// genel anahtar kullanılır (geriye dönük uyumluluk).
+function currentLsCacheKey(){
+  return window.dnzCurrentUid ? (LS_STORAGE_KEY + ':' + window.dnzCurrentUid) : LS_STORAGE_KEY;
+}
 const UNITS = ['m2','mt','kg','adet','m3','ton'];
 const UNIT_LABEL = {m2:'m²', mt:'mt', kg:'kg', adet:'adet', m3:'m³', ton:'ton', paket:'paket', kutu:'kutu', rulo:'rulo', litre:'litre', 'takım':'takım', torba:'torba'};
 const IMALAT_UNITS = ['adet','mt','m2','kg','m3','ton','paket','kutu','rulo','litre','takım','torba'];
@@ -779,7 +788,7 @@ async function persistStateRaw(){
   // 1) Tarayıcı önbelleği (localStorage): her cihaz/tarayıcıda çalışan, en güvenilir katman.
   //    Mobil dahil hemen hemen her tarayıcıda desteklenir; bu yüzden ana güvence budur.
   try{
-    localStorage.setItem(LS_STORAGE_KEY, json);
+    localStorage.setItem(currentLsCacheKey(), json);
   }catch(e){
     console.error('Tarayıcı önbelleğine kaydetme hatası', e);
   }
@@ -819,7 +828,7 @@ window.dnzApplyRemoteState = function(jsonString){
     const parsed = JSON.parse(jsonString);
     state = Object.assign(defaultState(), parsed);
     if(!state.projects) state.projects = {};
-    try{ localStorage.setItem(LS_STORAGE_KEY, jsonString); }catch(e){ /* yoksay */ }
+    try{ localStorage.setItem(currentLsCacheKey(), jsonString); }catch(e){ /* yoksay */ }
     lastCloudJsonSent = jsonString;
     renderAll();
     updateBackupBanner();
@@ -874,7 +883,7 @@ async function loadState(){
   //    (localStorage) dene — bu, hemen hemen her cihaz/tarayıcıda (mobil dahil) çalışır.
   let loadedFromCache = false;
   try{
-    const raw = localStorage.getItem(LS_STORAGE_KEY);
+    const raw = localStorage.getItem(currentLsCacheKey());
     if(raw){
       const parsed = JSON.parse(raw);
       state = Object.assign(defaultState(), parsed);
