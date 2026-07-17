@@ -34,6 +34,7 @@
     ref,
     set,
     get,
+    update,
     onValue
   } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
   // TODO: Add SDKs for Firebase products that you want to use
@@ -63,9 +64,10 @@
   // T.C. kimlik no ve IBAN gibi hassas alanlar içeren state JSON'u, veritabanı
   // konsolundan bakan biri için düz metin olarak görünüyordu. Buluta yazmadan önce
   // TÜM state JSON'unu, tarayıcının yerleşik Web Crypto API'siyle (AES-GCM) şifreliyoruz.
-  // Anahtar, kullanıcının Firebase UID'sinden türetiliyor ve hiçbir yerde ayrıca
-  // saklanmıyor; kullanıcı hangi cihazdan giriş yaparsa yapsın aynı anahtar yeniden
-  // türetilebiliyor.
+  // ÖNEMLİ: Artık veri kişiye değil FİRMAYA ait (birden fazla kullanıcı aynı firma
+  // verisini paylaşıyor), bu yüzden anahtar kullanıcının UID'sinden değil, firmanın
+  // companyId'sinden türetiliyor — böylece aynı firmadaki her yetkili kullanıcı aynı
+  // anahtarla şifreyi çözebiliyor.
   // NOT (dürüst sınır): Anahtar türetme formülü bu dosyanın (herkese açık) kaynağında
   // yer aldığı için bu, sunucu tarafı bir sırra dayanan askeri düzeyde bir koruma
   // DEĞİLDİR. Asıl amacı; veritabanına doğrudan erişimi olan (ör. Firebase konsolünü
@@ -73,12 +75,12 @@
   // sızıntı) birinin verileri kolayca okuyamamasını sağlamaktır.
   const ENC_PREFIX = 'dnzenc1:';
   const ENC_SALT = 'DNZ-app-level-enc-salt-v1';
-  let dnzKeyCache = { uid:null, keyPromise:null };
-  function deriveDnzKey(uid){
-    if(dnzKeyCache.uid === uid && dnzKeyCache.keyPromise) return dnzKeyCache.keyPromise;
+  let dnzKeyCache = { scopeId:null, keyPromise:null };
+  function deriveDnzKey(scopeId){
+    if(dnzKeyCache.scopeId === scopeId && dnzKeyCache.keyPromise) return dnzKeyCache.keyPromise;
     const keyPromise = (async ()=>{
       const enc = new TextEncoder();
-      const baseKey = await crypto.subtle.importKey('raw', enc.encode(uid), 'PBKDF2', false, ['deriveKey']);
+      const baseKey = await crypto.subtle.importKey('raw', enc.encode(scopeId), 'PBKDF2', false, ['deriveKey']);
       return crypto.subtle.deriveKey(
         { name:'PBKDF2', salt: enc.encode(ENC_SALT), iterations: 100000, hash:'SHA-256' },
         baseKey,
@@ -87,7 +89,7 @@
         ['encrypt','decrypt']
       );
     })();
-    dnzKeyCache = { uid, keyPromise };
+    dnzKeyCache = { scopeId, keyPromise };
     return keyPromise;
   }
   function dnzBufToB64(buf){
@@ -102,9 +104,9 @@
     for(let i=0;i<bin.length;i++) bytes[i] = bin.charCodeAt(i);
     return bytes.buffer;
   }
-  async function dnzEncryptState(uid, plainJson){
+  async function dnzEncryptState(companyId, plainJson){
     try{
-      const key = await deriveDnzKey(uid);
+      const key = await deriveDnzKey(companyId);
       const iv = crypto.getRandomValues(new Uint8Array(12));
       const enc = new TextEncoder();
       const cipherBuf = await crypto.subtle.encrypt({name:'AES-GCM', iv}, key, enc.encode(plainJson));
@@ -114,12 +116,12 @@
       return plainJson; // şifreleme başarısız olursa veriyi hiç göndermemek yerine düz metne düş
     }
   }
-  async function dnzDecryptState(uid, raw){
+  async function dnzDecryptState(companyId, raw){
     // Bu güncellemeden ÖNCE buluta yazılmış eski kayıtlar düz JSON'dur (ENC_PREFIX yok);
     // geriye dönük uyumluluk için bunları olduğu gibi döndürüyoruz.
     if(typeof raw !== 'string' || !raw.startsWith(ENC_PREFIX)) return raw;
     try{
-      const key = await deriveDnzKey(uid);
+      const key = await deriveDnzKey(companyId);
       const rest = raw.slice(ENC_PREFIX.length);
       const sep = rest.indexOf(':');
       const iv = new Uint8Array(dnzB64ToBuf(rest.slice(0, sep)));
@@ -133,18 +135,21 @@
   }
 
   // Ana uygulama kodu (klasik script) doğrudan ES modül import'u kullanamadığı için,
-  // Realtime Database okuma/yazma işlemlerini bu iki global fonksiyon üzerinden yapıyoruz.
+  // Realtime Database okuma/yazma işlemlerini bu global fonksiyonlar üzerinden yapıyoruz.
   // Tüm state tek bir JSON metni olarak saklanıyor (uygulamanın kendi localStorage
   // katmanıyla birebir aynı format), böylece Realtime Database'in anahtar (key) isimleri
   // için getirdiği kısıtlamalarla (., #, $, [, ]) uğraşmaya gerek kalmıyor. Buluta
   // yazmadan/okumadan önce yukarıdaki AES-GCM katmanından geçiyor; klasik script bu
   // şifreleme detayından tamamen habersiz, sadece düz JSON metniyle çalışmaya devam ediyor.
+  // ÖNEMLİ: Veri artık kullanıcıya değil FİRMAYA (companyId) bağlı; window.dnzCompanyId
+  // dolu değilse (henüz bir firmaya bağlanılmamışsa) bu fonksiyonlar hiçbir şey yapmaz.
   window.dnzDbSaveState = async function(jsonString){
     const user = auth.currentUser;
-    if(!user) return false;
+    const companyId = window.dnzCompanyId;
+    if(!user || !companyId) return false;
     try{
-      const encrypted = await dnzEncryptState(user.uid, jsonString);
-      await set(ref(db, 'users/' + user.uid + '/stateJson'), encrypted);
+      const encrypted = await dnzEncryptState(companyId, jsonString);
+      await set(ref(db, 'companies/' + companyId + '/stateJson'), encrypted);
       return true;
     }catch(e){
       console.error('Realtime Database kayıt hatası', e);
@@ -153,19 +158,99 @@
   };
   window.dnzDbLoadState = async function(){
     const user = auth.currentUser;
-    if(!user) return null;
+    const companyId = window.dnzCompanyId;
+    if(!user || !companyId) return null;
     try{
-      const snap = await get(ref(db, 'users/' + user.uid + '/stateJson'));
+      const snap = await get(ref(db, 'companies/' + companyId + '/stateJson'));
       if(!snap.exists()) return null;
-      return await dnzDecryptState(user.uid, snap.val());
+      return await dnzDecryptState(companyId, snap.val());
     }catch(e){
       console.error('Realtime Database okuma hatası', e);
       return null;
     }
   };
 
+  // ---- Firma (tenant) yönetimi: oluşturma, davetle katılma, davet kodu üretme ----
+  function genInviteCode(){
+    // 0/O, 1/I gibi karışıklık yaratan karakterler kasıtlı olarak çıkarıldı.
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    const arr = new Uint32Array(10);
+    crypto.getRandomValues(arr);
+    let code = '';
+    for(let i=0;i<10;i++) code += chars[arr[i] % chars.length];
+    return code;
+  }
+  window.dnzCreateCompany = async function(companyName){
+    const user = auth.currentUser;
+    if(!user) return {ok:false, error:'Oturum bulunamadı.'};
+    const name = (companyName||'').trim();
+    if(!name) return {ok:false, error:'Firma adı girin.'};
+    const companyId = 'c_' + user.uid.slice(0,8) + '_' + Date.now().toString(36);
+    const updates = {};
+    updates['userCompany/' + user.uid] = companyId;
+    updates['companies/' + companyId + '/meta'] = { name, createdAt: Date.now(), createdBy: user.uid };
+    updates['companies/' + companyId + '/members/' + user.uid] = { role:'admin', email:user.email||'', joinedAt: Date.now() };
+    try{
+      await update(ref(db), updates);
+      return {ok:true, companyId};
+    }catch(e){
+      console.error('Firma oluşturma hatası', e);
+      return {ok:false, error:'Firma oluşturulamadı: ' + (e && e.message ? e.message : '')};
+    }
+  };
+  window.dnzJoinCompanyByCode = async function(code){
+    const user = auth.currentUser;
+    if(!user) return {ok:false, error:'Oturum bulunamadı.'};
+    const cleanCode = (code||'').trim().toUpperCase();
+    if(!cleanCode) return {ok:false, error:'Davet kodunu girin.'};
+    try{
+      const codeSnap = await get(ref(db, 'inviteCodes/' + cleanCode));
+      if(!codeSnap.exists()) return {ok:false, error:'Geçersiz davet kodu.'};
+      const codeData = codeSnap.val();
+      const companyId = codeData.companyId;
+      const role = codeData.role === 'admin' ? 'admin' : 'personel';
+      const updates = {};
+      updates['userCompany/' + user.uid] = companyId;
+      updates['companies/' + companyId + '/members/' + user.uid] = { role, email:user.email||'', joinedAt: Date.now(), viaCode: cleanCode };
+      await update(ref(db), updates);
+      return {ok:true, companyId, role};
+    }catch(e){
+      console.error('Firmaya katılma hatası', e);
+      return {ok:false, error:'Kod geçersiz olabilir ya da bu firmaya zaten bağlısınız.'};
+    }
+  };
+  window.dnzGenerateInviteCode = async function(role){
+    const user = auth.currentUser;
+    const companyId = window.dnzCompanyId;
+    if(!user || !companyId) return {ok:false, error:'Oturum/firma bulunamadı.'};
+    if(window.dnzUserRole !== 'admin') return {ok:false, error:'Bu işlem için yönetici yetkisi gerekir.'};
+    const code = genInviteCode();
+    try{
+      await set(ref(db, 'inviteCodes/' + code), {
+        companyId, role: role==='admin'?'admin':'personel', createdBy:user.uid, createdAt:Date.now()
+      });
+      return {ok:true, code};
+    }catch(e){
+      console.error('Davet kodu oluşturma hatası', e);
+      return {ok:false, error:'Davet kodu oluşturulamadı: ' + (e && e.message ? e.message : '')};
+    }
+  };
+  window.dnzLoadCompanyMembers = async function(){
+    const companyId = window.dnzCompanyId;
+    if(!companyId) return {};
+    try{
+      const snap = await get(ref(db, 'companies/' + companyId + '/members'));
+      return snap.exists() ? snap.val() : {};
+    }catch(e){
+      console.error('Ekip listesi okunamadı', e);
+      return {};
+    }
+  };
+
   // --- Basit e-posta/şifre giriş ekranı mantığı ---
   const gate = document.getElementById('authGate');
+  const onboardingGate = document.getElementById('onboardingGate');
+  const pendingGate = document.getElementById('pendingGate');
   const appEl = document.getElementById('app');
   const emailInput = document.getElementById('authEmail');
   const passInput = document.getElementById('authPass');
@@ -181,6 +266,13 @@
     if(c.includes('weak-password')) return 'Şifre en az 6 karakter olmalı.';
     if(c.includes('too-many-requests')) return 'Çok fazla deneme yapıldı, lütfen biraz bekleyin.';
     return 'Bir hata oluştu: ' + (err && err.message ? err.message : '');
+  }
+
+  function hideAllGates(){
+    gate.style.display = 'none';
+    onboardingGate.style.display = 'none';
+    pendingGate.style.display = 'none';
+    appEl.style.display = 'none';
   }
 
   loginBtn.addEventListener('click', ()=>{
@@ -213,6 +305,31 @@
       .catch(err=>{ msgEl.textContent = authErrTr(err); })
       .finally(()=>{ registerBtn.disabled = false; });
   });
+
+  // --- Firma oluştur / davetle katıl ekranı ---
+  const onbMsg = document.getElementById('onbMsg');
+  document.getElementById('onbCreateBtn').addEventListener('click', async ()=>{
+    onbMsg.textContent = '';
+    const btn = document.getElementById('onbCreateBtn');
+    btn.disabled = true;
+    const name = document.getElementById('onbCompanyName').value;
+    const res = await window.dnzCreateCompany(name);
+    btn.disabled = false;
+    if(!res.ok){ onbMsg.textContent = res.error || 'Bir hata oluştu.'; return; }
+    await resolveAndRoute(auth.currentUser);
+  });
+  document.getElementById('onbJoinBtn').addEventListener('click', async ()=>{
+    onbMsg.textContent = '';
+    const btn = document.getElementById('onbJoinBtn');
+    btn.disabled = true;
+    const code = document.getElementById('onbInviteCode').value;
+    const res = await window.dnzJoinCompanyByCode(code);
+    btn.disabled = false;
+    if(!res.ok){ onbMsg.textContent = res.error || 'Bir hata oluştu.'; return; }
+    await resolveAndRoute(auth.currentUser);
+  });
+  document.getElementById('onbLogoutBtn').addEventListener('click', ()=> signOut(auth));
+  document.getElementById('pendingLogoutBtn').addEventListener('click', ()=> signOut(auth));
 
   // Diğer script (klasik, module olmayan) bu fonksiyonu çağırabilsin diye global yapıyoruz.
   window.dnzLogout = ()=> signOut(auth);
@@ -248,17 +365,17 @@
       .finally(()=>{ if(btn) btn.disabled = false; });
   };
 
-  // --- Gerçek zamanlı senkron ---
-  // Bu kullanıcıya ait bulut verisi her değiştiğinde (bu cihazdan ya da BAŞKA bir
-  // cihazdan/oturumdan) otomatik olarak tetiklenir ve ekranı günceller.
+  // --- Gerçek zamanlı senkron (firma verisi) ---
+  // Bu firmaya ait bulut verisi her değiştiğinde (bu cihazdan, BAŞKA bir cihazdan ya da
+  // firmadaki başka bir yetkiliden) otomatik olarak tetiklenir ve ekranı günceller.
   let realtimeUnsub = null;
-  function startRealtimeSync(uid){
+  function startRealtimeSync(companyId){
     if(realtimeUnsub){ realtimeUnsub(); realtimeUnsub = null; }
-    const stateRef = ref(db, 'users/' + uid + '/stateJson');
+    const stateRef = ref(db, 'companies/' + companyId + '/stateJson');
     realtimeUnsub = onValue(stateRef, (snapshot)=>{
       if(!snapshot.exists()) return;
       const val = snapshot.val();
-      dnzDecryptState(uid, val).then((decrypted)=>{
+      dnzDecryptState(companyId, val).then((decrypted)=>{
         if(decrypted!=null && typeof window.dnzApplyRemoteState === 'function'){
           window.dnzApplyRemoteState(decrypted);
         }
@@ -271,6 +388,72 @@
     if(realtimeUnsub){ realtimeUnsub(); realtimeUnsub = null; }
   }
 
+  // --- Firma aktiflik durumu (ödeme/abonelik) izleyicisi ---
+  // "active" bayrağı YALNIZCA Firebase konsolundan (kurallarda ".write": false) elle
+  // değiştirilebilir. Bu, uygulamayı işleten firmanın (sizin) tek bir bayrakla, firmanın
+  // kaç kullanıcısı olursa olsun erişimini açıp kapatabilmesini sağlar. Bu dinleyici
+  // sayesinde siz konsoldan aktif ettiğinizde kullanıcı sayfayı yenilemeden otomatik
+  // olarak uygulamaya geçer; deaktif ettiğinizde de anında "onay bekliyor" ekranına düşer.
+  let activeStatusUnsub = null;
+  function watchCompanyActive(companyId){
+    if(activeStatusUnsub){ activeStatusUnsub(); activeStatusUnsub = null; }
+    const activeRef = ref(db, 'companies/' + companyId + '/active');
+    activeStatusUnsub = onValue(activeRef, (snap)=>{
+      const isActive = snap.exists() && snap.val() === true;
+      enterCompanyState(companyId, isActive);
+    }, (err)=>{
+      console.error('Firma aktiflik durumu okunamadı', err);
+      enterCompanyState(companyId, false);
+    });
+  }
+  function stopWatchCompanyActive(){
+    if(activeStatusUnsub){ activeStatusUnsub(); activeStatusUnsub = null; }
+  }
+
+  function enterCompanyState(companyId, isActive){
+    if(isActive){
+      hideAllGates();
+      appEl.style.display = '';
+      if(typeof window.__dnzInitApp === 'function' && !window.__dnzInitStarted){
+        window.__dnzInitStarted = true;
+        window.__dnzInitApp();
+      }
+      startRealtimeSync(companyId);
+    } else {
+      stopRealtimeSync();
+      hideAllGates();
+      pendingGate.style.display = 'flex';
+    }
+  }
+
+  // Kullanıcı giriş yaptıktan sonra: hangi firmaya bağlı olduğunu, oradaki rolünü ve
+  // firmanın aktiflik durumunu çözer, sonra doğru ekrana yönlendirir.
+  async function resolveAndRoute(user){
+    if(!user) return;
+    try{
+      const ucSnap = await get(ref(db, 'userCompany/' + user.uid));
+      if(!ucSnap.exists()){
+        // Henüz bir firmaya bağlı değil: firma oluştur / davetle katıl ekranı.
+        stopRealtimeSync();
+        stopWatchCompanyActive();
+        window.dnzCompanyId = null;
+        window.dnzUserRole = null;
+        hideAllGates();
+        onboardingGate.style.display = 'flex';
+        return;
+      }
+      const companyId = ucSnap.val();
+      window.dnzCompanyId = companyId;
+      const roleSnap = await get(ref(db, 'companies/' + companyId + '/members/' + user.uid + '/role'));
+      window.dnzUserRole = roleSnap.exists() ? roleSnap.val() : 'personel';
+      watchCompanyActive(companyId); // bu, uygun ekranı (app ya da pending) kendi içinde açar
+    }catch(e){
+      console.error('Firma bilgisi çözümlenemedi', e);
+      hideAllGates();
+      gate.style.display = 'flex';
+    }
+  }
+
   onAuthStateChanged(auth, (user)=>{
     // Hesap değiştiğinde (giriş/çıkış), önceki hesaba ait bellekte tutulan dosya
     // handle önbelleğini temizliyoruz. Aksi halde bir önceki hesapla seçilmiş olan
@@ -280,21 +463,16 @@
     }
     if(user){
       window.__dnzUserAlreadySignedIn = true;
-      window.dnzCurrentUid = user.uid;
-      gate.style.display = 'none';
-      appEl.style.display = '';
-      if(typeof window.__dnzInitApp === 'function' && !window.__dnzInitStarted){
-        window.__dnzInitStarted = true;
-        window.__dnzInitApp();
-      }
-      startRealtimeSync(user.uid);
       updateEmailVerifyBanner(user);
+      resolveAndRoute(user);
     }else{
       window.__dnzUserAlreadySignedIn = false;
-      window.dnzCurrentUid = null;
-      gate.style.display = 'flex';
-      appEl.style.display = 'none';
+      window.dnzCompanyId = null;
+      window.dnzUserRole = null;
       stopRealtimeSync();
+      stopWatchCompanyActive();
+      hideAllGates();
+      gate.style.display = 'flex';
       updateEmailVerifyBanner(null);
     }
   });
@@ -706,6 +884,40 @@ footer.appfoot{text-align:center;padding:14px;color:rgba(11,36,54,0.45);font-siz
     <div id="authMsg" style="min-height:18px;font-size:0.78rem;color:#E8776B;margin-top:10px;text-align:center;"></div>
   </div>
 </div>
+
+<div id="onboardingGate" style="display:none;position:fixed;inset:0;z-index:1000;align-items:center;justify-content:center;background:linear-gradient(160deg,#0F3B4C,#08202E);font-family:'Inter',sans-serif;padding:16px;">
+  <div style="width:100%;max-width:380px;background:rgba(234,246,245,0.96);border-radius:18px;padding:28px 24px;box-shadow:0 8px 32px rgba(4,20,28,0.35);box-sizing:border-box;">
+    <div style="font-family:'Outfit',sans-serif;font-weight:800;font-size:1.15rem;color:#0B2436;margin-bottom:4px;text-align:center;">Firmanızı Bağlayın</div>
+    <div style="font-size:0.8rem;color:#345264;text-align:center;margin-bottom:18px;">Yeni bir firma hesabı oluşturun ya da yöneticinizden aldığınız davet koduyla mevcut bir firmaya katılın.</div>
+
+    <div id="onbCreateBox">
+      <label style="font-size:0.75rem;font-weight:700;color:#345264;">Yeni Firma Oluştur (Patron/Yönetici olursunuz)</label>
+      <input id="onbCompanyName" type="text" placeholder="Firma adı" style="width:100%;padding:11px 12px;margin:6px 0 10px;border:1px solid rgba(11,36,54,0.2);border-radius:10px;font-size:0.9rem;box-sizing:border-box;">
+      <button id="onbCreateBtn" type="button" style="width:100%;padding:12px;border:none;border-radius:10px;background:linear-gradient(135deg,#2FD3C7,#22A99F);color:#08202E;font-weight:700;font-size:0.9rem;cursor:pointer;margin-bottom:16px;">Firma Oluştur</button>
+    </div>
+
+    <div style="text-align:center;font-size:0.72rem;color:#345264;margin:6px 0;">— ya da —</div>
+
+    <div id="onbJoinBox">
+      <label style="font-size:0.75rem;font-weight:700;color:#345264;">Davet Koduyla Katıl (Personel olursunuz)</label>
+      <input id="onbInviteCode" type="text" placeholder="Örn: A3K9QZ7T2M" style="width:100%;padding:11px 12px;margin:6px 0 10px;border:1px solid rgba(11,36,54,0.2);border-radius:10px;font-size:0.9rem;box-sizing:border-box;text-transform:uppercase;">
+      <button id="onbJoinBtn" type="button" style="width:100%;padding:12px;border:1px solid #1C6E8C;border-radius:10px;background:transparent;color:#1C6E8C;font-weight:600;font-size:0.85rem;cursor:pointer;">Firmaya Katıl</button>
+    </div>
+
+    <div id="onbMsg" style="min-height:18px;font-size:0.78rem;color:#E8776B;margin-top:12px;text-align:center;"></div>
+    <button id="onbLogoutBtn" type="button" style="width:100%;padding:8px;border:none;background:transparent;color:#7a8a94;font-weight:600;font-size:0.72rem;cursor:pointer;margin-top:6px;">Çıkış Yap</button>
+  </div>
+</div>
+
+<div id="pendingGate" style="display:none;position:fixed;inset:0;z-index:1000;align-items:center;justify-content:center;background:linear-gradient(160deg,#0F3B4C,#08202E);font-family:'Inter',sans-serif;padding:16px;text-align:center;">
+  <div style="width:100%;max-width:380px;background:rgba(234,246,245,0.96);border-radius:18px;padding:28px 24px;box-shadow:0 8px 32px rgba(4,20,28,0.35);box-sizing:border-box;">
+    <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="#1C6E8C" stroke-width="1.6" style="margin:0 auto 10px;display:block;"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+    <div style="font-family:'Outfit',sans-serif;font-weight:800;font-size:1.1rem;color:#0B2436;margin-bottom:8px;">Hesabınız Onay Bekliyor</div>
+    <div id="pendingMsg" style="font-size:0.85rem;color:#345264;line-height:1.5;margin-bottom:18px;">Firma hesabınız oluşturuldu ancak henüz aktif değil. Erişiminizin açılması için lütfen firma yetkilinizle iletişime geçin.</div>
+    <button id="pendingLogoutBtn" type="button" style="width:100%;padding:11px;border:1px solid #1C6E8C;border-radius:10px;background:transparent;color:#1C6E8C;font-weight:600;font-size:0.85rem;cursor:pointer;">Çıkış Yap</button>
+  </div>
+</div>
+
 <div id="app" style="display:none;">
 
   <header class="topbar glass">
@@ -810,24 +1022,25 @@ footer.appfoot{text-align:center;padding:14px;color:rgba(11,36,54,0.45);font-siz
 /* ======================= STATE ======================= */
 const STORAGE_KEY = 'dnzMetrajData_v1';
 const LS_STORAGE_KEY = 'dnzMetrajData_localCache_v1';
-// Yerel önbellek (localStorage) artık Firebase hesabına göre AYRI tutulur. Böylece aynı
-// cihazda/tarayıcıda farklı bir hesapla giriş yapıldığında, önceki hesabın verisi
-// yanlışlıkla yeni hesaba "sızmaz". Giriş yapılmamışsa (auth henüz hazır değilse) eski
-// genel anahtar kullanılır (geriye dönük uyumluluk).
+// Yerel önbellek (localStorage) artık FİRMA hesabına göre AYRI tutulur (uid'e göre değil,
+// çünkü veri artık kişiye değil firmaya ait — aynı firmanın farklı çalışanları aynı veriyi
+// paylaşır). Böylece aynı cihazda/tarayıcıda farklı bir firma hesabıyla giriş yapıldığında,
+// önceki firmanın verisi yanlışlıkla yeni firmaya "sızmaz". Giriş yapılmamışsa (auth henüz
+// hazır değilse) eski genel anahtar kullanılır (geriye dönük uyumluluk).
 function currentLsCacheKey(){
-  return window.dnzCurrentUid ? (LS_STORAGE_KEY + ':' + window.dnzCurrentUid) : LS_STORAGE_KEY;
+  return window.dnzCompanyId ? (LS_STORAGE_KEY + ':' + window.dnzCompanyId) : LS_STORAGE_KEY;
 }
 // ÖNEMLİ GÜVENLİK DÜZELTMESİ: Otomatik yedekleme / "yedekten geri yükle" dosya
 // handle'ları (File System Access API) daha önce SABİT bir anahtar altında
 // saklanıyordu (hesaptan bağımsız). Bu yüzden bir cihazda bir hesapla dosya seçilince,
 // o cihazda BAŞKA bir hesapla giriş yapıldığında da aynı dosya sessizce okunup o hesabın
 // verisiymiş gibi işleniyor (ve hatta buluta yazılıyordu). Aşağıdaki fonksiyonlar bu
-// anahtarları da (localStorage cache key'i gibi) uid'e göre ayırır.
+// anahtarları da (localStorage cache key'i gibi) firmaya göre ayırır.
 function currentAutoBackupHandleKey(){
-  return window.dnzCurrentUid ? (FS_AUTO_BACKUP_HANDLE_KEY + ':' + window.dnzCurrentUid) : FS_AUTO_BACKUP_HANDLE_KEY;
+  return window.dnzCompanyId ? (FS_AUTO_BACKUP_HANDLE_KEY + ':' + window.dnzCompanyId) : FS_AUTO_BACKUP_HANDLE_KEY;
 }
 function currentBackupHandleKey(){
-  return window.dnzCurrentUid ? (FS_BACKUP_HANDLE_KEY + ':' + window.dnzCurrentUid) : FS_BACKUP_HANDLE_KEY;
+  return window.dnzCompanyId ? (FS_BACKUP_HANDLE_KEY + ':' + window.dnzCompanyId) : FS_BACKUP_HANDLE_KEY;
 }
 const UNITS = ['m2','mt','kg','adet','m3','ton'];
 const UNIT_LABEL = {m2:'m²', mt:'mt', kg:'kg', adet:'adet', m3:'m³', ton:'ton', paket:'paket', kutu:'kutu', rulo:'rulo', litre:'litre', 'takım':'takım', torba:'torba'};
@@ -1707,7 +1920,7 @@ function openPrivacyModal(){
         </p>
         <div style="font-size:0.82rem;line-height:1.55;color:var(--ink-soft);">
           <p><b>Veriler nerede saklanıyor?</b><br>
-          Verileriniz, Google'ın Firebase altyapısı üzerinde (Realtime Database, Avrupa/Frankfurt
+          Verileriniz, Google'ın Firebase altyapısı üzerinde (Realtime Database, Avrupa/Belçika
           bölgesi) hesabınıza bağlı olarak tutulur; ayrıca cihazınızın tarayıcı önbelleğinde
           (localStorage) ve tercihen seçtiğiniz bir otomatik yedekleme dosyasında bir kopyası bulunur.</p>
           <p><b>Veriler nasıl korunuyor?</b><br>
@@ -1719,10 +1932,13 @@ function openPrivacyModal(){
           kaynak koduna erişimi olan biri için mutlak bir garanti değildir — asıl güvence hesabınızın
           şifresini gizli tutmanızdır.</p>
           <p><b>Kimler erişebilir?</b><br>
-          Verileriniz yalnızca kendi hesabınızla (e-posta/şifre) giriş yaptığınızda görüntülenebilir.
-          Firebase projesinin yöneticileri (ör. bu uygulamayı işleten firma) teknik olarak
-          veritabanına erişebilir; bu nedenle hesabınızı güçlü bir şifreyle koruyun ve
-          şifrenizi kimseyle paylaşmayın.</p>
+          Verileriniz, aynı firmaya (davet kodu ile) bağlı olan ve giriş yapan tüm yetkili
+          kullanıcılar tarafından görüntülenebilir; bu, birden fazla çalışanın aynı firma
+          verisi üzerinde birlikte çalışabilmesi için kasıtlı bir tasarımdır. "Yönetici"
+          rolündeki kullanıcılar ek olarak yeni çalışan davet edebilir ve tüm verileri
+          silebilir; "Personel" rolü bu işlemleri yapamaz. Uygulamayı işleten firmanın
+          (bu hizmeti sunan taraf) yöneticileri teknik olarak veritabanına erişebilir; bu
+          nedenle hesabınızı güçlü bir şifreyle koruyun ve şifrenizi kimseyle paylaşmayın.</p>
           <p><b>Veriler ne amaçla işleniyor?</b><br>
           T.C. kimlik no ve IBAN bilgileri; personel özlük, puantaj ve ücret/ödeme (bordro benzeri)
           süreçlerinin yürütülmesi amacıyla, işveren sıfatıyla uygulamayı kullanan firma tarafından
@@ -5569,12 +5785,34 @@ function renderAyarlarTab(main){
     </div>
 
     <div class="card glass">
+      <h2>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
+        Ekip Üyeleri
+      </h2>
+      ${window.dnzUserRole === 'admin' ? `
+        <p class="hint">Firmanıza yeni bir çalışan eklemek için bir davet kodu üretin ve onunla paylaşın. Kişi "Firmaya Katıl" ekranında bu kodu girerek ekibinize dahil olur.</p>
+        <div class="btn-row">
+          <button class="btn btn-primary" id="btnGenInvitePersonel">Personel Davet Kodu Üret</button>
+          <button class="btn btn-ghost" id="btnGenInviteAdmin">Yönetici Davet Kodu Üret</button>
+        </div>
+        <div id="inviteCodeResult"></div>
+        <div id="teamMembersList" style="margin-top:14px;">
+          <p class="hint">Ekip listesi yükleniyor…</p>
+        </div>
+      ` : `
+        <p class="hint">Ekip yönetimi (davet kodu üretme, üye listesi) yalnızca firma yöneticisi tarafından yapılabilir.</p>
+      `}
+    </div>
+
+    ${window.dnzUserRole === 'admin' ? `
+    <div class="card glass">
       <h2>Tehlikeli Bölge</h2>
-      <p class="hint">Bu işlem tüm projeleri, metraj kayıtlarını ve teklifleri kalıcı olarak siler.</p>
+      <p class="hint">Bu işlem tüm projeleri, metraj kayıtlarını ve teklifleri kalıcı olarak siler. Firmanızdaki tüm çalışanları etkiler.</p>
       <div class="btn-row">
         <button class="btn btn-danger" id="btnResetAll">Tüm Verileri Sıfırla</button>
       </div>
     </div>
+    ` : ''}
   `;
   document.getElementById('btnSaveCompany').onclick = ()=>{
     state.company.name = document.getElementById('s-companyName').value.trim();
@@ -5636,13 +5874,56 @@ function renderAyarlarTab(main){
 
   document.getElementById('btnOpenPrivacy').onclick = openPrivacyModal;
 
-  document.getElementById('btnResetAll').onclick = ()=>{
-    confirmModal('TÜM projeler, metraj ve teklif verileri silinecek. Devam edilsin mi?', ()=>{
-      state = defaultState();
-      saveState(); renderAll();
-      showToast('Tüm veriler sıfırlandı.');
+  if(window.dnzUserRole === 'admin'){
+    const inviteResultEl = document.getElementById('inviteCodeResult');
+    async function handleGenInvite(role){
+      inviteResultEl.innerHTML = '<p class="hint">Oluşturuluyor…</p>';
+      const res = await window.dnzGenerateInviteCode(role);
+      if(!res.ok){
+        inviteResultEl.innerHTML = `<p class="hint" style="color:#c77700;">${esc(res.error||'Bir hata oluştu.')}</p>`;
+        return;
+      }
+      inviteResultEl.innerHTML = `
+        <p class="hint" style="font-weight:700;">
+          ${role==='admin' ? 'Yönetici' : 'Personel'} davet kodu: <span style="font-family:var(--font-mono);font-size:1rem;letter-spacing:1px;">${esc(res.code)}</span>
+        </p>
+        <p class="hint">Bu kodu ilgili çalışanla paylaşın; "Firmaya Katıl" ekranından bu kodu girerek ekibinize dahil olacaktır.</p>
+      `;
+    }
+    document.getElementById('btnGenInvitePersonel').onclick = ()=> handleGenInvite('personel');
+    document.getElementById('btnGenInviteAdmin').onclick = ()=> handleGenInvite('admin');
+
+    const teamListEl = document.getElementById('teamMembersList');
+    window.dnzLoadCompanyMembers().then((members)=>{
+      const rows = Object.entries(members||{});
+      if(rows.length === 0){
+        teamListEl.innerHTML = '<p class="hint">Henüz üye bulunamadı.</p>';
+        return;
+      }
+      teamListEl.innerHTML = `
+        <table style="width:100%;font-size:0.8rem;border-collapse:collapse;">
+          <thead><tr style="text-align:left;color:var(--ink-soft);">
+            <th style="padding:6px 8px;">E-posta</th><th style="padding:6px 8px;">Rol</th>
+          </tr></thead>
+          <tbody>
+            ${rows.map(([uid,m])=>`
+              <tr style="border-top:1px solid rgba(11,36,54,0.08);">
+                <td style="padding:6px 8px;">${esc(m.email||uid)}</td>
+                <td style="padding:6px 8px;">${m.role==='admin' ? 'Yönetici' : 'Personel'}</td>
+              </tr>`).join('')}
+          </tbody>
+        </table>
+      `;
     });
-  };
+
+    document.getElementById('btnResetAll').onclick = ()=>{
+      confirmModal('TÜM projeler, metraj ve teklif verileri silinecek. Devam edilsin mi?', ()=>{
+        state = defaultState();
+        saveState(); renderAll();
+        showToast('Tüm veriler sıfırlandı.');
+      });
+    };
+  }
 }
 
 /* ---- Yedek dosyası konumu hafızası (IndexedDB - File System Access handle'ları saklamak için) ---- */
