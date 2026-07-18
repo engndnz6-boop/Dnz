@@ -249,6 +249,7 @@
 
   // --- Basit e-posta/şifre giriş ekranı mantığı ---
   const gate = document.getElementById('authGate');
+  const verifyGate = document.getElementById('verifyGate');
   const onboardingGate = document.getElementById('onboardingGate');
   const pendingGate = document.getElementById('pendingGate');
   const appEl = document.getElementById('app');
@@ -270,10 +271,43 @@
 
   function hideAllGates(){
     gate.style.display = 'none';
+    verifyGate.style.display = 'none';
     onboardingGate.style.display = 'none';
     pendingGate.style.display = 'none';
     appEl.style.display = 'none';
   }
+
+  // --- E-posta doğrulama ekranı ---
+  document.getElementById('verifyCheckBtn').addEventListener('click', async ()=>{
+    const statusEl = document.getElementById('verifyStatusMsg');
+    const user = auth.currentUser;
+    if(!user){ return; }
+    statusEl.textContent = 'Kontrol ediliyor…';
+    try{
+      await user.reload();
+      if(auth.currentUser.emailVerified){
+        statusEl.textContent = '';
+        await resolveAndRoute(auth.currentUser);
+      } else {
+        statusEl.textContent = 'Henüz doğrulanmamış görünüyor. Maildeki bağlantıya tıkladıktan sonra tekrar deneyin.';
+      }
+    }catch(e){
+      statusEl.textContent = 'Kontrol edilemedi: ' + (e && e.message ? e.message : '');
+    }
+  });
+  document.getElementById('verifyResendBtn').addEventListener('click', async ()=>{
+    const statusEl = document.getElementById('verifyStatusMsg');
+    const user = auth.currentUser;
+    if(!user){ return; }
+    statusEl.textContent = 'Gönderiliyor…';
+    try{
+      await sendEmailVerification(user);
+      statusEl.textContent = 'Doğrulama e-postası tekrar gönderildi.';
+    }catch(e){
+      statusEl.textContent = 'Gönderilemedi: ' + (e && e.message ? e.message : '');
+    }
+  });
+  document.getElementById('verifyLogoutBtn').addEventListener('click', ()=> signOut(auth));
 
   loginBtn.addEventListener('click', ()=>{
     msgEl.textContent = '';
@@ -430,6 +464,14 @@
   // firmanın aktiflik durumunu çözer, sonra doğru ekrana yönlendirir.
   async function resolveAndRoute(user){
     if(!user) return;
+    // Doğrulanmamış e-postayla firma verisine erişimi engelle.
+    if(!user.emailVerified){
+      stopRealtimeSync();
+      stopWatchCompanyActive();
+      hideAllGates();
+      verifyGate.style.display = 'flex';
+      return;
+    }
     try{
       const ucSnap = await get(ref(db, 'userCompany/' + user.uid));
       if(!ucSnap.exists()){
@@ -882,6 +924,18 @@ footer.appfoot{text-align:center;padding:14px;color:rgba(11,36,54,0.45);font-siz
     <button id="authLoginBtn" type="button" style="width:100%;padding:12px;border:none;border-radius:10px;background:linear-gradient(135deg,#2FD3C7,#22A99F);color:#08202E;font-weight:700;font-size:0.9rem;cursor:pointer;margin-bottom:8px;">Giriş Yap</button>
     <button id="authRegisterBtn" type="button" style="width:100%;padding:12px;border:1px solid #1C6E8C;border-radius:10px;background:transparent;color:#1C6E8C;font-weight:600;font-size:0.85rem;cursor:pointer;">Hesap Oluştur</button>
     <div id="authMsg" style="min-height:18px;font-size:0.78rem;color:#E8776B;margin-top:10px;text-align:center;"></div>
+  </div>
+</div>
+
+<div id="verifyGate" style="display:none;position:fixed;inset:0;z-index:1000;align-items:center;justify-content:center;background:linear-gradient(160deg,#0F3B4C,#08202E);font-family:'Inter',sans-serif;padding:16px;text-align:center;">
+  <div style="width:100%;max-width:380px;background:rgba(234,246,245,0.96);border-radius:18px;padding:28px 24px;box-shadow:0 8px 32px rgba(4,20,28,0.35);box-sizing:border-box;">
+    <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="#1C6E8C" stroke-width="1.6" style="margin:0 auto 10px;display:block;"><path d="M4 4h16v16H4z"/><path d="M4 6l8 7 8-7"/></svg>
+    <div style="font-family:'Outfit',sans-serif;font-weight:800;font-size:1.1rem;color:#0B2436;margin-bottom:8px;">E-postanızı Doğrulayın</div>
+    <div id="verifyMsg" style="font-size:0.85rem;color:#345264;line-height:1.5;margin-bottom:18px;">Devam edebilmek için e-posta adresinize gönderilen doğrulama bağlantısına tıklamanız gerekiyor. Gelen kutunuzu (ve spam klasörünü) kontrol edin.</div>
+    <button id="verifyCheckBtn" type="button" style="width:100%;padding:12px;border:none;border-radius:10px;background:linear-gradient(135deg,#2FD3C7,#22A99F);color:#08202E;font-weight:700;font-size:0.9rem;cursor:pointer;margin-bottom:8px;">Doğruladım, Kontrol Et</button>
+    <button id="verifyResendBtn" type="button" style="width:100%;padding:11px;border:1px solid #1C6E8C;border-radius:10px;background:transparent;color:#1C6E8C;font-weight:600;font-size:0.85rem;cursor:pointer;margin-bottom:8px;">Doğrulama E-postasını Tekrar Gönder</button>
+    <div id="verifyStatusMsg" style="min-height:16px;font-size:0.75rem;color:#345264;margin-bottom:6px;"></div>
+    <button id="verifyLogoutBtn" type="button" style="width:100%;padding:8px;border:none;background:transparent;color:#7a8a94;font-weight:600;font-size:0.72rem;cursor:pointer;">Çıkış Yap</button>
   </div>
 </div>
 
@@ -2445,9 +2499,11 @@ function renderTeklifTab(main, proj){
 
     <div class="card glass">
       <h2>Teklif Kalemleri</h2>
+      <p class="hint">Aynı Blok, Kat, Daire, Mekân, Uygulama Yeri ve İmalat Cinsi'ne (ve aynı birime) sahip kalemler eklendikçe otomatik olarak tek satırda toplanır. Bu listede daha önce ayrı ayrı eklenmiş aynı kalemler varsa, aşağıdaki butonla tek seferde birleştirebilirsiniz.</p>
       <div class="table-scroll" id="teklifTableWrap"></div>
       <div class="totals-strip" id="teklifTotals"></div>
       <div class="btn-row">
+        <button class="btn btn-ghost" id="btnMergeTeklif">Aynı Kalemleri Birleştir</button>
         <button class="btn btn-primary" id="btnTeklifPdf">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg>
           Teklif PDF'ini İndir
@@ -2465,6 +2521,15 @@ function renderTeklifTab(main, proj){
   document.getElementById('btnClearTeklif').onclick = ()=>{ teklifForm = emptyTeklifForm(); renderMain(); };
   document.getElementById('btnFromMetraj').onclick = ()=>openMetrajPickModal(proj);
   document.getElementById('btnTeklifPdf').onclick = ()=>openTeklifTemplateModal(proj);
+  document.getElementById('btnMergeTeklif').onclick = ()=>{
+    const before = proj.teklifRows.length;
+    mergeAllTeklifRows(proj);
+    const after = proj.teklifRows.length;
+    saveState();
+    renderMain();
+    if(before===after){ showToast('Birleştirilecek aynı kalem bulunamadı.'); }
+    else { showToast(`${before-after} kalem birleştirildi, ${after} satır kaldı.`); }
+  };
   let noteSaveTimer = null;
   document.getElementById('t-note').addEventListener('input',(e)=>{
     proj.teklifNote = e.target.value;
@@ -2476,21 +2541,74 @@ function renderTeklifTab(main, proj){
   renderTeklifTotals(proj);
 }
 
+// Aynı Blok + Kat + Daire + Mekân + Uygulama Yeri + İmalat Cinsi (aciklama alanında
+// bu bilgiler virgülle birleşik tutulur) ve aynı birime sahip teklif kalemleri, ayrı
+// satırlar halinde tekrar tekrar eklenmek yerine tek bir satırda toplanır. Örn: aynı
+// daire/salon/alçıpan imalatı için iki farklı seferde teklife ekleme yapılırsa,
+// miktarlar toplanır ve tek satır olarak gösterilir.
+function normTeklifKey(aciklama, birim){
+  return normKey(aciklama) + '|' + normKey(birim);
+}
+function mergeOrAddTeklifRow(proj, data){
+  const key = normTeklifKey(data.aciklama, data.birim);
+  const existing = proj.teklifRows.find(r=> normTeklifKey(r.aciklama, r.birim)===key);
+  const eklenenMiktar = Math.round((parseFloat(data.miktar)||0)*100)/100;
+  if(existing){
+    existing.miktar = Math.round(((parseFloat(existing.miktar)||0) + eklenenMiktar)*100)/100;
+    if(data.birimFiyat){ existing.birimFiyat = data.birimFiyat; } // yeni fiyat girildiyse günceller, girilmediyse mevcut fiyatı korur
+    existing.tutar = Math.round(existing.miktar*(parseFloat(existing.birimFiyat)||0)*100)/100;
+    return existing;
+  }
+  const row = {
+    id: uid(),
+    aciklama: data.aciklama,
+    miktar: eklenenMiktar,
+    birim: data.birim,
+    birimFiyat: data.birimFiyat||0,
+    tutar: Math.round(eklenenMiktar*(data.birimFiyat||0)*100)/100
+  };
+  proj.teklifRows.push(row);
+  return row;
+}
+
+// Projedeki tüm teklif kalemlerini, aynı Blok/Kat/Daire/Mekân/Uygulama Yeri/İmalat
+// Cinsi (aciklama) ve aynı birime sahip olanları tek satırda toplayacak şekilde
+// yeniden düzenler. Daha önceden (bu birleştirme mantığı eklenmeden önce) ayrı ayrı
+// girilmiş kayıtları tek seferde temizlemek için kullanılır.
+function mergeAllTeklifRows(proj){
+  const merged = [];
+  const map = new Map();
+  proj.teklifRows.forEach(r=>{
+    const key = normTeklifKey(r.aciklama, r.birim);
+    if(map.has(key)){
+      const ex = map.get(key);
+      ex.miktar = Math.round(((parseFloat(ex.miktar)||0) + (parseFloat(r.miktar)||0))*100)/100;
+      ex.tutar = Math.round(((parseFloat(ex.tutar)||0) + (parseFloat(r.tutar)||0))*100)/100;
+      // Birim fiyatı, birleşmiş toplam tutar/miktara göre yeniden türetilir.
+      ex.birimFiyat = ex.miktar>0 ? Math.round((ex.tutar/ex.miktar)*100)/100 : ex.birimFiyat;
+    } else {
+      const copy = Object.assign({}, r);
+      map.set(key, copy);
+      merged.push(copy);
+    }
+  });
+  proj.teklifRows = merged;
+}
+
 function saveTeklifRow(proj){
   const miktar = parseFloat(teklifForm.miktar)||0;
   const birimFiyat = parseFloat(teklifForm.birimFiyat)||0;
   if(!teklifForm.aciklama.trim()){ showToast('Lütfen açıklama girin.'); return; }
-  const row = {
-    id: teklifForm.id || uid(),
-    aciklama: teklifForm.aciklama.trim(),
-    miktar, birim: teklifForm.birim, birimFiyat,
-    tutar: Math.round(miktar*birimFiyat*100)/100
-  };
+  const aciklama = teklifForm.aciklama.trim();
   if(teklifForm.id){
+    // Mevcut bir kalem güncelleniyor: doğrudan üzerine yaz, birleştirme yapma.
+    const row = { id: teklifForm.id, aciklama, miktar, birim: teklifForm.birim, birimFiyat, tutar: Math.round(miktar*birimFiyat*100)/100 };
     const idx = proj.teklifRows.findIndex(r=>r.id===row.id);
     if(idx>-1) proj.teklifRows[idx]=row;
   } else {
-    proj.teklifRows.push(row);
+    // Yeni kalem: aynı Blok/Kat/Daire/Mekân/Uygulama Yeri/İmalat Cinsi + aynı birimde
+    // zaten bir satır varsa, yeni satır açmak yerine mevcut satırla birleştirilir.
+    mergeOrAddTeklifRow(proj, {aciklama, miktar, birim: teklifForm.birim, birimFiyat});
   }
   saveState();
   teklifForm = emptyTeklifForm();
@@ -2876,9 +2994,14 @@ function computeMalzemeSonuc(malzeme, deger, opts){
   } else {
     miktar = Math.round(raw*100)/100;
   }
+  // Kullanıcının Malzeme Sonuç Paneli'nde elle girdiği ekstra miktar (kesim payı,
+  // fire, ek stok vb. için), hesaplanan miktara doğrudan eklenir.
+  // Örn: hesaplanan 102 m², +3 m² eklenirse toplam 105 m² olur.
+  const ekstra = parseFloat(opts.ekstra)||0;
+  if(ekstra){ miktar = Math.round((miktar+ekstra)*100)/100; }
   const tutar = miktar*(parseFloat(malzeme.satisFiyat)||0);
   const maliyet = miktar*(parseFloat(malzeme.alisFiyat)||0);
-  return { raw: Math.round(raw*100)/100, miktar, adetNote, paketNote, tutar: Math.round(tutar*100)/100, maliyet: Math.round(maliyet*100)/100 };
+  return { raw: Math.round(raw*100)/100, miktar, adetNote, paketNote, ekstra, tutar: Math.round(tutar*100)/100, maliyet: Math.round(maliyet*100)/100 };
 }
 
 // ---- Poligon (köşeli / L-T-U-Z şeklinde oda) alan hesaplama — AutoCAD'deki "AREA"
@@ -3349,6 +3472,24 @@ function bindHesapSonucEvents(sistem, deger, unit){
     });
     inp.addEventListener('change', ()=>{ saveState(); });
   });
+  wrap.querySelectorAll('[data-ekstra-id]').forEach(inp=>{
+    inp.addEventListener('input', e=>{
+      const id = e.target.dataset.ekstraId;
+      const m = sistem.malzemeler.find(x=>x.id===id);
+      if(!m) return;
+      if(!ui.imalatCalcEkstra) ui.imalatCalcEkstra = {};
+      ui.imalatCalcEkstra[id] = parseFloat(String(e.target.value).replace(',','.'))||0;
+      const r = computeMalzemeSonuc(m, deger, getPaketOpts(id));
+      const birimLabel = UNIT_LABEL[m.birim]||m.birim;
+      const miktarSpan = wrap.querySelector(`[data-miktar-id="${id}"]`);
+      if(miktarSpan) miktarSpan.textContent = `${fmtNum(r.miktar)} ${birimLabel}`;
+      const baseSpan = wrap.querySelector(`[data-basemiktar-id="${id}"]`);
+      if(baseSpan) baseSpan.textContent = `${fmtNum(Math.round((r.miktar-r.ekstra)*100)/100)} ${birimLabel}`;
+      const tutarCell = wrap.querySelector(`[data-tutar-id="${id}"]`);
+      if(tutarCell) tutarCell.textContent = fmtMoney(r.tutar);
+      refreshTotals();
+    });
+  });
   wrap.querySelectorAll('[data-paket-id]').forEach(chk=>{
     chk.addEventListener('change', e=>{
       const id = e.target.dataset.paketId;
@@ -3367,10 +3508,14 @@ function computeBirimMaliyet(toplamTutar, metraj){
   return Math.round((t/metraj)*100)/100;
 }
 
-// Bir malzeme için "Paket Tamamla" kutusu işaretlenmiş mi kontrol eder ve
-// computeMalzemeSonuc'a geçilecek opts nesnesini döndürür.
+// Bir malzeme için "Paket Tamamla" kutusu işaretlenmiş mi kontrol eder, kullanıcının
+// elle eklediği ekstra miktarı da (varsa) okur ve computeMalzemeSonuc'a geçilecek
+// opts nesnesini döndürür.
 function getPaketOpts(malzemeId){
-  return { paketTamamla: !!(ui.imalatCalcPaketTamamla && ui.imalatCalcPaketTamamla[malzemeId]) };
+  return {
+    paketTamamla: !!(ui.imalatCalcPaketTamamla && ui.imalatCalcPaketTamamla[malzemeId]),
+    ekstra: (ui.imalatCalcEkstra && ui.imalatCalcEkstra[malzemeId]) || 0
+  };
 }
 
 // Hesaplanan tam parça/adet sayısını, malzemenin paket içi adedine göre
@@ -3397,7 +3542,7 @@ function renderHesapSonucHtml(sistem, deger, basisUnit){
   const basisLabel = basisUnit==='mt' ? 'mt' : 'm²';
   return `
     <table>
-      <thead><tr><th>Malzeme</th><th>Sarfiyat</th><th class="num">Ebat</th><th>Ürün Satış Birimi</th><th class="num">Birim Fiyat</th><th class="num">Hesaplanan Miktar</th><th class="num">Tutar</th><th class="num">Paket Tamamla</th></tr></thead>
+      <thead><tr><th>Malzeme</th><th>Sarfiyat</th><th class="num">Ebat</th><th>Ürün Satış Birimi</th><th class="num">Birim Fiyat</th><th class="num">Hesaplanan Miktar</th><th class="num">Ekstra Ekle</th><th class="num">Toplam Miktar</th><th class="num">Tutar</th><th class="num">Paket Tamamla</th></tr></thead>
       <tbody>
         ${sistem.malzemeler.map(m=>{
           const opts = getPaketOpts(m.id);
@@ -3409,6 +3554,7 @@ function renderHesapSonucHtml(sistem, deger, basisUnit){
           if(pieceCount!=null && !(isAdetBirim && !m.paketAdet)){
             adetNoteHtml = `<div style="font-size:0.72rem;font-weight:500;color:var(--ink-soft);">(${formatPaketAdetNote(pieceCount, m.paketAdet)})</div>`;
           }
+          const baseMiktar = Math.round((r.miktar - r.ekstra)*100)/100;
           return `<tr>
             <td>${esc(m.ad)}</td>
             <td>${fmtNum(m.sarfiyat)} ${esc(birimLabel)}/${basisLabel}</td>
@@ -3417,9 +3563,15 @@ function renderHesapSonucHtml(sistem, deger, basisUnit){
             <td class="num">
               <input class="mono" type="number" step="any" data-fiyat-id="${m.id}" value="${esc(m.satisFiyat)}" style="width:92px;text-align:right;padding:6px 8px;border-radius:8px;border:1px solid rgba(11,36,54,0.15);background:rgba(255,255,255,0.7);">
             </td>
+            <td class="num">
+              <span data-basemiktar-id="${m.id}">${fmtNum(baseMiktar)} ${esc(birimLabel)}</span>
+              <div data-adetnote-id="${m.id}">${adetNoteHtml}</div>
+            </td>
+            <td class="num">
+              <input class="mono" type="number" step="any" data-ekstra-id="${m.id}" value="${r.ekstra? esc(r.ekstra) : ''}" placeholder="+0" title="Örn: hesaplanan 102 m² üzerine kesim payı/fire için 3 m² daha eklemek isterseniz buraya 3 yazın, toplam otomatik 105 m² olur." style="width:76px;text-align:right;padding:6px 8px;border-radius:8px;border:1px solid rgba(11,36,54,0.15);background:rgba(255,255,255,0.7);">
+            </td>
             <td class="num" style="font-weight:700;">
               <span data-miktar-id="${m.id}">${fmtNum(r.miktar)} ${esc(birimLabel)}</span>
-              <div data-adetnote-id="${m.id}">${adetNoteHtml}</div>
             </td>
             <td class="num" data-tutar-id="${m.id}">${fmtMoney(r.tutar)}</td>
             <td class="num">${m.paketAdet? `<label style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;white-space:nowrap;"><input type="checkbox" data-paket-id="${m.id}" ${opts.paketTamamla?'checked':''}> <span style="font-size:0.72rem;color:var(--ink-soft);">${fmtNum(m.paketAdet)}/paket</span></label>` : '—'}</td>
@@ -5643,12 +5795,10 @@ function openMetrajPickModal(proj){
     checked.forEach(chk=>{
       const g = groups[parseInt(chk.dataset.idx)];
       const desc = [g.blok,g.kat,g.daire,g.mekan,g.eleman,g.imalat].filter(Boolean).join(', ');
-      proj.teklifRows.push({
-        id:uid(), aciklama:desc, miktar:Math.round(g.miktar*100)/100, birim:g.birim, birimFiyat:0, tutar:0
-      });
+      mergeOrAddTeklifRow(proj, {aciklama:desc, miktar:g.miktar, birim:g.birim, birimFiyat:0});
     });
     saveState(); closeModal(); renderMain();
-    showToast(`${checked.length} kalem teklife eklendi.`);
+    showToast(`${checked.length} kalem teklife eklendi (aynı blok/kat/daire/mekân/uygulama yeri/imalat cinsi olanlar otomatik tek satırda toplandı).`);
   };
 }
 
