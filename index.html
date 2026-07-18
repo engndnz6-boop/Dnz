@@ -1141,6 +1141,8 @@ function newProject(name, employer){
     avanslar:[],
     zimmetler:[],
     tahsilatlar:[],
+    teklifOnaylandi:false,
+    manuelAlinacak:'',
     masraflar:[],
     yemekler:[],
     yemekFiyat:{ sabah:MEAL_PRICES.sabah, ogle:MEAL_PRICES.ogle, aksam:MEAL_PRICES.aksam },
@@ -1867,7 +1869,7 @@ function renderProjeBilgiPanosuHtml(proj){
       <div class="empty-state">Panoyu görmek için yukarıdan bir proje seçin.</div>
     </div>`;
   }
-  const hakedisToplam = projeTeklifToplam(proj);
+  const hakedisToplam = projeIsverenAlinacakToplam(proj);
   const alinanToplam = (proj.tahsilatlar||[]).reduce((s,r)=>s+(parseFloat(r.tutar)||0),0);
   const kalanIsveren = hakedisToplam - alinanToplam;
   const calisanaOdenecek = projeCalisanaOdenecekToplam(proj);
@@ -2483,16 +2485,16 @@ function renderTeklifTab(main, proj){
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
         Teklif Kalemi Ekle — <span style="color:var(--aqua-dim)">${esc(proj.name)}</span>
       </h2>
-      <div class="field-grid">
-        <div class="field" style="grid-column:span 3;"><label>Açıklama</label>
+      <div class="field-grid" style="grid-template-columns:repeat(2,minmax(140px,1fr));">
+        <div class="field" style="grid-column:span 2;"><label>Açıklama</label>
           <input type="text" id="t-aciklama" value="${esc(teklifForm.aciklama)}" placeholder="Örn: A Blok, 1.Kat, 1.Daire, Salon, Bölme Duvar İmalatı">
         </div>
         <div class="field"><label>Miktar</label><input class="mono" type="number" step="any" id="t-miktar" value="${esc(teklifForm.miktar)}"></div>
         <div class="field"><label>Birim</label>
           <select id="t-birim">${UNITS.map(u=>`<option value="${u}" ${u===teklifForm.birim?'selected':''}>${UNIT_LABEL[u]}</option>`).join('')}</select>
         </div>
-        <div class="field"><label>Birim Fiyat (TL)</label><input class="mono" type="number" step="any" id="t-birimFiyat" value="${esc(teklifForm.birimFiyat)}"></div>
-        <div class="field"><label>Tutar (TL)</label><input class="mono" type="text" readonly style="opacity:0.75;font-weight:700;" id="t-tutarDisplay" value="${fmtMoney((parseFloat(teklifForm.miktar)||0)*(parseFloat(teklifForm.birimFiyat)||0))}"></div>
+        <div class="field"><label>Birim Fiyat (TL)</label><input class="mono" type="number" step="any" id="t-birimFiyat" value="${esc(teklifForm.birimFiyat)}" style="font-size:0.95rem;"></div>
+        <div class="field"><label>Tutar (TL)</label><input class="mono" type="text" readonly style="opacity:0.75;font-weight:700;font-size:0.95rem;" id="t-tutarDisplay" value="${fmtMoney((parseFloat(teklifForm.miktar)||0)*(parseFloat(teklifForm.birimFiyat)||0))}"></div>
       </div>
       <div class="btn-row">
         <button class="btn btn-primary" id="btnSaveTeklif">${teklifForm.id?'Kalemi Güncelle':'Kalemi Ekle'}</button>
@@ -5085,6 +5087,14 @@ function projeTeklifToplam(proj){
   return (proj.teklifRows||[]).reduce((s,r)=>s+(parseFloat(r.tutar)||0),0);
 }
 
+// İşverenden alınacak toplam: teklif onaylandıysa teklif tutarı, artı her zaman
+// manuel girilen tutar. İkisi de aktifse toplanır.
+function projeIsverenAlinacakToplam(proj){
+  const teklifKismi = proj.teklifOnaylandi ? projeTeklifToplam(proj) : 0;
+  const manuelKismi = parseFloat(proj.manuelAlinacak)||0;
+  return teklifKismi + manuelKismi;
+}
+
 function renderTahsilatTab(main, proj){
   main.innerHTML = `
     <div class="card glass">
@@ -5119,6 +5129,20 @@ function renderTahsilatTab(main, proj){
     </div>
 
     <div class="card glass">
+      <h2>İşverenden Alınacak Tutar</h2>
+      <p class="hint">Teklifi onaylarsanız teklif toplamı (${fmtMoney(projeTeklifToplam(proj))} TL) işverenden alınacak tutara otomatik eklenir. Ayrıca teklif dışında manuel bir tutar da girebilirsiniz; ikisi de aktifse toplanır.</p>
+      <div class="field-grid">
+        <div class="field" style="display:flex;align-items:center;gap:10px;flex-direction:row;">
+          <input type="checkbox" id="th-teklifOnay" ${proj.teklifOnaylandi?'checked':''} style="width:19px;height:19px;flex:none;">
+          <label for="th-teklifOnay" style="margin:0;">Teklifi Onayla</label>
+        </div>
+        <div class="field"><label>Manuel Alınacak Tutar (TL)</label>
+          <input class="mono" type="number" step="any" id="th-manuelAlinacak" value="${esc(proj.manuelAlinacak||'')}" placeholder="Teklif dışında ek tutar">
+        </div>
+      </div>
+    </div>
+
+    <div class="card glass">
       <h2>Ödeme Listesi</h2>
       <div class="table-scroll" id="tahsilatTableWrap"></div>
     </div>
@@ -5140,6 +5164,20 @@ function renderTahsilatTab(main, proj){
   document.getElementById('btnSaveTahsilat').onclick = ()=>saveTahsilatRow(proj);
   document.getElementById('btnClearTahsilat').onclick = ()=>{ tahsilatForm = emptyTahsilatForm(); renderMain(); };
   document.getElementById('btnTahsilatPdf').onclick = ()=>exportTahsilatPdf(proj);
+
+  document.getElementById('th-teklifOnay').addEventListener('change',(e)=>{
+    proj.teklifOnaylandi = e.target.checked;
+    saveState();
+    renderTahsilatOzet(proj);
+  });
+  let manuelSaveTimer = null;
+  document.getElementById('th-manuelAlinacak').addEventListener('input',(e)=>{
+    proj.manuelAlinacak = e.target.value;
+    renderTahsilatOzet(proj);
+    clearTimeout(manuelSaveTimer);
+    manuelSaveTimer = setTimeout(()=>saveState(), 500);
+  });
+
   renderTahsilatTable(proj);
   renderTahsilatOzet(proj);
 }
@@ -5220,11 +5258,15 @@ function renderTahsilatTable(proj){
 
 function renderTahsilatOzet(proj){
   const el = document.getElementById('tahsilatOzet');
-  const toplamAlinacak = projeTeklifToplam(proj);
+  const teklifKismi = proj.teklifOnaylandi ? projeTeklifToplam(proj) : 0;
+  const manuelKismi = parseFloat(proj.manuelAlinacak)||0;
+  const toplamAlinacak = teklifKismi + manuelKismi;
   const alinan = (proj.tahsilatlar||[]).reduce((s,r)=>s+(parseFloat(r.tutar)||0),0);
   const kalan = toplamAlinacak - alinan;
   el.innerHTML = `
-    <div class="total-chip"><span class="lbl">Toplam Alınacak (Teklif)</span><span class="val">${fmtMoney(toplamAlinacak)}</span></div>
+    <div class="total-chip"><span class="lbl">Teklif Tutarı ${proj.teklifOnaylandi?'(Onaylı)':'(Onaylanmadı)'}</span><span class="val">${fmtMoney(teklifKismi)}</span></div>
+    <div class="total-chip"><span class="lbl">Manuel Alınacak</span><span class="val">${fmtMoney(manuelKismi)}</span></div>
+    <div class="total-chip"><span class="lbl">Toplam Alınacak (İşverenden)</span><span class="val">${fmtMoney(toplamAlinacak)}</span></div>
     <div class="total-chip"><span class="lbl">Alınan Ödeme</span><span class="val">${fmtMoney(alinan)}</span></div>
     <div class="total-chip"><span class="lbl">Kalan Ödeme</span><span class="val">${fmtMoney(kalan)}</span></div>
   `;
@@ -5233,7 +5275,9 @@ function renderTahsilatOzet(proj){
 async function exportTahsilatPdf(proj){
   showToast('PDF hazırlanıyor…');
   const rows = (proj.tahsilatlar||[]).slice().sort((a,b)=>(b.odemeTarihi||'').localeCompare(a.odemeTarihi||''));
-  const toplamAlinacak = projeTeklifToplam(proj);
+  const teklifKismi = proj.teklifOnaylandi ? projeTeklifToplam(proj) : 0;
+  const manuelKismi = parseFloat(proj.manuelAlinacak)||0;
+  const toplamAlinacak = teklifKismi + manuelKismi;
   const alinan = rows.reduce((s,r)=>s+(parseFloat(r.tutar)||0),0);
   const kalan = toplamAlinacak - alinan;
   const cellStyle = 'border:1px solid #E4EFEF;padding:5px 6px;text-align:left;word-break:break-word;';
@@ -5258,7 +5302,9 @@ async function exportTahsilatPdf(proj){
       </tr></tfoot>
     </table>
     <table style="width:100%;max-width:420px;border-collapse:collapse;font-size:11px;">
-      <tr><td style="padding:6px 4px;font-weight:700;">Toplam Alınacak (Teklif)</td><td style="padding:6px 4px;text-align:right;">${fmtMoney(toplamAlinacak)}</td></tr>
+      <tr><td style="padding:6px 4px;">Teklif Tutarı ${proj.teklifOnaylandi?'(Onaylı)':'(Onaylanmadı)'}</td><td style="padding:6px 4px;text-align:right;">${fmtMoney(teklifKismi)}</td></tr>
+      <tr><td style="padding:6px 4px;">Manuel Alınacak</td><td style="padding:6px 4px;text-align:right;">${fmtMoney(manuelKismi)}</td></tr>
+      <tr><td style="padding:6px 4px;font-weight:700;">Toplam Alınacak (İşverenden)</td><td style="padding:6px 4px;text-align:right;">${fmtMoney(toplamAlinacak)}</td></tr>
       <tr><td style="padding:6px 4px;font-weight:700;">Alınan Ödeme</td><td style="padding:6px 4px;text-align:right;">${fmtMoney(alinan)}</td></tr>
       <tr style="border-top:2px solid #1C6E8C;"><td style="padding:6px 4px;font-weight:700;color:#1C6E8C;">Kalan Ödeme</td><td style="padding:6px 4px;text-align:right;font-weight:700;color:#1C6E8C;">${fmtMoney(kalan)}</td></tr>
     </table>
