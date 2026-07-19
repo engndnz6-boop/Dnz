@@ -621,6 +621,7 @@ body{
 header.topbar{
   position:sticky;top:0;z-index:40;
   margin:10px 10px 0 10px;
+  margin-top:max(10px, calc(env(safe-area-inset-top) + 6px));
   padding:12px 16px;
   display:flex;align-items:center;gap:12px;flex-wrap:wrap;
 }
@@ -648,7 +649,7 @@ select.proj-select{
   background:rgba(255,255,255,0.55);
   border:1px solid var(--glass-border);
   border-radius:12px;padding:9px 30px 9px 12px;
-  font-family:var(--font-body);font-weight:600;font-size:0.85rem;color:var(--ink);
+  font-family:var(--font-body);font-weight:600;font-size:16px;color:var(--ink);
   background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230B2436' stroke-width='2'><path d='M6 9l6 6 6-6'/></svg>");
   background-repeat:no-repeat;background-position:right 8px center;background-size:16px;
   text-overflow:ellipsis;white-space:nowrap;overflow:hidden;
@@ -664,7 +665,7 @@ nav.tabs{
   position:fixed;top:0;left:0;z-index:100;
   height:100vh;height:100dvh;width:300px;max-width:85vw;
   display:flex;flex-direction:column;gap:5px;
-  padding:16px 12px 20px 12px;margin:0;
+  padding:calc(16px + env(safe-area-inset-top)) 12px calc(20px + env(safe-area-inset-bottom)) calc(12px + env(safe-area-inset-left));margin:0;
   overflow-y:auto;overflow-x:hidden;
   border-radius:0 22px 22px 0;
   transform:translateX(-104%);
@@ -705,7 +706,15 @@ main{flex:1;min-width:0;width:100%;padding:0 10px 40px 10px;display:flex;flex-di
 
 .field-grid{
   display:grid;gap:10px;
-  grid-template-columns:repeat(auto-fill,minmax(130px,1fr));
+  /* Dar ekranlarda (özellikle iOS Safari) "auto-fill,minmax(...)" ile
+     grid-column:span N birlikte kullanıldığında sütun sayısı hesaplaması
+     bozulup bazı kutuların (örn. Birim Fiyat) çok dar/kırpık görünmesine yol
+     açıyordu. Mobilde sabit 2 sütun kullanmak bunu tamamen ortadan kaldırıyor;
+     daha geniş ekranlarda (tablet/masaüstü) esnek auto-fill'e geri dönüyoruz. */
+  grid-template-columns:repeat(2, minmax(0,1fr));
+}
+@media (min-width:560px){
+  .field-grid{ grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); }
 }
 .field{display:flex;flex-direction:column;gap:4px;min-width:0;}
 .sg-list{position:absolute;top:100%;left:0;right:0;z-index:60;background:var(--card,#fff);border:1px solid rgba(11,36,54,0.15);border-radius:10px;margin-top:4px;max-height:190px;overflow-y:auto;box-shadow:0 10px 24px rgba(8,32,46,0.22);}
@@ -717,9 +726,13 @@ main{flex:1;min-width:0;width:100%;padding:0 10px 40px 10px;display:flex;flex-di
   width:100%;padding:9px 10px;border-radius:10px;
   border:1px solid rgba(11,36,54,0.15);
   background:rgba(255,255,255,0.6);
-  font-family:var(--font-body);font-size:0.85rem;color:var(--ink);
+  font-family:var(--font-body);font-size:16px;color:var(--ink);
   min-width:0;
 }
+/* iOS Safari, odaklanılan bir input/select/textarea'nın yazı boyutu 16px'in altındaysa
+   sayfayı otomatik olarak yakınlaştırır; bu da "kutular yerine oturmuyor" hissi verir.
+   Bu yüzden tüm form elemanlarını (tarayıcı büyütmesin diye) en az 16px yapıyoruz. */
+input, select, textarea, button{ font-size:16px; }
 .field input:focus,.field select:focus{outline:2px solid var(--aqua-dim);outline-offset:1px;}
 .field input.mono,.field.mono input{font-family:var(--font-mono);}
 
@@ -778,7 +791,7 @@ td.num,th.num{font-family:var(--font-mono);text-align:right;}
 .row-actions{display:flex;gap:4px;}
 
 .filter-bar{display:grid;gap:8px;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));}
-.filter-bar select{width:100%;padding:8px 9px;border-radius:9px;border:1px solid rgba(11,36,54,0.15);background:rgba(255,255,255,0.55);font-size:0.78rem;font-family:var(--font-body);color:var(--ink);}
+.filter-bar select{width:100%;padding:8px 9px;border-radius:9px;border:1px solid rgba(11,36,54,0.15);background:rgba(255,255,255,0.55);font-size:16px;font-family:var(--font-body);color:var(--ink);}
 
 .totals-strip{display:flex;flex-wrap:wrap;gap:10px;}
 .total-chip{
@@ -831,12 +844,12 @@ td.num,th.num{font-family:var(--font-mono);text-align:right;}
   background:rgba(47,211,199,0.22);color:#0A5850;
 }
 
-footer.appfoot{text-align:center;padding:14px;color:rgba(11,36,54,0.45);font-size:0.68rem;}
+footer.appfoot{text-align:center;padding:14px 14px calc(14px + env(safe-area-inset-bottom)) 14px;color:rgba(11,36,54,0.45);font-size:0.68rem;}
 
 .logo-preview{width:56px;height:56px;border-radius:10px;object-fit:contain;background:rgba(255,255,255,0.7);border:1px solid rgba(11,36,54,0.1);padding:4px;}
 
 .toast{
-  position:fixed;bottom:18px;left:50%;transform:translateX(-50%);
+  position:fixed;bottom:calc(18px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);
   padding:12px 20px;border-radius:12px;z-index:200;
   font-family:var(--font-body);font-weight:600;font-size:0.85rem;
   background:var(--glass-bg-strong);backdrop-filter:blur(14px);
@@ -932,7 +945,7 @@ footer.appfoot{text-align:center;padding:14px;color:rgba(11,36,54,0.45);font-siz
 </style>
 </head>
 <body>
-<div id="authGate" style="position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;background:linear-gradient(160deg,#0F3B4C,#08202E);font-family:'Inter',sans-serif;padding:16px;">
+<div id="authGate" style="position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;background:linear-gradient(160deg,#0F3B4C,#08202E);font-family:'Inter',sans-serif;padding:calc(16px + env(safe-area-inset-top)) calc(16px + env(safe-area-inset-right)) calc(16px + env(safe-area-inset-bottom)) calc(16px + env(safe-area-inset-left));">
   <div style="width:100%;max-width:340px;background:rgba(234,246,245,0.96);border-radius:18px;padding:28px 24px;box-shadow:0 8px 32px rgba(4,20,28,0.35);box-sizing:border-box;">
     <div style="font-family:'Outfit',sans-serif;font-weight:800;font-size:1.3rem;color:#0B2436;margin-bottom:4px;text-align:center;">DNZ</div>
     <div style="font-size:0.8rem;color:#345264;text-align:center;margin-bottom:18px;">Devam etmek için giriş yapın</div>
@@ -944,7 +957,7 @@ footer.appfoot{text-align:center;padding:14px;color:rgba(11,36,54,0.45);font-siz
   </div>
 </div>
 
-<div id="verifyGate" style="display:none;position:fixed;inset:0;z-index:1000;align-items:center;justify-content:center;background:linear-gradient(160deg,#0F3B4C,#08202E);font-family:'Inter',sans-serif;padding:16px;text-align:center;">
+<div id="verifyGate" style="display:none;position:fixed;inset:0;z-index:1000;align-items:center;justify-content:center;background:linear-gradient(160deg,#0F3B4C,#08202E);font-family:'Inter',sans-serif;padding:calc(16px + env(safe-area-inset-top)) calc(16px + env(safe-area-inset-right)) calc(16px + env(safe-area-inset-bottom)) calc(16px + env(safe-area-inset-left));text-align:center;">
   <div style="width:100%;max-width:380px;background:rgba(234,246,245,0.96);border-radius:18px;padding:28px 24px;box-shadow:0 8px 32px rgba(4,20,28,0.35);box-sizing:border-box;">
     <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="#1C6E8C" stroke-width="1.6" style="margin:0 auto 10px;display:block;"><path d="M4 4h16v16H4z"/><path d="M4 6l8 7 8-7"/></svg>
     <div style="font-family:'Outfit',sans-serif;font-weight:800;font-size:1.1rem;color:#0B2436;margin-bottom:8px;">E-postanızı Doğrulayın</div>
@@ -956,7 +969,7 @@ footer.appfoot{text-align:center;padding:14px;color:rgba(11,36,54,0.45);font-siz
   </div>
 </div>
 
-<div id="onboardingGate" style="display:none;position:fixed;inset:0;z-index:1000;align-items:center;justify-content:center;background:linear-gradient(160deg,#0F3B4C,#08202E);font-family:'Inter',sans-serif;padding:16px;">
+<div id="onboardingGate" style="display:none;position:fixed;inset:0;z-index:1000;align-items:center;justify-content:center;background:linear-gradient(160deg,#0F3B4C,#08202E);font-family:'Inter',sans-serif;padding:calc(16px + env(safe-area-inset-top)) calc(16px + env(safe-area-inset-right)) calc(16px + env(safe-area-inset-bottom)) calc(16px + env(safe-area-inset-left));">
   <div style="width:100%;max-width:380px;background:rgba(234,246,245,0.96);border-radius:18px;padding:28px 24px;box-shadow:0 8px 32px rgba(4,20,28,0.35);box-sizing:border-box;">
     <div style="font-family:'Outfit',sans-serif;font-weight:800;font-size:1.15rem;color:#0B2436;margin-bottom:4px;text-align:center;">Firmanızı Bağlayın</div>
     <div style="font-size:0.8rem;color:#345264;text-align:center;margin-bottom:18px;">Yeni bir firma hesabı oluşturun ya da yöneticinizden aldığınız davet koduyla mevcut bir firmaya katılın.</div>
@@ -980,7 +993,7 @@ footer.appfoot{text-align:center;padding:14px;color:rgba(11,36,54,0.45);font-siz
   </div>
 </div>
 
-<div id="pendingGate" style="display:none;position:fixed;inset:0;z-index:1000;align-items:center;justify-content:center;background:linear-gradient(160deg,#0F3B4C,#08202E);font-family:'Inter',sans-serif;padding:16px;text-align:center;">
+<div id="pendingGate" style="display:none;position:fixed;inset:0;z-index:1000;align-items:center;justify-content:center;background:linear-gradient(160deg,#0F3B4C,#08202E);font-family:'Inter',sans-serif;padding:calc(16px + env(safe-area-inset-top)) calc(16px + env(safe-area-inset-right)) calc(16px + env(safe-area-inset-bottom)) calc(16px + env(safe-area-inset-left));text-align:center;">
   <div style="width:100%;max-width:380px;background:rgba(234,246,245,0.96);border-radius:18px;padding:28px 24px;box-shadow:0 8px 32px rgba(4,20,28,0.35);box-sizing:border-box;">
     <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="#1C6E8C" stroke-width="1.6" style="margin:0 auto 10px;display:block;"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
     <div style="font-family:'Outfit',sans-serif;font-weight:800;font-size:1.1rem;color:#0B2436;margin-bottom:8px;">Hesabınız Onay Bekliyor</div>
@@ -1011,7 +1024,7 @@ footer.appfoot{text-align:center;padding:14px;color:rgba(11,36,54,0.45);font-siz
     </div>
   </header>
 
-  <button type="button" id="dnzLogoutBtn" onclick="if(confirm('Çıkış yapmak istediğinize emin misiniz?')) dnzLogout();" title="Çıkış Yap" style="position:fixed;top:12px;right:12px;z-index:41;width:38px;height:38px;border-radius:12px;border:1px solid rgba(255,255,255,0.55);background:rgba(234,246,245,0.75);backdrop-filter:blur(10px);display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 4px 14px rgba(8,32,46,0.18);">
+  <button type="button" id="dnzLogoutBtn" onclick="if(confirm('Çıkış yapmak istediğinize emin misiniz?')) dnzLogout();" title="Çıkış Yap" style="position:fixed;top:calc(12px + env(safe-area-inset-top));right:calc(12px + env(safe-area-inset-right));z-index:41;width:38px;height:38px;border-radius:12px;border:1px solid rgba(255,255,255,0.55);background:rgba(234,246,245,0.75);backdrop-filter:blur(10px);display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 4px 14px rgba(8,32,46,0.18);">
     <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="#0B2436" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>
   </button>
 
@@ -1059,9 +1072,9 @@ footer.appfoot{text-align:center;padding:14px;color:rgba(11,36,54,0.45);font-siz
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/></svg>
       Puantaj
     </button>
-    <button class="tab-btn ripple-el-host" data-tab="masraflar">
+    <button class="tab-btn ripple-el-host" data-tab="avanszimmet">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="6" width="20" height="13" rx="2"/><path d="M2 10h20"/><path d="M6 15h4"/></svg>
-      Masraflar
+      Avans/Zimmet
     </button>
     <button class="tab-btn ripple-el-host" data-tab="raporlar">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/></svg>
@@ -1141,12 +1154,12 @@ function newProject(name, employer){
     avanslar:[],
     zimmetler:[],
     tahsilatlar:[],
-    manuelIsverenAlacak:'',
-    teklifOnaylandi:true,
     masraflar:[],
     yemekler:[],
     yemekFiyat:{ sabah:MEAL_PRICES.sabah, ogle:MEAL_PRICES.ogle, aksam:MEAL_PRICES.aksam },
-    memory:{ blok:[], kat:[], daire:[], mekan:[], eleman:[], imalat:[] }
+    memory:{ blok:[], kat:[], daire:[], mekan:[], eleman:[], imalat:[] },
+    hakedisManuel:'',
+    hakedisTeklifOnay:false
   };
 }
 function currentYm(){
@@ -1180,7 +1193,6 @@ let ui = {
   yemekFilterEnd: isoToday(),
   yemekEditId:null,
   raporTab:'icmal',
-  masraflarTab:'avanszimmet',
   imalatSubTab:'tanim',
   imalatSelectedId:null,
   imalatCalcSistemId:null,
@@ -1749,25 +1761,28 @@ function renderMain(){
   if(ui.tab==='teklif') return renderTeklifTab(main, proj);
   if(ui.tab==='personel') return renderPersonelTab(main, proj);
   if(ui.tab==='puantaj') return renderPuantajTab(main, proj);
-  if(ui.tab==='masraflar') return renderMasraflarTab(main, proj);
+  if(ui.tab==='avanszimmet') return renderAvansZimmetTab(main, proj);
   if(ui.tab==='raporlar') return renderRaporlarTab(main, proj);
 }
 
-/* ======================= RAPORLAR (İcmal / Personeller / Toplu Hesap) ======================= */
+/* ======================= RAPORLAR (İcmal / Personeller / Toplu Hesap / Tahsilat / Masraf) ======================= */
 const RAPOR_SUBTABS = [
   {key:'icmal', label:'İcmal', icon:'<path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/>'},
   {key:'topluicmal', label:'Personeller', icon:'<path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/>'},
-  {key:'topluhesap', label:'Toplu Hesap', icon:'<path d="M3 3v18h18"/><path d="M7 16l4-6 4 4 5-8"/>'}
+  {key:'topluhesap', label:'Toplu Hesap', icon:'<path d="M3 3v18h18"/><path d="M7 16l4-6 4 4 5-8"/>'},
+  {key:'tahsilat', label:'Tahsilat', icon:'<path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/>'},
+  {key:'masraf', label:'Masraf', icon:'<path d="M20 12V8H6a2 2 0 010-4h12v4"/><path d="M4 6v12a2 2 0 002 2h14v-4"/><path d="M18 12a2 2 0 000 4h4v-4z"/>'},
+  {key:'yemek', label:'Yemek', icon:'<path d="M3 2v7c0 1.1.9 2 2 2h1v11"/><path d="M6 2v10"/><path d="M9 2v10"/><path d="M18 2a5 5 0 00-5 5v6h3v9"/>'}
 ];
 function renderRaporlarTab(main, proj){
-  if(!ui.raporTab || !RAPOR_SUBTABS.some(t=>t.key===ui.raporTab)) ui.raporTab = 'icmal';
+  if(!ui.raporTab) ui.raporTab = 'icmal';
   main.innerHTML = `
     <div class="card glass">
       <h2>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/></svg>
         Raporlar — <span style="color:var(--aqua-dim)">${esc(proj.name)}</span>
       </h2>
-      <p class="hint">İcmal, Personeller ve Toplu Hesap raporlarının tümüne buradan ulaşabilir, filtreleyebilir ve PDF çıktısı alabilirsiniz.</p>
+      <p class="hint">İcmal, Personeller, Toplu Hesap, Tahsilat ve Masraf raporlarının tümüne buradan ulaşabilir, filtreleyebilir ve PDF çıktısı alabilirsiniz.</p>
       <div class="report-subnav" id="reportSubnav">
         ${RAPOR_SUBTABS.map(t=>`
           <button class="report-subtab-btn ripple-el-host ${ui.raporTab===t.key?'active':''}" data-rap="${t.key}">
@@ -1789,46 +1804,9 @@ function renderRaporlarTab(main, proj){
   if(ui.raporTab==='icmal') renderIcmalTab(sub, proj);
   else if(ui.raporTab==='topluicmal') renderTopluIcmalTab(sub, proj);
   else if(ui.raporTab==='topluhesap') renderTopluHesapTab(sub, proj);
-}
-
-/* ======================= MASRAFLAR (Avans/Zimmet / Tahsilat / Masraf / Yemek) ======================= */
-const MASRAFLAR_SUBTABS = [
-  {key:'avanszimmet', label:'Avans/Zimmet', icon:'<rect x="2" y="6" width="20" height="13" rx="2"/><path d="M2 10h20"/><path d="M6 15h4"/>'},
-  {key:'tahsilat', label:'Tahsilat', icon:'<path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/>'},
-  {key:'masraf', label:'Masraf', icon:'<path d="M20 12V8H6a2 2 0 010-4h12v4"/><path d="M4 6v12a2 2 0 002 2h14v-4"/><path d="M18 12a2 2 0 000 4h4v-4z"/>'},
-  {key:'yemek', label:'Yemek', icon:'<path d="M3 2v7c0 1.1.9 2 2 2h1v11"/><path d="M6 2v10"/><path d="M9 2v10"/><path d="M18 2a5 5 0 00-5 5v6h3v9"/>'}
-];
-function renderMasraflarTab(main, proj){
-  if(!ui.masraflarTab || !MASRAFLAR_SUBTABS.some(t=>t.key===ui.masraflarTab)) ui.masraflarTab = 'avanszimmet';
-  main.innerHTML = `
-    <div class="card glass">
-      <h2>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="6" width="20" height="13" rx="2"/><path d="M2 10h20"/><path d="M6 15h4"/></svg>
-        Masraflar — <span style="color:var(--aqua-dim)">${esc(proj.name)}</span>
-      </h2>
-      <p class="hint">Avans/Zimmet, Tahsilat, Masraf ve Yemek kayıtlarının tümüne buradan ulaşabilir, filtreleyebilir ve PDF çıktısı alabilirsiniz.</p>
-      <div class="report-subnav" id="masraflarSubnav">
-        ${MASRAFLAR_SUBTABS.map(t=>`
-          <button class="report-subtab-btn ripple-el-host ${ui.masraflarTab===t.key?'active':''}" data-mas="${t.key}">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">${t.icon}</svg>
-            ${t.label}
-          </button>
-        `).join('')}
-      </div>
-    </div>
-    <div id="masraflarSubContent"></div>
-  `;
-  document.getElementById('masraflarSubnav').addEventListener('click',(e)=>{
-    const btn = e.target.closest('.report-subtab-btn');
-    if(!btn) return;
-    ui.masraflarTab = btn.dataset.mas;
-    renderMasraflarTab(main, proj);
-  });
-  const sub = document.getElementById('masraflarSubContent');
-  if(ui.masraflarTab==='avanszimmet') renderAvansZimmetTab(sub, proj);
-  else if(ui.masraflarTab==='tahsilat') renderTahsilatTab(sub, proj);
-  else if(ui.masraflarTab==='masraf') renderMasrafTab(sub, proj);
-  else if(ui.masraflarTab==='yemek') renderYemekTab(sub, proj);
+  else if(ui.raporTab==='tahsilat') renderTahsilatTab(sub, proj);
+  else if(ui.raporTab==='masraf') renderMasrafTab(sub, proj);
+  else if(ui.raporTab==='yemek') renderYemekTab(sub, proj);
 }
 
 /* ======================= PROJELER TAB ======================= */
@@ -1904,7 +1882,7 @@ function renderProjeBilgiPanosuHtml(proj){
       <div class="empty-state">Panoyu görmek için yukarıdan bir proje seçin.</div>
     </div>`;
   }
-  const hakedisToplam = projeIsverenAlacakToplam(proj);
+  const hakedisToplam = projeToplamAlinacak(proj);
   const alinanToplam = (proj.tahsilatlar||[]).reduce((s,r)=>s+(parseFloat(r.tutar)||0),0);
   const kalanIsveren = hakedisToplam - alinanToplam;
   const calisanaOdenecek = projeCalisanaOdenecekToplam(proj);
@@ -1992,6 +1970,39 @@ function openProjectModal(project){
   };
 }
 function closeModal(){ document.getElementById('modalRoot').innerHTML=''; }
+
+// Genel amaçlı, native <select>/OS seçici yerine kullanılan basit liste seçici.
+// Bazı mobil tarayıcılarda (özellikle PWA/ana ekrana eklenmiş durumda) native
+// <select> açılışı sayfadan çıkışa/kapanmaya neden olabiliyor; bu kendi
+// kontrolümüzdeki bir modal olduğu için o sorunu tamamen ortadan kaldırıyor.
+// options: [{value, label}], currentValue: string, onSelect: (value)=>void
+function openListPickerModal(title, options, currentValue, onSelect){
+  const modalRoot = document.getElementById('modalRoot');
+  modalRoot.innerHTML = `
+    <div class="modal-backdrop" id="modalBackdrop">
+      <div class="modal glass-strong glass" style="max-width:360px;max-height:74vh;overflow-y:auto;">
+        <h3>${esc(title)}</h3>
+        <div style="display:flex;flex-direction:column;gap:7px;margin-top:10px;">
+          ${options.map(o=>`
+            <button type="button" class="list-pick-item" data-value="${esc(o.value)}" style="text-align:left;padding:13px 14px;border-radius:10px;border:1.5px solid ${o.value===currentValue?'var(--aqua-dim)':'rgba(11,36,54,0.14)'};background:${o.value===currentValue?'rgba(47,211,199,0.16)':'rgba(255,255,255,0.65)'};font-weight:${o.value===currentValue?'700':'500'};font-size:0.92rem;color:var(--ink);cursor:pointer;">
+              ${esc(o.label)}
+            </button>`).join('')}
+        </div>
+        <div class="btn-row" style="margin-top:14px;justify-content:flex-end;">
+          <button class="btn btn-ghost" id="lpCancel">Vazgeç</button>
+        </div>
+      </div>
+    </div>`;
+  document.getElementById('lpCancel').onclick = closeModal;
+  document.getElementById('modalBackdrop').addEventListener('click',(e)=>{ if(e.target.id==='modalBackdrop') closeModal(); });
+  modalRoot.querySelectorAll('.list-pick-item').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const val = btn.dataset.value;
+      closeModal();
+      onSelect(val);
+    });
+  });
+}
 function confirmModal(msg, onYes){
   const modalRoot = document.getElementById('modalRoot');
   modalRoot.innerHTML = `
@@ -2167,16 +2178,30 @@ function renderMetrajFieldGrid(proj){
     <div class="field"><label>Yükseklik</label><input class="mono" type="number" step="any" id="f-yukseklik" value="${esc(metrajForm.yukseklik)}"></div>
     <div class="field"><label>Kapı Boşluğu (Minha)</label><input class="mono" type="number" step="any" id="f-minha" value="${esc(metrajForm.minha)}"></div>
     <div class="field"><label>Birim</label>
-      <select id="f-birim">${UNITS.map(u=>`<option value="${u}" ${u===metrajForm.birim?'selected':''}>${UNIT_LABEL[u]}</option>`).join('')}</select>
+      <button type="button" class="btn btn-ghost" id="f-birimBtn" style="width:100%;display:flex;align-items:center;justify-content:space-between;text-align:left;">
+        <span id="f-birimLabel">${esc(UNIT_LABEL[metrajForm.birim]||metrajForm.birim)}</span>
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;"><path d="M6 9l6 6 6-6"/></svg>
+      </button>
     </div>
     <div class="field"><label>Toplam (Brüt)</label><input class="mono" type="text" id="f-toplamDisplay" value="${fmtNum(computeRow(metrajForm).toplam)}" readonly style="opacity:0.75;"></div>
     <div class="field"><label>Alt Toplam (Net)</label><input class="mono" type="text" id="f-altToplamDisplay" value="${fmtNum(computeRow(metrajForm).altToplam)}" readonly style="opacity:0.75;font-weight:700;"></div>
   `;
-  const ids = ['blok','kat','daire','mekan','eleman','imalat','adet','kisaKenar','uzunluk','yukseklik','minha','birim'];
+  const ids = ['blok','kat','daire','mekan','eleman','imalat','adet','kisaKenar','uzunluk','yukseklik','minha'];
   ids.forEach(k=>{
     const el = document.getElementById('f-'+k);
     el.addEventListener('input', ()=>{
       metrajForm[k] = el.value;
+      const c = computeRow(metrajForm);
+      document.getElementById('f-toplamDisplay').value = fmtNum(c.toplam);
+      document.getElementById('f-altToplamDisplay').value = fmtNum(c.altToplam);
+    });
+  });
+  const fBirimBtn = document.getElementById('f-birimBtn');
+  if(fBirimBtn) fBirimBtn.addEventListener('click', ()=>{
+    openListPickerModal('Birim Seçin', UNITS.map(u=>({value:u, label:UNIT_LABEL[u]||u})), metrajForm.birim, (val)=>{
+      metrajForm.birim = val;
+      const lbl = document.getElementById('f-birimLabel');
+      if(lbl) lbl.textContent = UNIT_LABEL[val]||val;
       const c = computeRow(metrajForm);
       document.getElementById('f-toplamDisplay').value = fmtNum(c.toplam);
       document.getElementById('f-altToplamDisplay').value = fmtNum(c.altToplam);
@@ -2526,7 +2551,10 @@ function renderTeklifTab(main, proj){
         </div>
         <div class="field"><label>Miktar</label><input class="mono" type="number" step="any" id="t-miktar" value="${esc(teklifForm.miktar)}"></div>
         <div class="field"><label>Birim</label>
-          <select id="t-birim">${UNITS.map(u=>`<option value="${u}" ${u===teklifForm.birim?'selected':''}>${UNIT_LABEL[u]}</option>`).join('')}</select>
+          <button type="button" class="btn btn-ghost" id="t-birimBtn" style="width:100%;display:flex;align-items:center;justify-content:space-between;text-align:left;">
+            <span id="t-birimLabel">${esc(UNIT_LABEL[teklifForm.birim]||teklifForm.birim)}</span>
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;"><path d="M6 9l6 6 6-6"/></svg>
+          </button>
         </div>
         <div class="field"><label>Birim Fiyat (TL)</label><input class="mono" type="number" step="any" id="t-birimFiyat" value="${esc(teklifForm.birimFiyat)}" style="font-size:0.95rem;"></div>
         <div class="field"><label>Tutar (TL)</label><input class="mono" type="text" readonly style="opacity:0.75;font-weight:700;font-size:0.95rem;" id="t-tutarDisplay" value="${fmtMoney((parseFloat(teklifForm.miktar)||0)*(parseFloat(teklifForm.birimFiyat)||0))}"></div>
@@ -2565,10 +2593,18 @@ function renderTeklifTab(main, proj){
       </div>
     </div>
   `;
-  ['aciklama','miktar','birim','birimFiyat'].forEach(k=>{
+  ['aciklama','miktar','birimFiyat'].forEach(k=>{
     document.getElementById('t-'+k).addEventListener('input', ()=>{
       teklifForm[k] = document.getElementById('t-'+k).value;
       document.getElementById('t-tutarDisplay').value = fmtMoney((parseFloat(teklifForm.miktar)||0)*(parseFloat(teklifForm.birimFiyat)||0));
+    });
+  });
+  const tBirimBtn = document.getElementById('t-birimBtn');
+  if(tBirimBtn) tBirimBtn.addEventListener('click', ()=>{
+    openListPickerModal('Birim Seçin', UNITS.map(u=>({value:u, label:UNIT_LABEL[u]||u})), teklifForm.birim, (val)=>{
+      teklifForm.birim = val;
+      const lbl = document.getElementById('t-birimLabel');
+      if(lbl) lbl.textContent = UNIT_LABEL[val]||val;
     });
   });
   document.getElementById('btnSaveTeklif').onclick = ()=>saveTeklifRow(proj);
@@ -2856,8 +2892,10 @@ function renderImalatMalzemeSectionHtml(sistem){
           <input type="text" id="m-ad" value="${esc(imalatMalzemeForm.ad)}" placeholder="Örn: Tavan C Profili">
         </div>
         <div class="field"><label>Birim</label>
-          <input list="dl-imalatBirim" id="m-birim" value="${esc(imalatMalzemeForm.birim)}" placeholder="mt / adet / kg ...">
-          <datalist id="dl-imalatBirim">${IMALAT_UNITS.map(u=>`<option value="${u}">`).join('')}</datalist>
+          <button type="button" class="btn btn-ghost" id="m-birimBtn" style="width:100%;display:flex;align-items:center;justify-content:space-between;text-align:left;">
+            <span id="m-birimLabel">${esc(UNIT_LABEL[imalatMalzemeForm.birim]||imalatMalzemeForm.birim||'adet')}</span>
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;"><path d="M6 9l6 6 6-6"/></svg>
+          </button>
         </div>
         <div class="field"><label>Sarfiyat (birim ölçü başına)</label><input class="mono" type="number" step="any" id="m-sarfiyat" value="${esc(imalatMalzemeForm.sarfiyat)}" placeholder="Örn: 2.55"></div>
         <div class="field"><label>Ebat (parça ölçüsü, opsiyonel)</label><input class="mono" type="number" step="any" id="m-ebat" value="${esc(imalatMalzemeForm.ebat)}" placeholder="Örn: 3"></div>
@@ -2913,9 +2951,17 @@ function renderMalzemeTableHtml(sistem){
 }
 
 function bindImalatMalzemeSectionEvents(sistem){
-  ['ad','birim','sarfiyat','ebat','paketAdet','alisFiyat','satisFiyat'].forEach(k=>{
+  ['ad','sarfiyat','ebat','paketAdet','alisFiyat','satisFiyat'].forEach(k=>{
     const el = document.getElementById('m-'+k);
     if(el) el.addEventListener('input', ()=>{ imalatMalzemeForm[k] = el.value; });
+  });
+  const birimBtn = document.getElementById('m-birimBtn');
+  if(birimBtn) birimBtn.addEventListener('click', ()=>{
+    openListPickerModal('Birim Seçin', IMALAT_UNITS.map(u=>({value:u, label:UNIT_LABEL[u]||u})), imalatMalzemeForm.birim, (val)=>{
+      imalatMalzemeForm.birim = val;
+      const lbl = document.getElementById('m-birimLabel');
+      if(lbl) lbl.textContent = UNIT_LABEL[val]||val;
+    });
   });
   const saveBtn = document.getElementById('btnSaveMalzeme');
   if(saveBtn) saveBtn.onclick = ()=>saveImalatMalzeme(sistem);
@@ -3288,10 +3334,10 @@ function renderImalatHesapSection(sub){
           </select>
         </div>
         <div class="field"><label>Girilen Değerin Birimi</label>
-          <select id="h-birim" ${mode==='poligon'?'disabled':''}>
-            <option value="m2" ${ui.imalatCalcUnit==='m2'?'selected':''}>m² (alan)</option>
-            <option value="mt" ${ui.imalatCalcUnit==='mt'?'selected':''}>mt (uzunluk)</option>
-          </select>
+          <div id="h-birimToggle" style="display:flex;gap:6px;${mode==='poligon'?'opacity:0.5;pointer-events:none;':''}">
+            <button type="button" class="btn ${ui.imalatCalcUnit==='m2'?'btn-primary':'btn-ghost'}" data-h-birim="m2" style="flex:1;padding:9px 6px;font-size:0.82rem;">m² (alan)</button>
+            <button type="button" class="btn ${ui.imalatCalcUnit==='mt'?'btn-primary':'btn-ghost'}" data-h-birim="mt" style="flex:1;padding:9px 6px;font-size:0.82rem;">mt (uzunluk)</button>
+          </div>
         </div>
         <div class="field"><label>Hesaplanan Değer</label>
           <div class="mono" id="hesapDegerDisplay" style="padding:9px 10px;border-radius:10px;background:rgba(255,255,255,0.55);font-weight:700;">—</div>
@@ -3370,11 +3416,16 @@ function renderImalatHesapSection(sub){
     ui.imalatCalcSistemId = e.target.value || null;
     updateHesapPanel();
   });
-  const birimEl = document.getElementById('h-birim');
-  if(birimEl){
-    birimEl.addEventListener('change', e=>{
-      ui.imalatCalcUnit = e.target.value;
-      updateHesapPanel();
+  const birimToggle = document.getElementById('h-birimToggle');
+  if(birimToggle){
+    birimToggle.querySelectorAll('[data-h-birim]').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        ui.imalatCalcUnit = btn.dataset.hBirim;
+        updateHesapPanel();
+        birimToggle.querySelectorAll('[data-h-birim]').forEach(b=>{
+          b.className = 'btn ' + (b.dataset.hBirim===ui.imalatCalcUnit ? 'btn-primary' : 'btn-ghost');
+        });
+      });
     });
   }
   document.getElementById('hesapModeNav').addEventListener('click', e=>{
@@ -5122,17 +5173,41 @@ function projeTeklifToplam(proj){
   return (proj.teklifRows||[]).reduce((s,r)=>s+(parseFloat(r.tutar)||0),0);
 }
 
-// İşverenden Alınacak Toplam = manuel girilen tutar + (teklif onaylandıysa teklif toplamı).
-// "Teklifi Onayla" işaretli değilse teklif tutarı bu toplama dahil edilmez, sadece
-// manuel girilen tutar geçerli olur. İkisi de girilmişse (ve teklif onaylıysa) toplanır.
-function projeIsverenAlacakToplam(proj){
-  const manuel = parseFloat(proj.manuelIsverenAlacak)||0;
-  const teklif = proj.teklifOnaylandi ? projeTeklifToplam(proj) : 0;
-  return manuel + teklif;
+// İşveren'den alınacak toplam hakediş, iki kaynaktan gelebilir:
+// 1) proj.hakedisManuel — kullanıcının kendi elle girdiği güncel tutar (ör. İşverenin
+//    bildirdiği ama henüz Teklif bölümüne işlenmemiş bir rakam).
+// 2) Teklif bölümündeki kalemlerin toplamı (projeTeklifToplam) — sadece kullanıcı
+//    proj.hakedisTeklifOnay'ı onaylarsa (işaretlerse) bu toplama dahil edilir.
+// Onaylamazsa, sadece elle girilen tutar geçerli sayılır; teklif toplamı hiç katılmaz.
+function projeToplamAlinacak(proj){
+  const manuel = parseFloat(proj.hakedisManuel)||0;
+  const teklif = proj.hakedisTeklifOnay ? projeTeklifToplam(proj) : 0;
+  return Math.round((manuel+teklif)*100)/100;
 }
 
 function renderTahsilatTab(main, proj){
+  const teklifToplam = projeTeklifToplam(proj);
   main.innerHTML = `
+    <div class="card glass">
+      <h2>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/></svg>
+        İşveren'den Alınacak Hakediş
+      </h2>
+      <p class="hint">Buraya İşveren'in size bildirdiği güncel hakediş tutarını elle girin. Teklif bölümündeki kalemlerin toplamını (<b>${fmtMoney(teklifToplam)}</b>) da bu tutara eklemek isterseniz aşağıdaki kutuyu işaretleyin — işaretlemezseniz sadece burada elle girdiğiniz tutar geçerli sayılır.</p>
+      <div class="field-grid" style="grid-template-columns:repeat(2,minmax(140px,1fr));">
+        <div class="field" style="grid-column:span 2;"><label>İşveren'den Alınacak Hakediş (TL) — elle girilen</label>
+          <input class="mono" type="number" step="any" id="hk-manuel" value="${esc(proj.hakedisManuel||'')}" placeholder="Örn: 250000">
+        </div>
+      </div>
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.85rem;color:var(--ink);margin-top:2px;">
+        <input type="checkbox" id="hk-teklifOnay" ${proj.hakedisTeklifOnay?'checked':''}>
+        Teklif bölümündeki toplamı (${fmtMoney(teklifToplam)}) da dahil et
+      </label>
+      <div class="totals-strip" style="margin-top:6px;">
+        <div class="total-chip"><span class="lbl">Toplam Alınacak Hakediş</span><span class="val" id="hk-toplamDisplay">${fmtMoney(projeToplamAlinacak(proj))}</span></div>
+      </div>
+    </div>
+
     <div class="card glass">
       <h2>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
@@ -5165,23 +5240,6 @@ function renderTahsilatTab(main, proj){
     </div>
 
     <div class="card glass">
-      <h2>İşverenden Alınacak</h2>
-      <p class="hint">Teklif kalemlerinden gelen tutarı doğrudan kullanabilir, üzerine kendiniz manuel bir tutar ekleyebilir veya teklifi hiç dahil etmeden sadece manuel tutarı esas alabilirsiniz.</p>
-      <div class="field-grid">
-        <div class="field"><label>Teklif Tutarı (Referans)</label>
-          <input class="mono" type="text" readonly style="opacity:0.75;" value="${fmtMoney(projeTeklifToplam(proj))}">
-        </div>
-        <div class="field"><label>Manuel Tutar (TL)</label>
-          <input class="mono" type="number" step="any" id="th-manuelAlacak" value="${esc(proj.manuelIsverenAlacak||'')}" placeholder="0">
-        </div>
-      </div>
-      <label style="display:flex;align-items:center;gap:8px;margin-top:10px;cursor:pointer;font-size:0.85rem;color:var(--ink-soft);">
-        <input type="checkbox" id="th-teklifOnay" ${proj.teklifOnaylandi?'checked':''} style="width:18px;height:18px;">
-        <span>Teklifi Onayla — teklif tutarını manuel tutara ekleyerek "İşverenden Alınacak" toplamını oluştur</span>
-      </label>
-    </div>
-
-    <div class="card glass">
       <h2>Ödeme Listesi</h2>
       <div class="table-scroll" id="tahsilatTableWrap"></div>
     </div>
@@ -5197,22 +5255,28 @@ function renderTahsilatTab(main, proj){
       </div>
     </div>
   `;
+  let hakedisSaveTimer = null;
+  document.getElementById('hk-manuel').addEventListener('input', (e)=>{
+    proj.hakedisManuel = e.target.value;
+    const disp = document.getElementById('hk-toplamDisplay');
+    if(disp) disp.textContent = fmtMoney(projeToplamAlinacak(proj));
+    renderTahsilatOzet(proj);
+    clearTimeout(hakedisSaveTimer);
+    hakedisSaveTimer = setTimeout(()=>saveState(), 500);
+  });
+  document.getElementById('hk-teklifOnay').addEventListener('change', (e)=>{
+    proj.hakedisTeklifOnay = e.target.checked;
+    const disp = document.getElementById('hk-toplamDisplay');
+    if(disp) disp.textContent = fmtMoney(projeToplamAlinacak(proj));
+    renderTahsilatOzet(proj);
+    saveState();
+  });
   ['odemeTarihi','odemeYapan','odemeAlan','odemeSekli','aciklama','tutar'].forEach(k=>{
     document.getElementById('th-'+k).addEventListener('input', ()=>{ tahsilatForm[k]=document.getElementById('th-'+k).value; });
   });
   document.getElementById('btnSaveTahsilat').onclick = ()=>saveTahsilatRow(proj);
   document.getElementById('btnClearTahsilat').onclick = ()=>{ tahsilatForm = emptyTahsilatForm(); renderMain(); };
   document.getElementById('btnTahsilatPdf').onclick = ()=>exportTahsilatPdf(proj);
-  document.getElementById('th-manuelAlacak').addEventListener('input', (e)=>{
-    proj.manuelIsverenAlacak = e.target.value;
-    saveState();
-    renderTahsilatOzet(proj);
-  });
-  document.getElementById('th-teklifOnay').addEventListener('change', (e)=>{
-    proj.teklifOnaylandi = e.target.checked;
-    saveState();
-    renderTahsilatOzet(proj);
-  });
   renderTahsilatTable(proj);
   renderTahsilatOzet(proj);
 }
@@ -5293,11 +5357,11 @@ function renderTahsilatTable(proj){
 
 function renderTahsilatOzet(proj){
   const el = document.getElementById('tahsilatOzet');
-  const toplamAlinacak = projeIsverenAlacakToplam(proj);
+  const toplamAlinacak = projeToplamAlinacak(proj);
   const alinan = (proj.tahsilatlar||[]).reduce((s,r)=>s+(parseFloat(r.tutar)||0),0);
   const kalan = toplamAlinacak - alinan;
   el.innerHTML = `
-    <div class="total-chip"><span class="lbl">İşverenden Alınacak</span><span class="val">${fmtMoney(toplamAlinacak)}</span></div>
+    <div class="total-chip"><span class="lbl">Toplam Alınacak (Hakediş)</span><span class="val">${fmtMoney(toplamAlinacak)}</span></div>
     <div class="total-chip"><span class="lbl">Alınan Ödeme</span><span class="val">${fmtMoney(alinan)}</span></div>
     <div class="total-chip"><span class="lbl">Kalan Ödeme</span><span class="val">${fmtMoney(kalan)}</span></div>
   `;
@@ -5306,7 +5370,7 @@ function renderTahsilatOzet(proj){
 async function exportTahsilatPdf(proj){
   showToast('PDF hazırlanıyor…');
   const rows = (proj.tahsilatlar||[]).slice().sort((a,b)=>(b.odemeTarihi||'').localeCompare(a.odemeTarihi||''));
-  const toplamAlinacak = projeIsverenAlacakToplam(proj);
+  const toplamAlinacak = projeToplamAlinacak(proj);
   const alinan = rows.reduce((s,r)=>s+(parseFloat(r.tutar)||0),0);
   const kalan = toplamAlinacak - alinan;
   const cellStyle = 'border:1px solid #E4EFEF;padding:5px 6px;text-align:left;word-break:break-word;';
@@ -5331,7 +5395,7 @@ async function exportTahsilatPdf(proj){
       </tr></tfoot>
     </table>
     <table style="width:100%;max-width:420px;border-collapse:collapse;font-size:11px;">
-      <tr><td style="padding:6px 4px;font-weight:700;">İşverenden Alınacak</td><td style="padding:6px 4px;text-align:right;">${fmtMoney(toplamAlinacak)}</td></tr>
+      <tr><td style="padding:6px 4px;font-weight:700;">Toplam Alınacak (Teklif)</td><td style="padding:6px 4px;text-align:right;">${fmtMoney(toplamAlinacak)}</td></tr>
       <tr><td style="padding:6px 4px;font-weight:700;">Alınan Ödeme</td><td style="padding:6px 4px;text-align:right;">${fmtMoney(alinan)}</td></tr>
       <tr style="border-top:2px solid #1C6E8C;"><td style="padding:6px 4px;font-weight:700;color:#1C6E8C;">Kalan Ödeme</td><td style="padding:6px 4px;text-align:right;font-weight:700;color:#1C6E8C;">${fmtMoney(kalan)}</td></tr>
     </table>
@@ -6778,8 +6842,6 @@ window.__dnzInitApp = async function init(){
     if(!p.avanslar) p.avanslar = [];
     if(!p.zimmetler) p.zimmetler = [];
     if(!p.tahsilatlar) p.tahsilatlar = [];
-    if(p.manuelIsverenAlacak===undefined || p.manuelIsverenAlacak===null) p.manuelIsverenAlacak = '';
-    if(p.teklifOnaylandi===undefined || p.teklifOnaylandi===null) p.teklifOnaylandi = true;
     if(!p.masraflar) p.masraflar = [];
     if(!p.yemekler) p.yemekler = [];
     if(!p.yemekFiyat) p.yemekFiyat = { sabah:MEAL_PRICES.sabah, ogle:MEAL_PRICES.ogle, aksam:MEAL_PRICES.aksam };
