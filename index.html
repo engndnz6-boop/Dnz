@@ -2855,9 +2855,12 @@ function renderImalatMalzemeSectionHtml(sistem){
         <div class="field" style="grid-column:span 2;"><label>Malzeme Adı</label>
           <input type="text" id="m-ad" value="${esc(imalatMalzemeForm.ad)}" placeholder="Örn: Tavan C Profili">
         </div>
-        <div class="field"><label>Birim</label>
-          <input list="dl-imalatBirim" id="m-birim" value="${esc(imalatMalzemeForm.birim)}" placeholder="mt / adet / kg ...">
-          <datalist id="dl-imalatBirim">${IMALAT_UNITS.map(u=>`<option value="${u}">`).join('')}</datalist>
+        <div class="field" style="position:relative;"><label>Birim</label>
+          <div style="position:relative;">
+            <input id="m-birim" value="${esc(imalatMalzemeForm.birim)}" placeholder="mt / adet / kg ..." autocomplete="off" style="padding-right:28px;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);width:16px;height:16px;color:var(--ink-soft);pointer-events:none;"><path d="M6 9l6 6 6-6"/></svg>
+          </div>
+          <div class="sg-list" id="sg-mbirim" style="display:none;"></div>
         </div>
         <div class="field"><label>Sarfiyat (birim ölçü başına)</label><input class="mono" type="number" step="any" id="m-sarfiyat" value="${esc(imalatMalzemeForm.sarfiyat)}" placeholder="Örn: 2.55"></div>
         <div class="field"><label>Ebat (parça ölçüsü, opsiyonel)</label><input class="mono" type="number" step="any" id="m-ebat" value="${esc(imalatMalzemeForm.ebat)}" placeholder="Örn: 3"></div>
@@ -2917,6 +2920,39 @@ function bindImalatMalzemeSectionEvents(sistem){
     const el = document.getElementById('m-'+k);
     if(el) el.addEventListener('input', ()=>{ imalatMalzemeForm[k] = el.value; });
   });
+  // Birim alanı: eskiden tarayıcının native <datalist>'ine bağlıydı; bazı mobil
+  // tarayıcılarda ok işaretine dokunmak listeyi açmak yerine sayfayı kaydırıp
+  // kullanıcıyı başka bir yere götürüyordu. Bunun yerine (Metraj sekmesindeki Blok/
+  // Kat/Daire alanlarıyla aynı mantıkla) kendi açılır liste kutumuzu kullanıyoruz:
+  // kutuya dokunulduğunda/yazıldığında öneriler listelenir, bir öneriye dokunulunca
+  // değer kutuya yazılır; kullanıcı isterse listede olmayan bir birimi de elle yazabilir.
+  const birimInput = document.getElementById('m-birim');
+  const birimList = document.getElementById('sg-mbirim');
+  if(birimInput && birimList){
+    const showBirimSuggestions = ()=>{
+      const q = (birimInput.value||'').toLocaleLowerCase('tr');
+      const matches = IMALAT_UNITS.filter(u=> !q || u.toLocaleLowerCase('tr').includes(q) || (UNIT_LABEL[u]||'').toLocaleLowerCase('tr').includes(q));
+      if(matches.length===0){ birimList.style.display='none'; birimList.innerHTML=''; return; }
+      birimList.innerHTML = matches.map(u=>`<div class="sg-item">${esc(UNIT_LABEL[u]||u)}</div>`).join('');
+      birimList.style.display = 'block';
+      [...birimList.children].forEach((item,i)=>{
+        const pick = ()=>{
+          birimInput.value = matches[i];
+          birimInput.dispatchEvent(new Event('input', {bubbles:true}));
+          birimList.style.display = 'none';
+        };
+        item.addEventListener('mousedown', (e)=>{ e.preventDefault(); pick(); });
+        item.addEventListener('touchstart', (e)=>{ e.preventDefault(); pick(); }, {passive:false});
+      });
+    };
+    birimInput.addEventListener('focus', showBirimSuggestions);
+    birimInput.addEventListener('input', showBirimSuggestions);
+    // Bazı mobil tarayıcılarda hızlı dokunuşlarda 'focus' olayı gecikebiliyor;
+    // 'click' ile de listeyi açarak (ok işaretine veya kutunun herhangi bir
+    // yerine dokunulduğunda) her durumda listenin görünmesini garanti ediyoruz.
+    birimInput.addEventListener('click', showBirimSuggestions);
+    birimInput.addEventListener('blur', ()=>{ setTimeout(()=>{ birimList.style.display='none'; }, 150); });
+  }
   const saveBtn = document.getElementById('btnSaveMalzeme');
   if(saveBtn) saveBtn.onclick = ()=>saveImalatMalzeme(sistem);
   const clearBtn = document.getElementById('btnClearMalzeme');
