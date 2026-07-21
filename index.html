@@ -1124,6 +1124,7 @@ function defaultState(){
     activeProjectId:null,
     projects:{},
     imalatSistemleri:[],
+    urunler:[],
     lastBackupAt:null,
     dirtySinceBackup:false,
     metrajPdfFont:{ baslik:6, metin:6.5, rakam:7.5 }
@@ -1137,6 +1138,7 @@ function newProject(name, employer){
     metrajRows:[],
     teklifRows:[],
     teklifNote:'',
+    imalatFiyatListesi:[],
     personel:[],
     avanslar:[],
     zimmetler:[],
@@ -2189,7 +2191,14 @@ function renderMetrajFieldGrid(proj){
   ['blok','kat','daire','mekan','eleman','imalat'].forEach(k=>{
     const inputEl = document.getElementById('f-'+k);
     const listEl = document.getElementById('sg-'+k);
-    const values = (proj.memory[k]||[]).filter(Boolean);
+    let values = (proj.memory[k]||[]).filter(Boolean);
+    if(k==='imalat'){
+      // İmalat Cinsi Fiyat Listesi'ne (Teklif sekmesi) kaydedilen isimler de öneri
+      // listesine otomatik eklenir; alan yine serbest metin olduğu için kullanıcı
+      // isterse listeden seçer, isterse başka bir isim elle yazabilir.
+      const katalogAdlari = (proj.imalatFiyatListesi||[]).map(x=>x.ad).filter(Boolean);
+      values = Array.from(new Set([...values, ...katalogAdlari]));
+    }
     function showSuggestions(){
       const q = (inputEl.value||'').toLocaleLowerCase('tr');
       const matches = values.filter(v=> v.toLocaleLowerCase('tr').includes(q)).slice(0,8);
@@ -2513,6 +2522,25 @@ function emptyTeklifForm(){
 }
 let teklifForm = emptyTeklifForm();
 
+// Yapılacak imalat cinslerini (ör. "Bölme Duvar İmalatı") ve birim fiyatlarını
+// projeye özel bir liste olarak saklıyoruz. Bu liste iki yerde kullanılır:
+// 1) Metraj formundaki "İmalat Cinsi" alanının öneri listesinde isimler otomatik çıkar
+//    (yine de alan serbest metin olarak kalır, kullanıcı isterse başka bir isim girebilir).
+// 2) Teklif sekmesinde "Metrajdan Ekle" ile kalem eklenirken, metraj satırındaki imalat
+//    cinsine ait bir fiyat kayıtlıysa birim fiyat otomatik doldurulur (kullanıcı sonradan
+//    değiştirebilir).
+function emptyImalatFiyatForm(){ return {id:null, ad:'', fiyat:''}; }
+let imalatFiyatForm = emptyImalatFiyatForm();
+
+// Verilen imalat cinsi adına (büyük/küçük harf ve baştaki/sondaki boşluk farkı gözetmeksizin)
+// kayıtlı bir fiyat varsa döndürür, yoksa null döner.
+function findImalatFiyat(proj, imalatAdi){
+  if(!imalatAdi) return null;
+  const key = normKey(imalatAdi);
+  const found = (proj.imalatFiyatListesi||[]).find(x=>normKey(x.ad)===key);
+  return found ? (parseFloat(found.fiyat)||0) : null;
+}
+
 function renderTeklifTab(main, proj){
   main.innerHTML = `
     <div class="card glass">
@@ -2539,6 +2567,27 @@ function renderTeklifTab(main, proj){
           Metrajdan Ekle
         </button>
       </div>
+    </div>
+
+    <div class="card glass">
+      <h2>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+        İmalat Cinsi Fiyat Listesi
+      </h2>
+      <p class="hint">Sık kullandığınız imalat cinslerini (ör. "Bölme Duvar İmalatı") ve birim fiyatlarını buraya kaydedin. Kaydettiğiniz isimler Metraj sekmesindeki "İmalat Cinsi" alanında öneri olarak çıkar (alan yine serbest metindir, isterseniz farklı bir isim de girebilirsiniz). "Metrajdan Ekle" ile teklife kalem eklerken, metraj satırındaki imalat cinsine ait bir fiyat burada kayıtlıysa birim fiyat otomatik doldurulur; dilerseniz sonradan değiştirebilirsiniz.</p>
+      <div class="field-grid" style="grid-template-columns:repeat(2,minmax(140px,1fr));">
+        <div class="field" style="grid-column:span 2;"><label>İmalat Adı</label>
+          <input type="text" id="if-ad" value="${esc(imalatFiyatForm.ad)}" placeholder="Örn: Bölme Duvar İmalatı">
+        </div>
+        <div class="field" style="grid-column:span 2;"><label>Birim Fiyat (TL)</label>
+          <input class="mono" type="number" step="any" id="if-fiyat" value="${esc(imalatFiyatForm.fiyat)}">
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary ripple-el-host" id="btnSaveImalatFiyat">${imalatFiyatForm.id?'Güncelle':'Kaydet'}</button>
+        ${imalatFiyatForm.id ? `<button class="btn btn-ghost" id="btnClearImalatFiyat">Vazgeç</button>` : ''}
+      </div>
+      <div class="table-scroll" id="imalatFiyatTableWrap" style="margin-top:10px;">${renderImalatFiyatTableHtml(proj)}</div>
     </div>
 
     <div class="card glass">
@@ -2593,6 +2642,89 @@ function renderTeklifTab(main, proj){
 
   renderTeklifTable(proj);
   renderTeklifTotals(proj);
+  bindImalatFiyatListesiEvents(proj);
+}
+
+// İmalat Cinsi Fiyat Listesi kartındaki tabloyu HTML olarak üretir.
+function renderImalatFiyatTableHtml(proj){
+  const list = (proj.imalatFiyatListesi||[]).slice().sort((a,b)=>a.ad.localeCompare(b.ad,'tr'));
+  if(list.length===0) return `<div class="empty-state">Henüz imalat cinsi/fiyatı eklenmedi.</div>`;
+  return `
+    <table>
+      <thead><tr><th>İmalat Cinsi</th><th class="num">Birim Fiyat</th><th></th></tr></thead>
+      <tbody>
+        ${list.map(x=>`
+          <tr data-id="${x.id}">
+            <td>${esc(x.ad)}</td>
+            <td class="num">${fmtMoney(x.fiyat)}</td>
+            <td>
+              <div class="row-actions">
+                <button class="icon-btn" data-act="edit" title="Düzenle">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                </button>
+                <button class="icon-btn danger" data-act="delete" title="Sil">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0l-1 14a2 2 0 01-2 2H7a2 2 0 01-2-2L4 6h16z"/></svg>
+                </button>
+              </div>
+            </td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `;
+}
+
+function bindImalatFiyatListesiEvents(proj){
+  const adEl = document.getElementById('if-ad');
+  const fiyatEl = document.getElementById('if-fiyat');
+  if(adEl) adEl.addEventListener('input', ()=>{ imalatFiyatForm.ad = adEl.value; });
+  if(fiyatEl) fiyatEl.addEventListener('input', ()=>{ imalatFiyatForm.fiyat = fiyatEl.value; });
+  const saveBtn = document.getElementById('btnSaveImalatFiyat');
+  if(saveBtn) saveBtn.onclick = ()=>saveImalatFiyat(proj);
+  const clearBtn = document.getElementById('btnClearImalatFiyat');
+  if(clearBtn) clearBtn.onclick = ()=>{ imalatFiyatForm = emptyImalatFiyatForm(); renderMain(); };
+  const wrap = document.getElementById('imalatFiyatTableWrap');
+  if(wrap) wrap.querySelectorAll('tr[data-id]').forEach(tr=>{
+    tr.addEventListener('click',(e)=>{
+      const act = e.target.closest('[data-act]')?.dataset.act;
+      if(!act) return;
+      const id = tr.dataset.id;
+      if(act==='edit'){
+        const x = (proj.imalatFiyatListesi||[]).find(r=>r.id===id);
+        if(x){ imalatFiyatForm = {id:x.id, ad:x.ad, fiyat:x.fiyat}; renderMain(); window.scrollTo({top:0, behavior:'smooth'}); }
+      } else if(act==='delete'){
+        confirmModal('Bu imalat cinsini fiyat listesinden silmek istediğinize emin misiniz?', ()=>{
+          proj.imalatFiyatListesi = (proj.imalatFiyatListesi||[]).filter(r=>r.id!==id);
+          saveState(); renderMain();
+          showToast('İmalat cinsi silindi.');
+        });
+      }
+    });
+  });
+}
+
+function saveImalatFiyat(proj){
+  const ad = (imalatFiyatForm.ad||'').trim();
+  const fiyat = parseFloat(String(imalatFiyatForm.fiyat).replace(',','.'));
+  if(!ad){ showToast('Lütfen imalat cinsi adı girin.'); return; }
+  if(isNaN(fiyat)){ showToast('Lütfen birim fiyat girin.'); return; }
+  if(!proj.imalatFiyatListesi) proj.imalatFiyatListesi = [];
+  if(imalatFiyatForm.id){
+    const x = proj.imalatFiyatListesi.find(r=>r.id===imalatFiyatForm.id);
+    if(x){ x.ad = ad; x.fiyat = fiyat; }
+  } else {
+    // Aynı isimde (büyük/küçük harf ve boşluk farkı gözetmeksizin) zaten bir kayıt varsa
+    // yeni bir satır açmak yerine mevcut kaydın fiyatını günceller.
+    const key = normKey(ad);
+    const existing = proj.imalatFiyatListesi.find(r=>normKey(r.ad)===key);
+    if(existing){ existing.fiyat = fiyat; }
+    else { proj.imalatFiyatListesi.push({id:uid(), ad, fiyat}); }
+  }
+  addMemory(proj, 'imalat', ad);
+  saveState();
+  imalatFiyatForm = emptyImalatFiyatForm();
+  renderMain();
+  showToast('İmalat cinsi fiyat listesi kaydedildi.');
 }
 
 // Aynı Blok + Kat + Daire + Mekân + Uygulama Yeri + İmalat Cinsi (aciklama alanında
@@ -2737,6 +2869,19 @@ let imalatSistemForm = emptyImalatSistemForm();
 function emptyImalatMalzemeForm(){ return {id:null, ad:'', birim:'mt', sarfiyat:'', ebat:'', paketAdet:'', alisFiyat:'', satisFiyat:''}; }
 let imalatMalzemeForm = emptyImalatMalzemeForm();
 
+// Ürün Fiyat Listesi: tüm imalat sistemlerinde ortak kullanılan bir ürün/malzeme adı +
+// alış fiyatı + satış fiyatı kataloğudur (state.urunler, tüm projelerde ve sistemlerde
+// ortaktır — imalatSistemleri ile aynı mantık). Bir sisteme malzeme eklerken "Malzeme Adı"
+// kutusuna bu listeden bir ürün seçilirse, Alış Fiyatı ve Satış Fiyatı otomatik doldurulur;
+// kullanıcı dilerse bu fiyatları elle değiştirebilir.
+function emptyUrunForm(){ return {id:null, ad:'', alisFiyat:'', satisFiyat:''}; }
+let urunForm = emptyUrunForm();
+function findUrunByAd(ad){
+  if(!ad) return null;
+  const key = normKey(ad);
+  return (state.urunler||[]).find(u=>normKey(u.ad)===key) || null;
+}
+
 function renderImalatTab(main){
   if(!ui.imalatSubTab) ui.imalatSubTab = 'tanim';
   main.innerHTML = `
@@ -2791,6 +2936,25 @@ function renderImalatTanimSection(sub){
       </div>
     </div>
     <div class="card glass">
+      <h2>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+        Ürün Ekle
+      </h2>
+      <p class="hint">Kullandığınız ürünleri (ör. "Alçıpan Levha 12.5mm") alış ve satış fiyatlarıyla buraya kaydedin. Bu liste tüm imalat sistemlerinde ortak kullanılır: aşağıda bir sisteme malzeme eklerken "Malzeme Adı" kutusundan bu ürünlerden birini seçtiğinizde, Alış Fiyatı ve Satış Fiyatı otomatik gelir; isterseniz sonradan değiştirebilirsiniz.</p>
+      <div class="field-grid">
+        <div class="field" style="grid-column:span 2;"><label>Ürün Adı</label>
+          <input type="text" id="ur-ad" value="${esc(urunForm.ad)}" placeholder="Örn: Alçıpan Levha 12.5mm">
+        </div>
+        <div class="field"><label>Alış Fiyatı (TL)</label><input class="mono" type="number" step="any" id="ur-alisFiyat" value="${esc(urunForm.alisFiyat)}"></div>
+        <div class="field"><label>Satış Fiyatı (TL)</label><input class="mono" type="number" step="any" id="ur-satisFiyat" value="${esc(urunForm.satisFiyat)}"></div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary ripple-el-host" id="btnSaveUrun">${urunForm.id? 'Ürünü Güncelle':'Ürünü Kaydet'}</button>
+        ${urunForm.id? `<button class="btn btn-ghost" id="btnClearUrun">Vazgeç</button>` : ''}
+      </div>
+      <div class="table-scroll" id="urunTableWrap" style="margin-top:10px;">${renderUrunTableHtml()}</div>
+    </div>
+    <div class="card glass">
       <h2>Tanımlı İmalat Sistemleri <span class="badge">${sistemler.length}</span></h2>
       <div class="project-list" id="imalatSistemList">
         ${sistemler.length===0 ? `<div class="empty-state">Henüz imalat sistemi eklenmedi.</div>` : sistemler.map(s=>`
@@ -2818,6 +2982,7 @@ function renderImalatTanimSection(sub){
   document.getElementById('btnSaveSistem').onclick = ()=>saveImalatSistem();
   const clearBtn = document.getElementById('btnClearSistem');
   if(clearBtn) clearBtn.onclick = ()=>{ imalatSistemForm = emptyImalatSistemForm(); renderImalatTab(document.getElementById('mainContent')); };
+  bindUrunFiyatEvents();
   document.getElementById('imalatSistemList').addEventListener('click',(e)=>{
     const item = e.target.closest('.project-item');
     if(!item) return;
@@ -2846,14 +3011,99 @@ function renderImalatTanimSection(sub){
   if(selected) bindImalatMalzemeSectionEvents(selected);
 }
 
+// Ürün Fiyat Listesi kartındaki tabloyu HTML olarak üretir.
+function renderUrunTableHtml(){
+  const list = (state.urunler||[]).slice().sort((a,b)=>a.ad.localeCompare(b.ad,'tr'));
+  if(list.length===0) return `<div class="empty-state">Henüz ürün eklenmedi.</div>`;
+  return `
+    <table>
+      <thead><tr><th>Ürün</th><th class="num">Alış Fiyatı</th><th class="num">Satış Fiyatı</th><th></th></tr></thead>
+      <tbody>
+        ${list.map(u=>`
+          <tr data-id="${u.id}">
+            <td>${esc(u.ad)}</td>
+            <td class="num">${fmtMoney(u.alisFiyat)}</td>
+            <td class="num">${fmtMoney(u.satisFiyat)}</td>
+            <td>
+              <div class="row-actions">
+                <button class="icon-btn" data-act="edit" title="Düzenle">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                </button>
+                <button class="icon-btn danger" data-act="delete" title="Sil">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0l-1 14a2 2 0 01-2 2H7a2 2 0 01-2-2L4 6h16z"/></svg>
+                </button>
+              </div>
+            </td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `;
+}
+
+function bindUrunFiyatEvents(){
+  const adEl = document.getElementById('ur-ad');
+  const alisEl = document.getElementById('ur-alisFiyat');
+  const satisEl = document.getElementById('ur-satisFiyat');
+  if(adEl) adEl.addEventListener('input', ()=>{ urunForm.ad = adEl.value; });
+  if(alisEl) alisEl.addEventListener('input', ()=>{ urunForm.alisFiyat = alisEl.value; });
+  if(satisEl) satisEl.addEventListener('input', ()=>{ urunForm.satisFiyat = satisEl.value; });
+  const saveBtn = document.getElementById('btnSaveUrun');
+  if(saveBtn) saveBtn.onclick = ()=>saveUrun();
+  const clearBtn = document.getElementById('btnClearUrun');
+  if(clearBtn) clearBtn.onclick = ()=>{ urunForm = emptyUrunForm(); renderImalatTab(document.getElementById('mainContent')); };
+  const wrap = document.getElementById('urunTableWrap');
+  if(wrap) wrap.querySelectorAll('tr[data-id]').forEach(tr=>{
+    tr.addEventListener('click',(e)=>{
+      const act = e.target.closest('[data-act]')?.dataset.act;
+      if(!act) return;
+      const id = tr.dataset.id;
+      if(act==='edit'){
+        const u = (state.urunler||[]).find(x=>x.id===id);
+        if(u){ urunForm = {id:u.id, ad:u.ad, alisFiyat:u.alisFiyat, satisFiyat:u.satisFiyat}; renderImalatTab(document.getElementById('mainContent')); window.scrollTo({top:0, behavior:'smooth'}); }
+      } else if(act==='delete'){
+        confirmModal('Bu ürünü fiyat listesinden silmek istediğinize emin misiniz?', ()=>{
+          state.urunler = (state.urunler||[]).filter(x=>x.id!==id);
+          saveState(); renderImalatTab(document.getElementById('mainContent'));
+          showToast('Ürün silindi.');
+        });
+      }
+    });
+  });
+}
+
+function saveUrun(){
+  const ad = (urunForm.ad||'').trim();
+  const alisFiyat = parseFloat(String(urunForm.alisFiyat).replace(',','.')) || 0;
+  const satisFiyat = parseFloat(String(urunForm.satisFiyat).replace(',','.')) || 0;
+  if(!ad){ showToast('Lütfen ürün adı girin.'); return; }
+  if(!state.urunler) state.urunler = [];
+  if(urunForm.id){
+    const u = state.urunler.find(x=>x.id===urunForm.id);
+    if(u){ u.ad = ad; u.alisFiyat = alisFiyat; u.satisFiyat = satisFiyat; }
+  } else {
+    // Aynı isimde (büyük/küçük harf ve boşluk farkı gözetmeksizin) zaten bir ürün varsa
+    // yeni bir satır açmak yerine mevcut kaydın fiyatlarını günceller.
+    const key = normKey(ad);
+    const existing = state.urunler.find(x=>normKey(x.ad)===key);
+    if(existing){ existing.alisFiyat = alisFiyat; existing.satisFiyat = satisFiyat; }
+    else { state.urunler.push({id:uid(), ad, alisFiyat, satisFiyat}); }
+  }
+  saveState();
+  urunForm = emptyUrunForm();
+  renderImalatTab(document.getElementById('mainContent'));
+  showToast('Ürün fiyat listesi kaydedildi.');
+}
+
 function renderImalatMalzemeSectionHtml(sistem){
   return `
     <div class="card glass">
       <h2>Malzeme Ekle — <span style="color:var(--aqua-dim)">${esc(sistem.ad)}</span></h2>
       <p class="hint">Sarfiyat, 1 m² (ya da girdiğiniz ölçü 1 mt ise 1 mt) başına düşen tüketim miktarıdır. Örn: "100 m²'de 255 mt profil gider" ise sarfiyat <b>2,55</b> yazılır. Profil/boru gibi parça halinde satılan ürünlerde "Ebat" (parça boyu) girilirse, hesaplama panelinde miktar otomatik tam parça sayısına yuvarlanır ve altında adet olarak not düşülür. "Paket İçi Adet" girilirse (örn. bir pakette 12 adet varsa), Hesaplama Paneli'nde "Paket Tamamla" işaretlendiğinde hesaplanan adet otomatik olarak paket katına (12, 24, 36 ...) yuvarlanır.</p>
       <div class="field-grid">
-        <div class="field" style="grid-column:span 2;"><label>Malzeme Adı</label>
-          <input type="text" id="m-ad" value="${esc(imalatMalzemeForm.ad)}" placeholder="Örn: Tavan C Profili">
+        <div class="field" style="grid-column:span 2;position:relative;"><label>Malzeme Adı</label>
+          <input type="text" id="m-ad" value="${esc(imalatMalzemeForm.ad)}" placeholder="Örn: Tavan C Profili" autocomplete="off">
+          <div class="sg-list" id="sg-mad" style="display:none;"></div>
         </div>
         <div class="field" style="position:relative;"><label>Birim</label>
           <div style="position:relative;">
@@ -2920,6 +3170,41 @@ function bindImalatMalzemeSectionEvents(sistem){
     const el = document.getElementById('m-'+k);
     if(el) el.addEventListener('input', ()=>{ imalatMalzemeForm[k] = el.value; });
   });
+  // Malzeme Adı alanı: Ürün Fiyat Listesi'ne (yukarıdaki "Ürün Ekle" kartı) kaydedilen
+  // ürün adlarını öneri olarak gösterir. Bir öneriye dokunulduğunda/tıklandığında hem
+  // malzeme adı hem de o ürüne kayıtlı Alış Fiyatı ve Satış Fiyatı otomatik doldurulur;
+  // kullanıcı isterse bu fiyatları elle değiştirebilir (alan yine serbest metindir,
+  // listede olmayan bir malzeme adı da girilebilir).
+  const adInput = document.getElementById('m-ad');
+  const adList = document.getElementById('sg-mad');
+  if(adInput && adList){
+    const showAdSuggestions = ()=>{
+      const q = (adInput.value||'').toLocaleLowerCase('tr');
+      const urunler = state.urunler||[];
+      const matches = urunler.filter(u=> !q || u.ad.toLocaleLowerCase('tr').includes(q)).slice(0,8);
+      if(matches.length===0){ adList.style.display='none'; adList.innerHTML=''; return; }
+      adList.innerHTML = matches.map(u=>`<div class="sg-item">${esc(u.ad)}</div>`).join('');
+      adList.style.display = 'block';
+      [...adList.children].forEach((item,i)=>{
+        const pick = ()=>{
+          const u = matches[i];
+          adInput.value = u.ad;
+          adInput.dispatchEvent(new Event('input', {bubbles:true}));
+          const alisEl = document.getElementById('m-alisFiyat');
+          const satisEl = document.getElementById('m-satisFiyat');
+          if(alisEl){ alisEl.value = u.alisFiyat; alisEl.dispatchEvent(new Event('input', {bubbles:true})); }
+          if(satisEl){ satisEl.value = u.satisFiyat; satisEl.dispatchEvent(new Event('input', {bubbles:true})); }
+          adList.style.display = 'none';
+        };
+        item.addEventListener('mousedown', (e)=>{ e.preventDefault(); pick(); });
+        item.addEventListener('touchstart', (e)=>{ e.preventDefault(); pick(); }, {passive:false});
+      });
+    };
+    adInput.addEventListener('focus', showAdSuggestions);
+    adInput.addEventListener('input', showAdSuggestions);
+    adInput.addEventListener('click', showAdSuggestions);
+    adInput.addEventListener('blur', ()=>{ setTimeout(()=>{ adList.style.display='none'; }, 150); });
+  }
   // Birim alanı: eskiden tarayıcının native <datalist>'ine bağlıydı; bazı mobil
   // tarayıcılarda ok işaretine dokunmak listeyi açmak yerine sayfayı kaydırıp
   // kullanıcıyı başka bir yere götürüyordu. Bunun yerine (Metraj sekmesindeki Blok/
@@ -5900,9 +6185,10 @@ function openMetrajPickModal(proj){
         <div class="pick-list" id="pickList">
           ${groups.map((g,i)=>{
             const desc = [g.blok,g.kat,g.daire,g.mekan,g.eleman,g.imalat].filter(Boolean).join(', ');
+            const fiyat = findImalatFiyat(proj, g.imalat);
             return `<div class="pick-item">
               <input type="checkbox" id="pk-${i}" data-idx="${i}">
-              <label for="pk-${i}">${esc(desc)} — <b>${fmtNum(g.miktar)} ${UNIT_LABEL[g.birim]}</b></label>
+              <label for="pk-${i}">${esc(desc)} — <b>${fmtNum(g.miktar)} ${UNIT_LABEL[g.birim]}</b>${fiyat!=null ? ` <span style="color:var(--aqua-dim);">(Kayıtlı Fiyat: ${fmtMoney(fiyat)})</span>` : ''}</label>
             </div>`;
           }).join('')}
         </div>
@@ -5921,7 +6207,11 @@ function openMetrajPickModal(proj){
     checked.forEach(chk=>{
       const g = groups[parseInt(chk.dataset.idx)];
       const desc = [g.blok,g.kat,g.daire,g.mekan,g.eleman,g.imalat].filter(Boolean).join(', ');
-      mergeOrAddTeklifRow(proj, {aciklama:desc, miktar:g.miktar, birim:g.birim, birimFiyat:0});
+      // İmalat Cinsi Fiyat Listesi'nde bu imalat cinsine ait bir fiyat kayıtlıysa
+      // birim fiyat otomatik doldurulur; kullanıcı Teklif Kalemleri tablosundan
+      // (Düzenle butonu) dilediği zaman bu fiyatı değiştirebilir.
+      const fiyat = findImalatFiyat(proj, g.imalat);
+      mergeOrAddTeklifRow(proj, {aciklama:desc, miktar:g.miktar, birim:g.birim, birimFiyat: fiyat!=null ? fiyat : 0});
     });
     saveState(); closeModal(); renderMain();
     showToast(`${checked.length} kalem teklife eklendi (aynı blok/kat/daire/mekân/uygulama yeri/imalat cinsi olanlar otomatik tek satırda toplandı).`);
@@ -6817,6 +7107,7 @@ window.__dnzInitApp = async function init(){
     if(p.manuelIsverenAlacak===undefined || p.manuelIsverenAlacak===null) p.manuelIsverenAlacak = '';
     if(p.teklifOnaylandi===undefined || p.teklifOnaylandi===null) p.teklifOnaylandi = true;
     if(!p.masraflar) p.masraflar = [];
+    if(!p.imalatFiyatListesi) p.imalatFiyatListesi = [];
     if(!p.yemekler) p.yemekler = [];
     if(!p.yemekFiyat) p.yemekFiyat = { sabah:MEAL_PRICES.sabah, ogle:MEAL_PRICES.ogle, aksam:MEAL_PRICES.aksam };
     (p.yemekler||[]).forEach(r=>{
