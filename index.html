@@ -713,14 +713,14 @@ main{flex:1;min-width:0;width:100%;padding:0 10px 40px 10px;display:flex;flex-di
 .sg-item:last-child{border-bottom:none;}
 .sg-item:hover,.sg-item:active{background:rgba(47,211,199,0.16);}
 .field label{font-size:0.7rem;font-weight:600;color:var(--ink-soft);letter-spacing:0.2px;}
-.field input,.field select{
+.field input,.field select,.field textarea{
   width:100%;padding:9px 10px;border-radius:10px;
   border:1px solid rgba(11,36,54,0.15);
   background:rgba(255,255,255,0.6);
   font-family:var(--font-body);font-size:0.85rem;color:var(--ink);
-  min-width:0;
+  min-width:0;resize:vertical;
 }
-.field input:focus,.field select:focus{outline:2px solid var(--aqua-dim);outline-offset:1px;}
+.field input:focus,.field select:focus,.field textarea:focus{outline:2px solid var(--aqua-dim);outline-offset:1px;}
 .field input.mono,.field.mono input{font-family:var(--font-mono);}
 
 .btn{
@@ -929,6 +929,75 @@ footer.appfoot{text-align:center;padding:14px;color:rgba(11,36,54,0.45);font-siz
   table{font-size:0.72rem;}
   .card{padding:14px;}
 }
+
+/* personel arama sonuç kartı */
+.personel-arama-item{cursor:pointer;transition:background 120ms ease;}
+.personel-arama-item:hover{background:rgba(47,211,199,0.22);}
+
+/* Dashboard bar grafikleri */
+.bar-track{width:100%;height:10px;border-radius:6px;background:rgba(11,36,54,0.08);overflow:hidden;}
+.bar-fill{height:100%;border-radius:6px;transition:width 500ms ease;}
+html[data-theme="dark"] .bar-track{background:rgba(255,255,255,0.09);}
+
+/* Personel Ara üzerinden bulunan kayıt, tabloda kısa süreliğine vurgulanır */
+tbody tr{transition:background 1.6s ease;}
+tbody tr.row-highlight{background:rgba(47,211,199,0.4) !important;}
+
+/* ======================= KOYU MOD ======================= */
+html[data-theme="dark"]{ color-scheme:dark; }
+html[data-theme="dark"] body{
+  background:
+    radial-gradient(ellipse 80% 60% at 20% -10%, rgba(47,211,199,0.10), transparent 60%),
+    radial-gradient(ellipse 70% 50% at 90% 10%, rgba(28,110,140,0.16), transparent 60%),
+    linear-gradient(160deg, #0B1A20 0%, #0A171D 45%, #081217 100%);
+}
+html[data-theme="dark"]{
+  --ink:#EAF6F5;
+  --ink-soft:#9FBAC1;
+  --glass-bg:rgba(16,38,46,0.66);
+  --glass-bg-strong:rgba(16,38,46,0.86);
+  --glass-border:rgba(255,255,255,0.10);
+  --shadow-color:rgba(0,0,0,0.45);
+}
+html[data-theme="dark"] .glass{box-shadow:0 8px 32px var(--shadow-color), inset 0 1px 0 rgba(255,255,255,0.04);}
+html[data-theme="dark"] .brand-mark{background:#0F2229;box-shadow:0 4px 14px rgba(0,0,0,0.4);}
+html[data-theme="dark"] select.proj-select{
+  background-color:rgba(255,255,255,0.06);
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23EAF6F5' stroke-width='2'><path d='M6 9l6 6 6-6'/></svg>");
+}
+html[data-theme="dark"] .field input,
+html[data-theme="dark"] .field select,
+html[data-theme="dark"] .field textarea,
+html[data-theme="dark"] .filter-bar select,
+html[data-theme="dark"] .month-picker{
+  background:rgba(255,255,255,0.06);border-color:rgba(255,255,255,0.14);color:var(--ink);
+}
+html[data-theme="dark"] .btn-ghost{background:rgba(255,255,255,0.07);border-color:rgba(255,255,255,0.16);}
+html[data-theme="dark"] .icon-btn{background:rgba(255,255,255,0.08);}
+html[data-theme="dark"] .icon-btn:hover{background:rgba(255,255,255,0.18);}
+html[data-theme="dark"] .report-subtab-btn{background:rgba(255,255,255,0.07);}
+html[data-theme="dark"] .report-subtab-btn:not(.active):hover{background:rgba(255,255,255,0.16);}
+html[data-theme="dark"] thead th{background:rgba(255,255,255,0.07);}
+html[data-theme="dark"] tbody td{border-top-color:rgba(255,255,255,0.09);}
+html[data-theme="dark"] tbody tr:hover{background:rgba(255,255,255,0.05);}
+html[data-theme="dark"] .project-item{background:rgba(255,255,255,0.05);border-color:rgba(255,255,255,0.09);}
+html[data-theme="dark"] .project-item.active{background:rgba(47,211,199,0.18);}
+html[data-theme="dark"] .total-chip{background:rgba(255,255,255,0.06);border-color:rgba(255,255,255,0.1);}
+html[data-theme="dark"] .pick-item{background:rgba(255,255,255,0.05);}
+html[data-theme="dark"] .personel-arama-item:hover{background:rgba(47,211,199,0.22);}
+html[data-theme="dark"] .sg-list{background:#10232a;}
+html[data-theme="dark"] .att-table th,html[data-theme="dark"] .att-table td{border-color:rgba(255,255,255,0.09);}
+html[data-theme="dark"] .att-table td.name-cell,html[data-theme="dark"] .att-table th.name-cell{background:rgba(16,38,46,0.95);}
+html[data-theme="dark"] .att-table thead th{background:rgba(255,255,255,0.09);}
+html[data-theme="dark"] .file-attach-chip{background:rgba(47,211,199,0.16);color:var(--ink);}
+html[data-theme="dark"] footer.appfoot{color:rgba(234,246,245,0.35);}
+html[data-theme="dark"] .logo-preview{background:rgba(255,255,255,0.08);border-color:rgba(255,255,255,0.14);}
+html[data-theme="dark"] .backup-banner{color:#ffd8a3;}
+html[data-theme="dark"] .backup-banner.verify-banner{color:#bfe6ee;}
+html[data-theme="dark"] #dnzThemeBtn,
+html[data-theme="dark"] #dnzLogoutBtn{background:rgba(16,38,46,0.85);border-color:rgba(255,255,255,0.16);}
+html[data-theme="dark"] #dnzThemeBtn svg,
+html[data-theme="dark"] #dnzLogoutBtn svg{stroke:#EAF6F5;}
 </style>
 </head>
 <body>
@@ -1011,6 +1080,10 @@ footer.appfoot{text-align:center;padding:14px;color:rgba(11,36,54,0.45);font-siz
     </div>
   </header>
 
+  <button type="button" id="dnzThemeBtn" title="Açık/Koyu Mod" style="position:fixed;top:12px;right:58px;z-index:41;width:38px;height:38px;border-radius:12px;border:1px solid rgba(255,255,255,0.55);background:rgba(234,246,245,0.75);backdrop-filter:blur(10px);display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 4px 14px rgba(8,32,46,0.18);">
+    <svg id="dnzThemeIcon" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="#0B2436" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+  </button>
+
   <button type="button" id="dnzLogoutBtn" onclick="if(confirm('Çıkış yapmak istediğinize emin misiniz?')) dnzLogout();" title="Çıkış Yap" style="position:fixed;top:12px;right:12px;z-index:41;width:38px;height:38px;border-radius:12px;border:1px solid rgba(255,255,255,0.55);background:rgba(234,246,245,0.75);backdrop-filter:blur(10px);display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 4px 14px rgba(8,32,46,0.18);">
     <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="#0B2436" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>
   </button>
@@ -1058,6 +1131,10 @@ footer.appfoot{text-align:center;padding:14px;color:rgba(11,36,54,0.45);font-siz
     <button class="tab-btn ripple-el-host" data-tab="puantaj">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/></svg>
       Puantaj
+    </button>
+    <button class="tab-btn ripple-el-host" data-tab="gunluk">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/><path d="M9 7h7M9 11h7"/></svg>
+      Şantiye Günlüğü
     </button>
     <button class="tab-btn ripple-el-host" data-tab="masraflar">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="6" width="20" height="13" rx="2"/><path d="M2 10h20"/><path d="M6 15h4"/></svg>
@@ -1125,6 +1202,7 @@ function defaultState(){
     projects:{},
     imalatSistemleri:[],
     urunler:[],
+    imalatCinsiFiyatListesi:[],
     lastBackupAt:null,
     dirtySinceBackup:false,
     metrajPdfFont:{ baslik:6, metin:6.5, rakam:7.5 }
@@ -1138,7 +1216,6 @@ function newProject(name, employer){
     metrajRows:[],
     teklifRows:[],
     teklifNote:'',
-    imalatFiyatListesi:[],
     personel:[],
     avanslar:[],
     zimmetler:[],
@@ -1148,6 +1225,8 @@ function newProject(name, employer){
     masraflar:[],
     yemekler:[],
     yemekFiyat:{ sabah:MEAL_PRICES.sabah, ogle:MEAL_PRICES.ogle, aksam:MEAL_PRICES.aksam },
+    gunlukKayitlar:[],
+    havaKonum:null,
     memory:{ blok:[], kat:[], daire:[], mekan:[], eleman:[], imalat:[] }
   };
 }
@@ -1180,6 +1259,8 @@ let ui = {
   masrafFilterKalemi:'',
   yemekFilterStart: isoMonthStart(),
   yemekFilterEnd: isoToday(),
+  gunlukFilterStart: isoMonthStart(),
+  gunlukFilterEnd: isoToday(),
   yemekEditId:null,
   raporTab:'icmal',
   masraflarTab:'avanszimmet',
@@ -1198,7 +1279,9 @@ let ui = {
     {uzunluk:'', aci:90}
   ],
   imalatCalcNot:'',
-  imalatCalcPaketTamamla:{}
+  imalatCalcPaketTamamla:{},
+  personelAramaQuery:'',
+  personelHighlightId:null
 };
 
 /* ======================= PERSISTENCE ======================= */
@@ -1677,6 +1760,32 @@ document.getElementById('tabNav').addEventListener('click',(e)=>{
 document.getElementById('btnQuickNewProject').addEventListener('click', ()=> openProjectModal(null));
 document.getElementById('bannerBackupBtn').addEventListener('click', exportBackupFile);
 
+/* ======================= AÇIK / KOYU MOD ======================= */
+// Tercih, hesaba değil bu tarayıcıya bağlı basit bir ayar olduğu için localStorage'da
+// tutulur (uygulamanın Firebase'e senkronize ettiği ana state'in bir parçası değildir).
+const DNZ_THEME_KEY = 'dnzTheme_v1';
+const THEME_ICON_SUN = '<circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>';
+const THEME_ICON_MOON = '<path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/>';
+function applyDnzTheme(theme){
+  document.documentElement.setAttribute('data-theme', theme);
+  const icon = document.getElementById('dnzThemeIcon');
+  if(icon) icon.innerHTML = theme==='dark' ? THEME_ICON_MOON : THEME_ICON_SUN;
+}
+function initDnzTheme(){
+  let stored = null;
+  try{ stored = localStorage.getItem(DNZ_THEME_KEY); }catch(e){ /* yoksay */ }
+  const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  applyDnzTheme(stored || (prefersDark ? 'dark' : 'light'));
+}
+function toggleDnzTheme(){
+  const current = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+  const next = current === 'dark' ? 'light' : 'dark';
+  try{ localStorage.setItem(DNZ_THEME_KEY, next); }catch(e){ /* yoksay */ }
+  applyDnzTheme(next);
+}
+initDnzTheme();
+document.getElementById('dnzThemeBtn').addEventListener('click', toggleDnzTheme);
+
 /* ======================= YEDEKLENMEDEN ÇIKIŞI ENGELLEME ======================= */
 // 1) Sekme/tarayıcı kapatma, sayfa yenileme: tarayıcının kendi "Bu sayfadan ayrılmak
 //    istiyor musunuz?" uyarısını tetikler.
@@ -1751,18 +1860,20 @@ function renderMain(){
   if(ui.tab==='teklif') return renderTeklifTab(main, proj);
   if(ui.tab==='personel') return renderPersonelTab(main, proj);
   if(ui.tab==='puantaj') return renderPuantajTab(main, proj);
+  if(ui.tab==='gunluk') return renderSantiyeGunluguTab(main, proj);
   if(ui.tab==='masraflar') return renderMasraflarTab(main, proj);
   if(ui.tab==='raporlar') return renderRaporlarTab(main, proj);
 }
 
-/* ======================= RAPORLAR (İcmal / Personeller / Toplu Hesap) ======================= */
+/* ======================= RAPORLAR (Dashboard / İcmal / Personeller / Toplu Hesap) ======================= */
 const RAPOR_SUBTABS = [
+  {key:'dashboard', label:'Dashboard', icon:'<rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/>'},
   {key:'icmal', label:'İcmal', icon:'<path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/>'},
   {key:'topluicmal', label:'Personeller', icon:'<path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/>'},
   {key:'topluhesap', label:'Toplu Hesap', icon:'<path d="M3 3v18h18"/><path d="M7 16l4-6 4 4 5-8"/>'}
 ];
 function renderRaporlarTab(main, proj){
-  if(!ui.raporTab || !RAPOR_SUBTABS.some(t=>t.key===ui.raporTab)) ui.raporTab = 'icmal';
+  if(!ui.raporTab || !RAPOR_SUBTABS.some(t=>t.key===ui.raporTab)) ui.raporTab = 'dashboard';
   main.innerHTML = `
     <div class="card glass">
       <h2>
@@ -1788,7 +1899,8 @@ function renderRaporlarTab(main, proj){
     renderRaporlarTab(main, proj);
   });
   const sub = document.getElementById('reportSubContent');
-  if(ui.raporTab==='icmal') renderIcmalTab(sub, proj);
+  if(ui.raporTab==='dashboard') renderRaporDashboardTab(sub, proj);
+  else if(ui.raporTab==='icmal') renderIcmalTab(sub, proj);
   else if(ui.raporTab==='topluicmal') renderTopluIcmalTab(sub, proj);
   else if(ui.raporTab==='topluhesap') renderTopluHesapTab(sub, proj);
 }
@@ -1850,6 +1962,8 @@ function renderProjelerTab(main){
         </button>
       </div>
     </div>
+    ${renderGenelOzetHtml()}
+    ${renderPersonelAramaHtml()}
     <div class="card glass">
       <h2>Proje Listesi <span class="badge">${projects.length}</span></h2>
       <div class="project-list" id="projectList">
@@ -1896,6 +2010,157 @@ function renderProjelerTab(main){
       });
     }
   });
+  wirePersonelArama();
+}
+
+/* ---- Personel Ara: tüm projelerdeki personeli isim/pozisyon/kimlik no ile arar ---- */
+function wirePersonelArama(){
+  const input = document.getElementById('personelAramaInput');
+  const sonucWrap = document.getElementById('personelAramaSonuc');
+  if(!input || !sonucWrap) return;
+  input.addEventListener('input', ()=>{
+    ui.personelAramaQuery = input.value;
+    sonucWrap.innerHTML = renderPersonelAramaResultsHtml();
+  });
+  sonucWrap.addEventListener('click',(e)=>{
+    const item = e.target.closest('.personel-arama-item');
+    if(!item) return;
+    goToPersonel(item.dataset.proj, item.dataset.pid);
+  });
+}
+
+function renderPersonelAramaResultsHtml(){
+  const q = normKey(ui.personelAramaQuery||'');
+  if(!q) return '';
+  const results = [];
+  Object.values(state.projects).forEach(proj=>{
+    (proj.personel||[]).forEach(p=>{
+      const hay = normKey(p.adSoyad) + ' ' + normKey(p.pozisyon) + ' ' + normKey(p.kimlikNo);
+      if(hay.includes(q)) results.push({proj, p});
+    });
+  });
+  results.sort((a,b)=>a.p.adSoyad.localeCompare(b.p.adSoyad,'tr'));
+  if(results.length===0){
+    return `<div class="empty-state" style="padding:16px;">"${esc(ui.personelAramaQuery)}" için sonuç bulunamadı.</div>`;
+  }
+  return `
+    <div class="pick-list">
+      ${results.map(r=>{
+        const st = personelStatus(r.p);
+        return `
+        <div class="pick-item personel-arama-item" data-proj="${r.proj.id}" data-pid="${r.p.id}">
+          <div style="display:flex;flex-direction:column;gap:2px;min-width:0;flex:1;">
+            <b style="font-family:var(--font-display);font-size:0.85rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(r.p.adSoyad)}</b>
+            <span style="font-size:0.7rem;color:var(--ink-soft);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(r.p.pozisyon)||'Pozisyon belirtilmedi'} · ${esc(r.proj.name)}</span>
+          </div>
+          <span class="status-badge ${st.cls}">${st.text}</span>
+        </div>`;
+      }).join('')}
+    </div>`;
+}
+
+function renderPersonelAramaHtml(){
+  return `
+    <div class="card glass">
+      <h2>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.3-4.3"/></svg>
+        Personel Ara
+      </h2>
+      <p class="hint">Adı soyadı, pozisyon ya da kimlik numarasına göre <b>tüm projelerdeki</b> personeli arayın. Bulduğunuz kişiye tıkladığınızda ilgili projeye geçilip Personel bölümünde tüm bilgileri açılır.</p>
+      <div class="field">
+        <input type="text" id="personelAramaInput" value="${esc(ui.personelAramaQuery||'')}" placeholder="Örn: Ahmet Yılmaz">
+      </div>
+      <div id="personelAramaSonuc">${renderPersonelAramaResultsHtml()}</div>
+    </div>`;
+}
+
+// Aramadan bir personele tıklandığında: ilgili proje aktif projeye çevrilir, Personel
+// sekmesine geçilir, formu kişinin TÜM bilgileriyle (baba adı, kimlik no, IBAN dahil)
+// önceden doldurulmuş halde açılır ve tablo satırı kısa süreliğine vurgulanır.
+function goToPersonel(projId, personId){
+  const proj = state.projects[projId];
+  if(!proj) return;
+  const p = (proj.personel||[]).find(x=>x.id===personId);
+  if(!p) return;
+  state.activeProjectId = projId;
+  personelForm = {id:p.id, adSoyad:p.adSoyad, babaAdi:p.babaAdi, kimlikNo:p.kimlikNo, banka:p.banka, girisTarihi:p.girisTarihi, cikisTarihi:p.cikisTarihi, pozisyon:p.pozisyon, yevmiye:String(p.yevmiye), dosya:p.dosya||null};
+  ui.tab = 'personel';
+  ui.personelHighlightId = p.id;
+  saveState();
+  renderAll();
+  window.scrollTo({top:0, behavior:'smooth'});
+  showToast(`${p.adSoyad} bulundu.`);
+}
+
+/* ---- Genel Özet: tüm projelerin toplu rakamları (Anasayfa) ---- */
+function renderGenelOzetHtml(){
+  const projects = Object.values(state.projects);
+  if(projects.length===0){
+    return `
+    <div class="card glass">
+      <h2>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/></svg>
+        Tüm Projeler — Genel Özet
+      </h2>
+      <div class="empty-state">Genel özeti görmek için önce bir proje oluşturun.</div>
+    </div>`;
+  }
+  let toplamPersonel=0, toplamMetraj=0, toplamTeklif=0;
+  let toplamHakedis=0, toplamTahsilat=0, toplamOdenecek=0, toplamOdenen=0, toplamMasraf=0, toplamYemek=0;
+  projects.forEach(p=>{
+    toplamPersonel += (p.personel||[]).length;
+    toplamMetraj += (p.metrajRows||[]).length;
+    toplamTeklif += (p.teklifRows||[]).length;
+    toplamHakedis += projeIsverenAlacakToplam(p);
+    toplamTahsilat += (p.tahsilatlar||[]).reduce((s,r)=>s+(parseFloat(r.tutar)||0),0);
+    toplamOdenecek += projeCalisanaOdenecekToplam(p);
+    toplamOdenen += projeCalisanaOdenenToplam(p);
+    toplamMasraf += projeMasrafToplam(p);
+    toplamYemek += projeYemekToplam(p);
+  });
+  const kalanIsveren = toplamHakedis - toplamTahsilat;
+  const kalanCalisan = toplamOdenecek - toplamOdenen;
+  const genelKalanKar = toplamHakedis - toplamOdenecek - toplamMasraf - toplamYemek;
+  return `
+    <div class="card glass">
+      <h2>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/></svg>
+        Tüm Projeler — Genel Özet <span class="badge">${projects.length} proje</span>
+      </h2>
+      <p class="hint">Tüm projelerinizin toplam rakamları; her projedeki Teklif, Tahsilat, Puantaj/Mesai, Avans ve Masraf kayıtlarından otomatik hesaplanır.</p>
+      <div class="totals-strip">
+        <div class="total-chip"><span class="lbl">Toplam Proje</span><span class="val">${projects.length}</span></div>
+        <div class="total-chip"><span class="lbl">Toplam Personel</span><span class="val">${toplamPersonel}</span></div>
+        <div class="total-chip"><span class="lbl">Metraj Satırı</span><span class="val">${toplamMetraj}</span></div>
+        <div class="total-chip"><span class="lbl">Teklif Kalemi</span><span class="val">${toplamTeklif}</span></div>
+      </div>
+      <div class="field-grid" style="grid-template-columns:repeat(auto-fill,minmax(210px,1fr));">
+        <div class="card glass" style="padding:12px;gap:8px;">
+          <b style="font-family:var(--font-display);font-size:0.82rem;color:var(--tide);">İşveren Hesabı (Tüm Projeler)</b>
+          <div class="totals-strip">
+            <div class="total-chip"><span class="lbl">Toplam Hakediş</span><span class="val">${fmtMoney(toplamHakedis)}</span></div>
+            <div class="total-chip"><span class="lbl">Toplam Tahsilat</span><span class="val">${fmtMoney(toplamTahsilat)}</span></div>
+            <div class="total-chip"><span class="lbl">Kalan Ödeme</span><span class="val">${fmtMoney(kalanIsveren)}</span></div>
+          </div>
+        </div>
+        <div class="card glass" style="padding:12px;gap:8px;">
+          <b style="font-family:var(--font-display);font-size:0.82rem;color:var(--tide);">Çalışan Hesabı (Tüm Projeler)</b>
+          <div class="totals-strip">
+            <div class="total-chip"><span class="lbl">Ödenecek</span><span class="val">${fmtMoney(toplamOdenecek)}</span></div>
+            <div class="total-chip"><span class="lbl">Ödenen</span><span class="val">${fmtMoney(toplamOdenen)}</span></div>
+            <div class="total-chip"><span class="lbl">Kalan</span><span class="val">${fmtMoney(kalanCalisan)}</span></div>
+          </div>
+        </div>
+        <div class="card glass" style="padding:12px;gap:8px;">
+          <b style="font-family:var(--font-display);font-size:0.82rem;color:var(--tide);">Genel Kâr Özeti</b>
+          <div class="totals-strip">
+            <div class="total-chip"><span class="lbl">Masraf</span><span class="val">${fmtMoney(toplamMasraf)}</span></div>
+            <div class="total-chip"><span class="lbl">Yemek</span><span class="val">${fmtMoney(toplamYemek)}</span></div>
+            <div class="total-chip"><span class="lbl">Genel Kalan Kâr</span><span class="val">${fmtMoney(genelKalanKar)}</span></div>
+          </div>
+        </div>
+      </div>
+    </div>`;
 }
 
 function renderProjeBilgiPanosuHtml(proj){
@@ -2194,9 +2459,10 @@ function renderMetrajFieldGrid(proj){
     let values = (proj.memory[k]||[]).filter(Boolean);
     if(k==='imalat'){
       // İmalat Cinsi Fiyat Listesi'ne (Teklif sekmesi) kaydedilen isimler de öneri
-      // listesine otomatik eklenir; alan yine serbest metin olduğu için kullanıcı
-      // isterse listeden seçer, isterse başka bir isim elle yazabilir.
-      const katalogAdlari = (proj.imalatFiyatListesi||[]).map(x=>x.ad).filter(Boolean);
+      // listesine otomatik eklenir; bu liste artık tüm projelerde ortaktır. Alan yine
+      // serbest metin olduğu için kullanıcı isterse listeden seçer, isterse başka bir
+      // isim elle yazabilir.
+      const katalogAdlari = (state.imalatCinsiFiyatListesi||[]).map(x=>x.ad).filter(Boolean);
       values = Array.from(new Set([...values, ...katalogAdlari]));
     }
     function showSuggestions(){
@@ -2375,6 +2641,137 @@ function groupIcmalRows(rows){
     return a.eleman.localeCompare(b.eleman,'tr') || a.imalat.localeCompare(b.imalat,'tr');
   });
 }
+/* ---- Dashboard: özet KPI kartları + basit SVG grafikler (harici kütüphane kullanılmaz,
+   çevrimdışı çalışmaya devam eder). ---- */
+function svgDonutChart(segments, opts={}){
+  const size = opts.size || 130;
+  const stroke = opts.stroke || 20;
+  const total = segments.reduce((s,x)=>s+(x.value>0?x.value:0),0);
+  const r = (size - stroke)/2;
+  const c = size/2;
+  const circ = 2*Math.PI*r;
+  let offset = 0;
+  const arcs = segments.filter(s=>s.value>0).map(s=>{
+    const frac = total>0 ? s.value/total : 0;
+    const dash = frac*circ;
+    const gap = circ - dash;
+    const rotate = total>0 ? (offset/total)*360 - 90 : -90;
+    offset += s.value;
+    return `<circle cx="${c}" cy="${c}" r="${r}" fill="none" stroke="${s.color}" stroke-width="${stroke}" stroke-dasharray="${dash.toFixed(2)} ${gap.toFixed(2)}" transform="rotate(${rotate.toFixed(2)} ${c} ${c})"/>`;
+  }).join('');
+  return `
+    <svg viewBox="0 0 ${size} ${size}" width="${size}" height="${size}">
+      <circle cx="${c}" cy="${c}" r="${r}" fill="none" stroke="var(--ink-soft)" stroke-opacity="0.16" stroke-width="${stroke}"/>
+      ${arcs}
+    </svg>`;
+}
+function svgBarRow(label, value, max, color, valueLabel){
+  const pct = max>0 ? Math.min(100, (value/max)*100) : 0;
+  return `
+    <div>
+      <div style="display:flex;justify-content:space-between;font-size:0.72rem;color:var(--ink-soft);margin-bottom:4px;gap:8px;">
+        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(label)}</span>
+        <span style="font-family:var(--font-mono);font-weight:700;color:var(--ink);white-space:nowrap;">${valueLabel}</span>
+      </div>
+      <div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:${color};"></div></div>
+    </div>`;
+}
+const DASHBOARD_PALETTE = ['#2FD3C7','#1C6E8C','#E8776B','#FFB74D','#8E7CC3','#6FCF97','#56CCF2','#F2994A'];
+
+function renderRaporDashboardTab(main, proj){
+  const hakedis = projeIsverenAlacakToplam(proj);
+  const tahsilat = (proj.tahsilatlar||[]).reduce((s,r)=>s+(parseFloat(r.tutar)||0),0);
+  const kalanIsveren = hakedis - tahsilat;
+  const odenecek = projeCalisanaOdenecekToplam(proj);
+  const odenen = projeCalisanaOdenenToplam(proj);
+  const kalanCalisan = odenecek - odenen;
+  const masrafToplam = projeMasrafToplam(proj);
+  const yemekToplam = projeYemekToplam(proj);
+  const kalanKar = hakedis - odenecek - masrafToplam - yemekToplam;
+
+  const personelList = proj.personel || [];
+  const aktifSayi = personelList.filter(p=>personelStatus(p).cls==='aktif').length;
+  const ayrilmisSayi = personelList.length - aktifSayi;
+
+  const ym = currentYm();
+  const ayPersonel = activePersonelForMonth(proj, ym);
+  const ayToplamGun = ayPersonel.reduce((s,p)=> s + personelPuantajToplam(p, ym), 0);
+  const ayToplamMesai = ayPersonel.reduce((s,p)=> s + personelMesaiToplam(p, ym), 0);
+
+  const masrafGroups = {};
+  (proj.masraflar||[]).forEach(m=>{
+    const key = (m.masrafKalemi||'Diğer').trim() || 'Diğer';
+    masrafGroups[key] = (masrafGroups[key]||0) + (parseFloat(m.tutar)||0);
+  });
+  const masrafSegments = Object.entries(masrafGroups)
+    .sort((a,b)=>b[1]-a[1])
+    .map(([k,v],i)=>({label:k, value:v, color:DASHBOARD_PALETTE[i%DASHBOARD_PALETTE.length]}));
+
+  const maxHesap = Math.max(hakedis, tahsilat, odenecek, odenen, 1);
+
+  main.innerHTML = `
+    <div class="card glass">
+      <h2>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>
+        Dashboard — <span style="color:var(--aqua-dim)">${esc(proj.name)}</span>
+      </h2>
+      <p class="hint">Bu projenin finansal ve operasyonel durumuna hızlı bir bakış. Rakamlar Teklif, Tahsilat, Puantaj, Avans/Zimmet ve Masraf kayıtlarından anlık hesaplanır.</p>
+      <div class="totals-strip">
+        <div class="total-chip"><span class="lbl">Toplam Hakediş</span><span class="val">${fmtMoney(hakedis)}</span></div>
+        <div class="total-chip"><span class="lbl">Kalan Ödeme (İşveren)</span><span class="val">${fmtMoney(kalanIsveren)}</span></div>
+        <div class="total-chip"><span class="lbl">Kalan Ödeme (Çalışan)</span><span class="val">${fmtMoney(kalanCalisan)}</span></div>
+        <div class="total-chip"><span class="lbl">Kalan Kâr</span><span class="val">${fmtMoney(kalanKar)}</span></div>
+      </div>
+    </div>
+
+    <div class="field-grid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr));align-items:stretch;">
+      <div class="card glass">
+        <h2 style="font-size:0.92rem;">İşveren / Çalışan Hesabı</h2>
+        <div style="display:flex;flex-direction:column;gap:12px;">
+          ${svgBarRow('Toplam Hakediş', hakedis, maxHesap, 'var(--aqua-dim)', fmtMoney(hakedis))}
+          ${svgBarRow('Toplam Tahsilat', tahsilat, maxHesap, 'var(--tide)', fmtMoney(tahsilat))}
+          ${svgBarRow('Çalışana Ödenecek', odenecek, maxHesap, '#E8776B', fmtMoney(odenecek))}
+          ${svgBarRow('Çalışana Ödenen', odenen, maxHesap, '#FFB74D', fmtMoney(odenen))}
+        </div>
+      </div>
+
+      <div class="card glass" style="align-items:center;">
+        <h2 style="font-size:0.92rem;align-self:flex-start;">Personel Durumu</h2>
+        ${personelList.length===0 ? `<div class="empty-state">Henüz personel eklenmedi.</div>` : `
+        <div style="display:flex;align-items:center;gap:18px;flex-wrap:wrap;justify-content:center;">
+          ${svgDonutChart([{label:'Aktif', value:aktifSayi, color:'#2FD3C7'},{label:'Ayrılmış', value:ayrilmisSayi, color:'#E8776B'}])}
+          <div style="display:flex;flex-direction:column;gap:6px;font-size:0.78rem;">
+            <span><b style="color:#2FD3C7;">●</b> Aktif: ${aktifSayi}</span>
+            <span><b style="color:#E8776B;">●</b> Ayrılmış: ${ayrilmisSayi}</span>
+            <span style="color:var(--ink-soft);">Toplam: ${personelList.length} personel</span>
+          </div>
+        </div>`}
+      </div>
+
+      <div class="card glass" style="align-items:center;">
+        <h2 style="font-size:0.92rem;align-self:flex-start;">Masraf Dağılımı</h2>
+        ${masrafSegments.length===0 ? `<div class="empty-state">Henüz masraf kaydı yok.</div>` : `
+        <div style="display:flex;align-items:center;gap:18px;flex-wrap:wrap;justify-content:center;">
+          ${svgDonutChart(masrafSegments)}
+          <div style="display:flex;flex-direction:column;gap:5px;font-size:0.75rem;max-width:190px;">
+            ${masrafSegments.map(s=>`<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><b style="color:${s.color};">●</b> ${esc(s.label)}: ${fmtMoney(s.value)}</span>`).join('')}
+          </div>
+        </div>`}
+      </div>
+
+      <div class="card glass">
+        <h2 style="font-size:0.92rem;">Bu Ay Puantaj Özeti (${ym})</h2>
+        <div class="totals-strip">
+          <div class="total-chip"><span class="lbl">Çalışan Personel</span><span class="val">${ayPersonel.length}</span></div>
+          <div class="total-chip"><span class="lbl">Toplam Çalışılan Gün</span><span class="val">${fmtNum(ayToplamGun)}</span></div>
+          <div class="total-chip"><span class="lbl">Toplam Mesai (saat)</span><span class="val">${fmtNum(ayToplamMesai)}</span></div>
+        </div>
+        <p class="hint">Detaylı puantaj kayıtları için Puantaj sekmesine geçebilirsiniz.</p>
+      </div>
+    </div>
+  `;
+}
+
 function renderIcmalTab(main, proj){
   main.innerHTML = `
     <div class="card glass">
@@ -2523,7 +2920,8 @@ function emptyTeklifForm(){
 let teklifForm = emptyTeklifForm();
 
 // Yapılacak imalat cinslerini (ör. "Bölme Duvar İmalatı") ve birim fiyatlarını
-// projeye özel bir liste olarak saklıyoruz. Bu liste iki yerde kullanılır:
+// tüm projelerde ortak kullanılan genel bir liste olarak saklıyoruz (state.imalatCinsiFiyatListesi
+// — İmalat Sistemleri sekmesindeki Ürün listesiyle aynı mantık). Bu liste iki yerde kullanılır:
 // 1) Metraj formundaki "İmalat Cinsi" alanının öneri listesinde isimler otomatik çıkar
 //    (yine de alan serbest metin olarak kalır, kullanıcı isterse başka bir isim girebilir).
 // 2) Teklif sekmesinde "Metrajdan Ekle" ile kalem eklenirken, metraj satırındaki imalat
@@ -2534,10 +2932,10 @@ let imalatFiyatForm = emptyImalatFiyatForm();
 
 // Verilen imalat cinsi adına (büyük/küçük harf ve baştaki/sondaki boşluk farkı gözetmeksizin)
 // kayıtlı bir fiyat varsa döndürür, yoksa null döner.
-function findImalatFiyat(proj, imalatAdi){
+function findImalatFiyat(imalatAdi){
   if(!imalatAdi) return null;
   const key = normKey(imalatAdi);
-  const found = (proj.imalatFiyatListesi||[]).find(x=>normKey(x.ad)===key);
+  const found = (state.imalatCinsiFiyatListesi||[]).find(x=>normKey(x.ad)===key);
   return found ? (parseFloat(found.fiyat)||0) : null;
 }
 
@@ -2574,7 +2972,7 @@ function renderTeklifTab(main, proj){
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
         İmalat Cinsi Fiyat Listesi
       </h2>
-      <p class="hint">Sık kullandığınız imalat cinslerini (ör. "Bölme Duvar İmalatı") ve birim fiyatlarını buraya kaydedin. Kaydettiğiniz isimler Metraj sekmesindeki "İmalat Cinsi" alanında öneri olarak çıkar (alan yine serbest metindir, isterseniz farklı bir isim de girebilirsiniz). "Metrajdan Ekle" ile teklife kalem eklerken, metraj satırındaki imalat cinsine ait bir fiyat burada kayıtlıysa birim fiyat otomatik doldurulur; dilerseniz sonradan değiştirebilirsiniz.</p>
+      <p class="hint">Sık kullandığınız imalat cinslerini (ör. "Bölme Duvar İmalatı") ve birim fiyatlarını buraya kaydedin. Bu liste tüm projelerde ortak kullanılır. Kaydettiğiniz isimler Metraj sekmesindeki "İmalat Cinsi" alanında öneri olarak çıkar (alan yine serbest metindir, isterseniz farklı bir isim de girebilirsiniz). "Metrajdan Ekle" ile teklife kalem eklerken, metraj satırındaki imalat cinsine ait bir fiyat burada kayıtlıysa birim fiyat otomatik doldurulur; dilerseniz sonradan değiştirebilirsiniz.</p>
       <div class="field-grid" style="grid-template-columns:repeat(2,minmax(140px,1fr));">
         <div class="field" style="grid-column:span 2;"><label>İmalat Adı</label>
           <input type="text" id="if-ad" value="${esc(imalatFiyatForm.ad)}" placeholder="Örn: Bölme Duvar İmalatı">
@@ -2587,7 +2985,7 @@ function renderTeklifTab(main, proj){
         <button class="btn btn-primary ripple-el-host" id="btnSaveImalatFiyat">${imalatFiyatForm.id?'Güncelle':'Kaydet'}</button>
         ${imalatFiyatForm.id ? `<button class="btn btn-ghost" id="btnClearImalatFiyat">Vazgeç</button>` : ''}
       </div>
-      <div class="table-scroll" id="imalatFiyatTableWrap" style="margin-top:10px;">${renderImalatFiyatTableHtml(proj)}</div>
+      <div class="table-scroll" id="imalatFiyatTableWrap" style="margin-top:10px;">${renderImalatFiyatTableHtml()}</div>
     </div>
 
     <div class="card glass">
@@ -2642,12 +3040,12 @@ function renderTeklifTab(main, proj){
 
   renderTeklifTable(proj);
   renderTeklifTotals(proj);
-  bindImalatFiyatListesiEvents(proj);
+  bindImalatFiyatListesiEvents();
 }
 
 // İmalat Cinsi Fiyat Listesi kartındaki tabloyu HTML olarak üretir.
-function renderImalatFiyatTableHtml(proj){
-  const list = (proj.imalatFiyatListesi||[]).slice().sort((a,b)=>a.ad.localeCompare(b.ad,'tr'));
+function renderImalatFiyatTableHtml(){
+  const list = (state.imalatCinsiFiyatListesi||[]).slice().sort((a,b)=>a.ad.localeCompare(b.ad,'tr'));
   if(list.length===0) return `<div class="empty-state">Henüz imalat cinsi/fiyatı eklenmedi.</div>`;
   return `
     <table>
@@ -2674,13 +3072,13 @@ function renderImalatFiyatTableHtml(proj){
   `;
 }
 
-function bindImalatFiyatListesiEvents(proj){
+function bindImalatFiyatListesiEvents(){
   const adEl = document.getElementById('if-ad');
   const fiyatEl = document.getElementById('if-fiyat');
   if(adEl) adEl.addEventListener('input', ()=>{ imalatFiyatForm.ad = adEl.value; });
   if(fiyatEl) fiyatEl.addEventListener('input', ()=>{ imalatFiyatForm.fiyat = fiyatEl.value; });
   const saveBtn = document.getElementById('btnSaveImalatFiyat');
-  if(saveBtn) saveBtn.onclick = ()=>saveImalatFiyat(proj);
+  if(saveBtn) saveBtn.onclick = ()=>saveImalatFiyat();
   const clearBtn = document.getElementById('btnClearImalatFiyat');
   if(clearBtn) clearBtn.onclick = ()=>{ imalatFiyatForm = emptyImalatFiyatForm(); renderMain(); };
   const wrap = document.getElementById('imalatFiyatTableWrap');
@@ -2690,11 +3088,11 @@ function bindImalatFiyatListesiEvents(proj){
       if(!act) return;
       const id = tr.dataset.id;
       if(act==='edit'){
-        const x = (proj.imalatFiyatListesi||[]).find(r=>r.id===id);
+        const x = (state.imalatCinsiFiyatListesi||[]).find(r=>r.id===id);
         if(x){ imalatFiyatForm = {id:x.id, ad:x.ad, fiyat:x.fiyat}; renderMain(); window.scrollTo({top:0, behavior:'smooth'}); }
       } else if(act==='delete'){
-        confirmModal('Bu imalat cinsini fiyat listesinden silmek istediğinize emin misiniz?', ()=>{
-          proj.imalatFiyatListesi = (proj.imalatFiyatListesi||[]).filter(r=>r.id!==id);
+        confirmModal('Bu imalat cinsini fiyat listesinden silmek istediğinize emin misiniz? (Bu liste tüm projelerde ortaktır.)', ()=>{
+          state.imalatCinsiFiyatListesi = (state.imalatCinsiFiyatListesi||[]).filter(r=>r.id!==id);
           saveState(); renderMain();
           showToast('İmalat cinsi silindi.');
         });
@@ -2703,24 +3101,23 @@ function bindImalatFiyatListesiEvents(proj){
   });
 }
 
-function saveImalatFiyat(proj){
+function saveImalatFiyat(){
   const ad = (imalatFiyatForm.ad||'').trim();
   const fiyat = parseFloat(String(imalatFiyatForm.fiyat).replace(',','.'));
   if(!ad){ showToast('Lütfen imalat cinsi adı girin.'); return; }
   if(isNaN(fiyat)){ showToast('Lütfen birim fiyat girin.'); return; }
-  if(!proj.imalatFiyatListesi) proj.imalatFiyatListesi = [];
+  if(!state.imalatCinsiFiyatListesi) state.imalatCinsiFiyatListesi = [];
   if(imalatFiyatForm.id){
-    const x = proj.imalatFiyatListesi.find(r=>r.id===imalatFiyatForm.id);
+    const x = state.imalatCinsiFiyatListesi.find(r=>r.id===imalatFiyatForm.id);
     if(x){ x.ad = ad; x.fiyat = fiyat; }
   } else {
     // Aynı isimde (büyük/küçük harf ve boşluk farkı gözetmeksizin) zaten bir kayıt varsa
     // yeni bir satır açmak yerine mevcut kaydın fiyatını günceller.
     const key = normKey(ad);
-    const existing = proj.imalatFiyatListesi.find(r=>normKey(r.ad)===key);
+    const existing = state.imalatCinsiFiyatListesi.find(r=>normKey(r.ad)===key);
     if(existing){ existing.fiyat = fiyat; }
-    else { proj.imalatFiyatListesi.push({id:uid(), ad, fiyat}); }
+    else { state.imalatCinsiFiyatListesi.push({id:uid(), ad, fiyat}); }
   }
-  addMemory(proj, 'imalat', ad);
   saveState();
   imalatFiyatForm = emptyImalatFiyatForm();
   renderMain();
@@ -4131,6 +4528,16 @@ function renderPersonelTable(proj){
       </tbody>
     </table>
   `;
+  // Personel Ara (Anasayfa) özelliğinden gelindiyse, bulunan kişinin satırını
+  // kısa süreliğine vurgula (highlight) ki kullanıcı hangi kaydın bulunduğunu görsün.
+  if(ui.personelHighlightId){
+    const hlRow = wrap.querySelector(`tr[data-id="${ui.personelHighlightId}"]`);
+    if(hlRow){
+      hlRow.classList.add('row-highlight');
+      setTimeout(()=>{ hlRow.classList.remove('row-highlight'); }, 2600);
+    }
+    ui.personelHighlightId = null;
+  }
   wrap.querySelectorAll('tr[data-id]').forEach(tr=>{
     tr.addEventListener('click',(e)=>{
       const act = e.target.closest('[data-act]')?.dataset.act;
@@ -4630,6 +5037,375 @@ async function exportPuantajMesaiPdf(proj){
     <div style="margin-top:36px;font-size:9px;color:#8096A3;">DNZ Metraj &amp; Teklif Yönetimi ile oluşturulmuştur.</div>
   `;
   showPdfPreview(html, `puantaj-mesai-${ym}-${proj.name.replace(/[^a-z0-9ığüşöç]+/gi,'_')}.pdf`, 'l');
+}
+
+/* ======================= ŞANTİYE GÜNLÜĞÜ (+ Güncel Hava Durumu) =======================
+   Hava durumu, tamamen ücretsiz ve anahtarsız bir servis olan open-meteo.com üzerinden
+   çekilir: konum belirlemek için önce tarayıcı konumu, olmazsa şehir arama kullanılır.
+   Seçilen konum projeye kaydedilir (proj.havaKonum), böylece her seferinde tekrar
+   sorulmaz. İnternet yoksa (veya kullanıcı izin vermezse) modül zarifçe hata gösterir;
+   günlük kaydı eklemek hava durumundan bağımsız olarak her zaman çalışır. */
+function emptyGunlukForm(){
+  return {id:null, tarih:isoToday(), hava:'', sicaklik:'', calisanSayisi:'', yapilanIsler:'', notlar:'', dosya:null};
+}
+let gunlukForm = emptyGunlukForm();
+// projectId -> {status:'idle'|'loading'|'ok'|'error', data:{temp,wind,code,fetchedAt}, error}
+let gunlukHavaState = {};
+
+const WEATHER_CODE_MAP = {
+  0:{desc:'Açık',cat:'clear'}, 1:{desc:'Genellikle Açık',cat:'clear'},
+  2:{desc:'Parçalı Bulutlu',cat:'cloudy'}, 3:{desc:'Kapalı',cat:'cloudy'},
+  45:{desc:'Sisli',cat:'fog'}, 48:{desc:'Kırağı Sisi',cat:'fog'},
+  51:{desc:'Hafif Çisenti',cat:'rain'}, 53:{desc:'Çisenti',cat:'rain'}, 55:{desc:'Yoğun Çisenti',cat:'rain'},
+  56:{desc:'Donan Çisenti',cat:'rain'}, 57:{desc:'Yoğun Donan Çisenti',cat:'rain'},
+  61:{desc:'Hafif Yağmurlu',cat:'rain'}, 63:{desc:'Yağmurlu',cat:'rain'}, 65:{desc:'Kuvvetli Yağmurlu',cat:'rain'},
+  66:{desc:'Donan Yağmur',cat:'rain'}, 67:{desc:'Kuvvetli Donan Yağmur',cat:'rain'},
+  71:{desc:'Hafif Kar Yağışlı',cat:'snow'}, 73:{desc:'Kar Yağışlı',cat:'snow'}, 75:{desc:'Kuvvetli Kar Yağışlı',cat:'snow'},
+  77:{desc:'Kar Taneli',cat:'snow'},
+  80:{desc:'Hafif Sağanak',cat:'rain'}, 81:{desc:'Sağanak Yağışlı',cat:'rain'}, 82:{desc:'Şiddetli Sağanak',cat:'rain'},
+  85:{desc:'Hafif Kar Sağanağı',cat:'snow'}, 86:{desc:'Kuvvetli Kar Sağanağı',cat:'snow'},
+  95:{desc:'Gök Gürültülü Fırtına',cat:'storm'}, 96:{desc:'Dolu ile Fırtına',cat:'storm'}, 99:{desc:'Şiddetli Dolu ile Fırtına',cat:'storm'}
+};
+function weatherCodeInfo(code){ return WEATHER_CODE_MAP[code] || {desc:'Bilinmiyor', cat:'cloudy'}; }
+function weatherIconSvg(cat){
+  const icons = {
+    clear:'<circle cx="12" cy="12" r="5"/><path d="M12 1v3M12 20v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M1 12h3M20 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/>',
+    cloudy:'<path d="M17.5 19H6a4 4 0 01-.9-7.9A5.5 5.5 0 0116.9 8H17.5a4.5 4.5 0 010 9z"/>',
+    fog:'<path d="M17.5 15H6a4 4 0 01-.9-7.9A5.5 5.5 0 0116.9 6H17.5a4.5 4.5 0 010 9z"/><path d="M4 19h16M4 22h10"/>',
+    rain:'<path d="M17.5 15H6a4 4 0 01-.9-7.9A5.5 5.5 0 0116.9 5H17.5a4.5 4.5 0 010 9z"/><path d="M8 19l-1 2M12 19l-1 2M16 19l-1 2"/>',
+    snow:'<path d="M17.5 13H6a4 4 0 01-.9-7.9A5.5 5.5 0 0116.9 3H17.5a4.5 4.5 0 010 9z"/><path d="M8 17v4M12 17v4M16 17v4"/>',
+    storm:'<path d="M17.5 13H6a4 4 0 01-.9-7.9A5.5 5.5 0 0116.9 3H17.5a4.5 4.5 0 010 9z"/><path d="M11 15l-2 4h3l-2 4"/>'
+  };
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${icons[cat]||icons.cloudy}</svg>`;
+}
+
+async function fetchHavaDurumuIcin(proj){
+  if(!proj.havaKonum) return;
+  gunlukHavaState[proj.id] = {status:'loading', error:''};
+  refreshHavaWidget(proj);
+  try{
+    const {lat, lon} = proj.havaKonum;
+    const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&timezone=auto`);
+    if(!res.ok) throw new Error('İstek başarısız');
+    const json = await res.json();
+    const cw = json.current_weather;
+    if(!cw) throw new Error('Veri alınamadı');
+    gunlukHavaState[proj.id] = {status:'ok', data:{temp:cw.temperature, wind:cw.windspeed, code:cw.weathercode, fetchedAt:Date.now()}, error:''};
+  }catch(e){
+    console.error(e);
+    gunlukHavaState[proj.id] = {status:'error', error:'Hava durumu alınamadı. İnternet bağlantınızı kontrol edip tekrar deneyin.'};
+  }
+  refreshHavaWidget(proj);
+}
+function gunlukKonumumuKullan(proj){
+  if(!navigator.geolocation){ showToast('Tarayıcınız konum özelliğini desteklemiyor.'); return; }
+  gunlukHavaState[proj.id] = {status:'loading', error:''};
+  refreshHavaWidget(proj);
+  navigator.geolocation.getCurrentPosition(async (pos)=>{
+    proj.havaKonum = {name:'Mevcut Konum', lat:+pos.coords.latitude.toFixed(4), lon:+pos.coords.longitude.toFixed(4)};
+    saveState();
+    await fetchHavaDurumuIcin(proj);
+  }, ()=>{
+    gunlukHavaState[proj.id] = {status:'error', error:'Konum alınamadı. Lütfen tarayıcı izinlerini kontrol edin ya da şehir adıyla arayın.'};
+    refreshHavaWidget(proj);
+  }, {timeout:10000});
+}
+async function gunlukSehirAra(proj, query){
+  if(!query || !query.trim()){ showToast('Lütfen bir şehir adı girin.'); return; }
+  gunlukHavaState[proj.id] = {status:'loading', error:''};
+  refreshHavaWidget(proj);
+  try{
+    const res = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(query.trim())}&count=1&language=tr&format=json`);
+    if(!res.ok) throw new Error('İstek başarısız');
+    const json = await res.json();
+    const first = json.results && json.results[0];
+    if(!first) throw new Error('Şehir bulunamadı');
+    const label = [first.name, first.admin1, first.country].filter(Boolean).join(', ');
+    proj.havaKonum = {name:label, lat:first.latitude, lon:first.longitude};
+    saveState();
+    await fetchHavaDurumuIcin(proj);
+  }catch(e){
+    console.error(e);
+    gunlukHavaState[proj.id] = {status:'error', error:'Şehir bulunamadı. Lütfen farklı bir yazımla tekrar deneyin.'};
+    refreshHavaWidget(proj);
+  }
+}
+function renderGunlukHavaWidgetHtml(proj){
+  const st = gunlukHavaState[proj.id] || {status:'idle'};
+  if(!proj.havaKonum){
+    return `
+      <div class="card glass" id="gunlukHavaWidget" style="gap:10px;">
+        <h2 style="font-size:0.95rem;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M17.5 19H6a4 4 0 01-.9-7.9A5.5 5.5 0 0116.9 8H17.5a4.5 4.5 0 010 9z"/></svg>
+          Güncel Hava Durumu
+        </h2>
+        <p class="hint">Şantiyenin bulunduğu şehri arayın ya da mevcut konumunuzu kullanın; bir kez ayarlandıktan sonra bu proje için hatırlanır.</p>
+        ${st.status==='error' ? `<div class="empty-state" style="padding:10px;">${esc(st.error)}</div>` : ''}
+        <div class="field-grid" style="grid-template-columns:1fr auto;align-items:end;">
+          <div class="field"><label>Şehir</label><input type="text" id="gh-sehir" placeholder="Örn: Ankara"></div>
+          <button class="btn btn-ghost" id="btnGhAra" ${st.status==='loading'?'disabled':''}>${st.status==='loading'?'Aranıyor…':'Ara'}</button>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-primary" id="btnGhKonum" ${st.status==='loading'?'disabled':''}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+            Mevcut Konumumu Kullan
+          </button>
+        </div>
+      </div>`;
+  }
+  if(st.status==='loading'){
+    return `<div class="card glass" id="gunlukHavaWidget"><h2 style="font-size:0.95rem;">Güncel Hava Durumu</h2><div class="hint">Hava durumu bilgisi getiriliyor…</div></div>`;
+  }
+  if(st.status==='error'){
+    return `
+      <div class="card glass" id="gunlukHavaWidget" style="gap:10px;">
+        <h2 style="font-size:0.95rem;">Güncel Hava Durumu — ${esc(proj.havaKonum.name)}</h2>
+        <div class="empty-state" style="padding:10px;">${esc(st.error)}</div>
+        <div class="btn-row">
+          <button class="btn btn-ghost" id="btnGhYenile">Tekrar Dene</button>
+          <button class="btn btn-ghost" id="btnGhDegistir">Konumu Değiştir</button>
+        </div>
+      </div>`;
+  }
+  const d = st.data || {};
+  const info = weatherCodeInfo(d.code);
+  return `
+    <div class="card glass" id="gunlukHavaWidget" style="gap:10px;">
+      <h2 style="font-size:0.95rem;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M17.5 19H6a4 4 0 01-.9-7.9A5.5 5.5 0 0116.9 8H17.5a4.5 4.5 0 010 9z"/></svg>
+        Güncel Hava Durumu — ${esc(proj.havaKonum.name)}
+      </h2>
+      <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+        <div style="width:48px;height:48px;color:var(--aqua-dim);flex-shrink:0;">${weatherIconSvg(info.cat)}</div>
+        <div>
+          <div style="font-family:var(--font-display);font-size:1.6rem;font-weight:800;color:var(--ink);">${Math.round(d.temp)}°C</div>
+          <div style="font-size:0.8rem;color:var(--ink-soft);">${esc(info.desc)} · Rüzgar ${fmtNum(d.wind)} km/s</div>
+        </div>
+        <div style="margin-left:auto;display:flex;gap:8px;">
+          <button class="icon-btn" id="btnGhYenile" title="Yenile">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+          </button>
+          <button class="icon-btn" id="btnGhDegistir" title="Konumu Değiştir">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+          </button>
+        </div>
+      </div>
+      <button class="btn btn-ghost btn-sm" id="btnGhKullanForm" style="align-self:flex-start;">Bu bilgileri günlük kaydına aktar</button>
+      <p class="hint" style="font-size:0.68rem;margin:0;">Kaynak: open-meteo.com — Son güncelleme: ${new Date(d.fetchedAt).toLocaleTimeString('tr-TR')}</p>
+    </div>`;
+}
+function wireGunlukHavaWidget(proj){
+  const araBtn = document.getElementById('btnGhAra');
+  const sehirInput = document.getElementById('gh-sehir');
+  if(araBtn && sehirInput){
+    araBtn.onclick = ()=> gunlukSehirAra(proj, sehirInput.value);
+    sehirInput.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); gunlukSehirAra(proj, sehirInput.value); } });
+  }
+  const konumBtn = document.getElementById('btnGhKonum');
+  if(konumBtn) konumBtn.onclick = ()=> gunlukKonumumuKullan(proj);
+  const yenileBtn = document.getElementById('btnGhYenile');
+  if(yenileBtn) yenileBtn.onclick = ()=> fetchHavaDurumuIcin(proj);
+  const degistirBtn = document.getElementById('btnGhDegistir');
+  if(degistirBtn) degistirBtn.onclick = ()=>{ proj.havaKonum = null; saveState(); refreshHavaWidget(proj); };
+  const kullanFormBtn = document.getElementById('btnGhKullanForm');
+  if(kullanFormBtn) kullanFormBtn.onclick = ()=>{
+    const st = gunlukHavaState[proj.id];
+    if(!st || !st.data) return;
+    const info = weatherCodeInfo(st.data.code);
+    gunlukForm.hava = info.desc;
+    gunlukForm.sicaklik = String(Math.round(st.data.temp));
+    const havaInput = document.getElementById('gk-hava');
+    const sicaklikInput = document.getElementById('gk-sicaklik');
+    if(havaInput) havaInput.value = gunlukForm.hava;
+    if(sicaklikInput) sicaklikInput.value = gunlukForm.sicaklik;
+    showToast('Hava durumu bilgileri forma aktarıldı.');
+  };
+}
+function refreshHavaWidget(proj){
+  const el = document.getElementById('gunlukHavaWidget');
+  if(!el) return;
+  el.outerHTML = renderGunlukHavaWidgetHtml(proj);
+  wireGunlukHavaWidget(proj);
+}
+
+function renderSantiyeGunluguTab(main, proj){
+  main.innerHTML = `
+    ${renderGunlukHavaWidgetHtml(proj)}
+
+    <div class="card glass">
+      <h2>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/><path d="M9 7h7M9 11h7"/></svg>
+        Günlük Kaydı Ekle — <span style="color:var(--aqua-dim)">${esc(proj.name)}</span>
+      </h2>
+      <p class="hint">Şantiyede o gün yapılan işleri, hava koşullarını ve varsa aksaklıkları kaydedin. Yukarıdaki "Bu bilgileri günlük kaydına aktar" butonuyla güncel hava durumunu otomatik doldurabilirsiniz.</p>
+      <div class="field-grid">
+        <div class="field"><label>Tarih</label><input type="date" id="gk-tarih" value="${esc(gunlukForm.tarih)}"></div>
+        <div class="field"><label>Hava Durumu</label>
+          <input type="text" id="gk-hava" list="gkHavaList" value="${esc(gunlukForm.hava)}" placeholder="Örn: Açık">
+          <datalist id="gkHavaList">${['Açık','Parçalı Bulutlu','Kapalı','Sisli','Yağmurlu','Karla Karışık','Fırtınalı/Rüzgarlı'].map(o=>`<option value="${o}">`).join('')}</datalist>
+        </div>
+        <div class="field"><label>Sıcaklık (°C)</label><input class="mono" type="number" step="any" id="gk-sicaklik" value="${esc(gunlukForm.sicaklik)}" placeholder="0"></div>
+        <div class="field"><label>Çalışan Sayısı</label><input class="mono" type="number" min="0" step="1" id="gk-calisanSayisi" value="${esc(gunlukForm.calisanSayisi)}" placeholder="0"></div>
+      </div>
+      <div class="field" style="margin-top:6px;"><label>Yapılan İşler</label>
+        <textarea id="gk-yapilanIsler" rows="3" placeholder="Bugün şantiyede yapılan işleri özetleyin…">${esc(gunlukForm.yapilanIsler)}</textarea>
+      </div>
+      <div class="field"><label>Notlar / Aksaklıklar (opsiyonel)</label>
+        <textarea id="gk-notlar" rows="2" placeholder="Malzeme eksikliği, iş kazası, gecikme nedeni vb.">${esc(gunlukForm.notlar)}</textarea>
+      </div>
+      <div class="field">
+        <label>Fotoğraf / Belge Eki (opsiyonel)</label>
+        <input type="file" id="gk-dosya" accept="image/*,.pdf">
+        <div id="gkAttachChip" style="margin-top:6px;">${attachmentChipHtml(gunlukForm.dosya)}</div>
+      </div>
+      <div class="btn-row" style="margin-top:10px;">
+        <button class="btn btn-primary" id="btnSaveGunluk">${gunlukForm.id?'Kaydı Güncelle':'Günlük Kaydı Ekle'}</button>
+        <button class="btn btn-ghost" id="btnClearGunluk">Formu Temizle</button>
+      </div>
+    </div>
+
+    <div class="card glass">
+      <h2>Şantiye Günlüğü Kayıtları</h2>
+      <div class="filter-bar" style="margin-bottom:10px;">
+        <div class="field"><label>Başlangıç Tarihi</label><input type="date" id="gk-filterStart" value="${esc(ui.gunlukFilterStart)}"></div>
+        <div class="field"><label>Bitiş Tarihi</label><input type="date" id="gk-filterEnd" value="${esc(ui.gunlukFilterEnd)}"></div>
+        <button class="btn btn-ghost btn-sm" id="btnClearGunlukFilter" style="align-self:end;">Filtreyi Temizle</button>
+      </div>
+      <div id="gunlukListWrap"></div>
+      <div class="btn-row" style="margin-top:10px;">
+        <button class="btn btn-ghost" id="btnGunlukPdf">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg>
+          Şantiye Günlüğü PDF
+        </button>
+      </div>
+    </div>
+  `;
+  wireGunlukHavaWidget(proj);
+  ['tarih','hava','sicaklik','calisanSayisi','yapilanIsler','notlar'].forEach(k=>{
+    document.getElementById('gk-'+k).addEventListener('input', ()=>{ gunlukForm[k]=document.getElementById('gk-'+k).value; });
+  });
+  wireAttachmentInput({inputId:'gk-dosya', chipWrapId:'gkAttachChip', getForm:()=>gunlukForm});
+  document.getElementById('btnSaveGunluk').onclick = ()=>saveGunlukRow(proj);
+  document.getElementById('btnClearGunluk').onclick = ()=>{ gunlukForm = emptyGunlukForm(); renderMain(); };
+  document.getElementById('gk-filterStart').addEventListener('change',(e)=>{ ui.gunlukFilterStart = e.target.value || isoMonthStart(); renderGunlukList(proj); });
+  document.getElementById('gk-filterEnd').addEventListener('change',(e)=>{ ui.gunlukFilterEnd = e.target.value || isoToday(); renderGunlukList(proj); });
+  document.getElementById('btnClearGunlukFilter').onclick = ()=>{ ui.gunlukFilterStart = isoMonthStart(); ui.gunlukFilterEnd = isoToday(); renderMain(); };
+  document.getElementById('btnGunlukPdf').onclick = ()=>exportGunlukPdf(proj);
+  renderGunlukList(proj);
+  // Konum daha önce ayarlanmışsa ve bu oturumda henüz çekilmediyse otomatik getir.
+  if(proj.havaKonum && !gunlukHavaState[proj.id]) fetchHavaDurumuIcin(proj);
+}
+function filteredGunluk(proj){
+  const start = ui.gunlukFilterStart, end = ui.gunlukFilterEnd;
+  return (proj.gunlukKayitlar||[]).filter(r=> (!start || r.tarih>=start) && (!end || r.tarih<=end))
+    .slice().sort((a,b)=> (b.tarih||'').localeCompare(a.tarih||''));
+}
+function saveGunlukRow(proj){
+  if(!gunlukForm.tarih){ showToast('Lütfen tarih girin.'); return; }
+  if(!(gunlukForm.yapilanIsler||'').trim()){ showToast('Lütfen yapılan işleri kısaca yazın.'); return; }
+  if(!proj.gunlukKayitlar) proj.gunlukKayitlar = [];
+  const existing = gunlukForm.id ? proj.gunlukKayitlar.find(r=>r.id===gunlukForm.id) : null;
+  const row = {
+    id: gunlukForm.id || uid(),
+    tarih: gunlukForm.tarih,
+    hava: (gunlukForm.hava||'').trim(),
+    sicaklik: gunlukForm.sicaklik===''? null : parseFloat(gunlukForm.sicaklik),
+    calisanSayisi: gunlukForm.calisanSayisi===''? null : parseInt(gunlukForm.calisanSayisi),
+    yapilanIsler: (gunlukForm.yapilanIsler||'').trim(),
+    notlar: (gunlukForm.notlar||'').trim(),
+    dosya: gunlukForm.dosya||null,
+    createdAt: existing ? existing.createdAt : Date.now()
+  };
+  if(gunlukForm.id){
+    const idx = proj.gunlukKayitlar.findIndex(r=>r.id===row.id);
+    if(idx>-1) proj.gunlukKayitlar[idx]=row;
+  } else {
+    proj.gunlukKayitlar.push(row);
+  }
+  saveState();
+  gunlukForm = emptyGunlukForm();
+  renderMain();
+  showToast('Şantiye günlüğü kaydedildi.');
+}
+function renderGunlukList(proj){
+  const wrap = document.getElementById('gunlukListWrap');
+  if(!wrap) return;
+  const rows = filteredGunluk(proj);
+  if(rows.length===0){
+    wrap.innerHTML = `<div class="empty-state">Bu tarih aralığında kayıtlı şantiye günlüğü bulunamadı.</div>`;
+    return;
+  }
+  wrap.innerHTML = rows.map(r=>`
+    <div class="card glass gunluk-entry" data-id="${r.id}" style="padding:14px;gap:8px;margin-bottom:10px;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;">
+        <div style="display:flex;flex-direction:column;gap:2px;">
+          <b style="font-family:var(--font-display);font-size:0.95rem;">${fmtDateStr(r.tarih)}</b>
+          <span style="font-size:0.75rem;color:var(--ink-soft);">${r.hava? esc(r.hava):'Hava durumu girilmedi'}${r.sicaklik!=null? ' · '+r.sicaklik+'°C':''}${r.calisanSayisi!=null? ' · '+r.calisanSayisi+' çalışan':''}</span>
+        </div>
+        <div class="row-actions">
+          ${r.dosya ? `<button class="icon-btn attach-active" data-act="dosya" title="Ekli dosyayı görüntüle: ${esc(r.dosya.name)}">${attachmentIconSvg(r.dosya)}</button>` : ''}
+          <button class="icon-btn" data-act="edit" title="Düzenle">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+          </button>
+          <button class="icon-btn danger" data-act="delete" title="Sil">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0l-1 14a2 2 0 01-2 2H7a2 2 0 01-2-2L4 6h16z"/></svg>
+          </button>
+        </div>
+      </div>
+      <div style="font-size:0.85rem;color:var(--ink);white-space:pre-wrap;">${esc(r.yapilanIsler)}</div>
+      ${r.notlar? `<div style="font-size:0.78rem;color:var(--ink-soft);border-top:1px solid var(--glass-border);padding-top:6px;white-space:pre-wrap;"><b>Not:</b> ${esc(r.notlar)}</div>`:''}
+    </div>
+  `).join('');
+  wrap.querySelectorAll('.gunluk-entry').forEach(card=>{
+    card.addEventListener('click',(e)=>{
+      const act = e.target.closest('[data-act]')?.dataset.act;
+      if(!act) return;
+      const id = card.dataset.id;
+      const r = proj.gunlukKayitlar.find(x=>x.id===id);
+      if(!r) return;
+      if(act==='edit'){
+        gunlukForm = {id:r.id, tarih:r.tarih, hava:r.hava, sicaklik:r.sicaklik==null?'':String(r.sicaklik), calisanSayisi:r.calisanSayisi==null?'':String(r.calisanSayisi), yapilanIsler:r.yapilanIsler, notlar:r.notlar, dosya:r.dosya||null};
+        renderMain(); window.scrollTo({top:0, behavior:'smooth'});
+      } else if(act==='delete'){
+        confirmModal(`${fmtDateStr(r.tarih)} tarihli şantiye günlüğü kaydını silmek istediğinize emin misiniz?`, ()=>{
+          proj.gunlukKayitlar = proj.gunlukKayitlar.filter(x=>x.id!==id);
+          saveState(); renderGunlukList(proj);
+          showToast('Kayıt silindi.');
+        });
+      } else if(act==='dosya'){
+        openAttachment(r.dosya);
+      }
+    });
+  });
+}
+async function exportGunlukPdf(proj){
+  showToast('PDF hazırlanıyor…');
+  const rows = filteredGunluk(proj).slice().sort((a,b)=>(a.tarih||'').localeCompare(b.tarih||''));
+  if(rows.length===0){ showToast('Listelenecek şantiye günlüğü kaydı yok.'); return; }
+  const cellStyle = 'border:1px solid #E4EFEF;padding:6px 5px;text-align:left;word-break:break-word;vertical-align:top;';
+  const start = ui.gunlukFilterStart, end = ui.gunlukFilterEnd;
+  const html = `
+    ${pdfHeaderHtml(proj, 'Şantiye Günlüğü — ' + fmtDateStr(start) + ' — ' + fmtDateStr(end))}
+    <table style="width:100%;border-collapse:collapse;font-size:9px;table-layout:fixed;">
+      <thead><tr style="background:#EAF6F5;">
+        <th style="${cellStyle}width:10%;">Tarih</th>
+        <th style="${cellStyle}width:15%;">Hava / Sıcaklık</th>
+        <th style="${cellStyle}width:38%;">Yapılan İşler</th>
+        <th style="${cellStyle}width:37%;">Notlar</th>
+      </tr></thead>
+      <tbody>
+        ${rows.map(r=>`
+          <tr>
+            <td style="${cellStyle}">${fmtDateStr(r.tarih)}</td>
+            <td style="${cellStyle}">${esc(r.hava)||'—'}${r.sicaklik!=null?' ('+r.sicaklik+'°C)':''}${r.calisanSayisi!=null?'<br>Çalışan: '+r.calisanSayisi:''}</td>
+            <td style="${cellStyle}">${esc(r.yapilanIsler)||'—'}</td>
+            <td style="${cellStyle}">${esc(r.notlar)||'—'}</td>
+          </tr>`).join('')}
+      </tbody>
+    </table>
+    <div style="margin-top:36px;font-size:9px;color:#8096A3;">DNZ Metraj &amp; Teklif Yönetimi ile oluşturulmuştur.</div>
+  `;
+  showPdfPreview(html, `santiye-gunlugu-${proj.name.replace(/[^a-z0-9ığüşöç]+/gi,'_')}.pdf`, 'l');
 }
 
 /* ======================= AVANS / ZİMMET TAB ======================= */
@@ -6185,7 +6961,7 @@ function openMetrajPickModal(proj){
         <div class="pick-list" id="pickList">
           ${groups.map((g,i)=>{
             const desc = [g.blok,g.kat,g.daire,g.mekan,g.eleman,g.imalat].filter(Boolean).join(', ');
-            const fiyat = findImalatFiyat(proj, g.imalat);
+            const fiyat = findImalatFiyat(g.imalat);
             return `<div class="pick-item">
               <input type="checkbox" id="pk-${i}" data-idx="${i}">
               <label for="pk-${i}">${esc(desc)} — <b>${fmtNum(g.miktar)} ${UNIT_LABEL[g.birim]}</b>${fiyat!=null ? ` <span style="color:var(--aqua-dim);">(Kayıtlı Fiyat: ${fmtMoney(fiyat)})</span>` : ''}</label>
@@ -6210,7 +6986,7 @@ function openMetrajPickModal(proj){
       // İmalat Cinsi Fiyat Listesi'nde bu imalat cinsine ait bir fiyat kayıtlıysa
       // birim fiyat otomatik doldurulur; kullanıcı Teklif Kalemleri tablosundan
       // (Düzenle butonu) dilediği zaman bu fiyatı değiştirebilir.
-      const fiyat = findImalatFiyat(proj, g.imalat);
+      const fiyat = findImalatFiyat(g.imalat);
       mergeOrAddTeklifRow(proj, {aciklama:desc, miktar:g.miktar, birim:g.birim, birimFiyat: fiyat!=null ? fiyat : 0});
     });
     saveState(); closeModal(); renderMain();
@@ -7095,6 +7871,8 @@ window.__dnzInitApp = async function init(){
   await refreshAutoBackupInfo();
   // Eski kayıtlarda (bu modüller eklenmeden önce oluşturulmuş projelerde) eksik
   // alanları tamamla, böylece kod hiçbir yerde undefined'a takılmasın.
+  if(!state.imalatCinsiFiyatListesi) state.imalatCinsiFiyatListesi = [];
+  let imalatCinsiMigrated = false;
   Object.values(state.projects).forEach(p=>{
     if(!p.personel) p.personel = [];
     p.personel.forEach(emp=>{
@@ -7107,9 +7885,22 @@ window.__dnzInitApp = async function init(){
     if(p.manuelIsverenAlacak===undefined || p.manuelIsverenAlacak===null) p.manuelIsverenAlacak = '';
     if(p.teklifOnaylandi===undefined || p.teklifOnaylandi===null) p.teklifOnaylandi = true;
     if(!p.masraflar) p.masraflar = [];
-    if(!p.imalatFiyatListesi) p.imalatFiyatListesi = [];
+    // İmalat Cinsi Fiyat Listesi eskiden proje bazında tutuluyordu; artık tüm projelerde
+    // ortak (state.imalatCinsiFiyatListesi). Daha önce bir projede kaydedilmiş kalemler
+    // varsa bunları isim bazında tekilleştirerek genel listeye taşıyıp projeden kaldırıyoruz.
+    if(p.imalatFiyatListesi && p.imalatFiyatListesi.length){
+      p.imalatFiyatListesi.forEach(item=>{
+        const key = normKey(item.ad);
+        const exists = state.imalatCinsiFiyatListesi.find(x=>normKey(x.ad)===key);
+        if(!exists) state.imalatCinsiFiyatListesi.push({id:uid(), ad:item.ad, fiyat:item.fiyat});
+      });
+      delete p.imalatFiyatListesi;
+      imalatCinsiMigrated = true;
+    }
     if(!p.yemekler) p.yemekler = [];
     if(!p.yemekFiyat) p.yemekFiyat = { sabah:MEAL_PRICES.sabah, ogle:MEAL_PRICES.ogle, aksam:MEAL_PRICES.aksam };
+    if(!p.gunlukKayitlar) p.gunlukKayitlar = [];
+    if(p.havaKonum===undefined) p.havaKonum = null;
     (p.yemekler||[]).forEach(r=>{
       if(r.tarih) r.tarih = fixLegacyDateStr(r.tarih);
       if(r.sabahFiyat==null) r.sabahFiyat = parseFloat(p.yemekFiyat.sabah)||0;
@@ -7123,6 +7914,8 @@ window.__dnzInitApp = async function init(){
       state.company.logo = await resizeImageDataUrl(state.company.logo, 320, 0.8);
       await saveState();
     }catch(e){ /* yoksay */ }
+  } else if(imalatCinsiMigrated){
+    try{ await saveState(); }catch(e){ /* yoksay */ }
   }
   if(!state.activeProjectId && Object.keys(state.projects).length>0){
     state.activeProjectId = Object.keys(state.projects)[0];
