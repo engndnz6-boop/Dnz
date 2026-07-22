@@ -931,8 +931,8 @@ footer.appfoot{text-align:center;padding:14px;color:rgba(11,36,54,0.45);font-siz
 }
 
 /* personel arama sonuç kartı */
-.personel-arama-item{cursor:pointer;transition:background 120ms ease;}
-.personel-arama-item:hover{background:rgba(47,211,199,0.22);}
+.arama-sonuc-item{cursor:pointer;transition:background 120ms ease;}
+.arama-sonuc-item:hover{background:rgba(47,211,199,0.22);}
 
 /* Dashboard bar grafikleri */
 .bar-track{width:100%;height:10px;border-radius:6px;background:rgba(11,36,54,0.08);overflow:hidden;}
@@ -984,7 +984,7 @@ html[data-theme="dark"] .project-item{background:rgba(255,255,255,0.05);border-c
 html[data-theme="dark"] .project-item.active{background:rgba(47,211,199,0.18);}
 html[data-theme="dark"] .total-chip{background:rgba(255,255,255,0.06);border-color:rgba(255,255,255,0.1);}
 html[data-theme="dark"] .pick-item{background:rgba(255,255,255,0.05);}
-html[data-theme="dark"] .personel-arama-item:hover{background:rgba(47,211,199,0.22);}
+html[data-theme="dark"] .arama-sonuc-item:hover{background:rgba(47,211,199,0.22);}
 html[data-theme="dark"] .sg-list{background:#10232a;}
 html[data-theme="dark"] .att-table th,html[data-theme="dark"] .att-table td{border-color:rgba(255,255,255,0.09);}
 html[data-theme="dark"] .att-table td.name-cell,html[data-theme="dark"] .att-table th.name-cell{background:rgba(16,38,46,0.95);}
@@ -1194,10 +1194,21 @@ const UNITS = ['m2','mt','kg','adet','m3','ton'];
 const UNIT_LABEL = {m2:'m²', mt:'mt', kg:'kg', adet:'adet', m3:'m³', ton:'ton', paket:'paket', kutu:'kutu', rulo:'rulo', litre:'litre', 'takım':'takım', torba:'torba'};
 const IMALAT_UNITS = ['adet','mt','m2','kg','m3','ton','paket','kutu','rulo','litre','takım','torba'];
 const MEAL_PRICES = { sabah:100, ogle:200, aksam:200 };
+// Proje bazında para birimi desteği: her proje kendi para biriminde (TRY/USD/EUR)
+// tutulur. Eski projelerde bu alan olmadığı için her yerde ||'TRY' ile varsayılan
+// TL kabul edilir, böylece mevcut projeler etkilenmeden aynı şekilde çalışmaya devam eder.
+const CURRENCY_INFO = {
+  TRY: { label:'TL', name:'Türk Lirası (TL)' },
+  USD: { label:'$', name:'Amerikan Doları ($)' },
+  EUR: { label:'€', name:'Euro (€)' }
+};
+function projectCurrency(p){
+  return (p && CURRENCY_INFO[p.currency]) ? p.currency : 'TRY';
+}
 
 function defaultState(){
   return {
-    company:{ name:'', logo:'' },
+    company:{ name:'', logo:'', vergiDairesi:'', vergiNo:'', adres:'', telefon:'' },
     activeProjectId:null,
     projects:{},
     imalatSistemleri:[],
@@ -1213,6 +1224,9 @@ function newProject(name, employer){
   return {
     id, name: name||'Yeni Proje', employer: employer||'',
     createdAt: Date.now(),
+    currency: 'TRY',
+    baslangicTarihi: '',
+    bitisTarihi: '',
     metrajRows:[],
     teklifRows:[],
     teklifNote:'',
@@ -1280,8 +1294,9 @@ let ui = {
   ],
   imalatCalcNot:'',
   imalatCalcPaketTamamla:{},
-  personelAramaQuery:'',
-  personelHighlightId:null
+  globalAramaQuery:'',
+  personelHighlightId:null,
+  pendingHighlightId:null
 };
 
 /* ======================= PERSISTENCE ======================= */
@@ -1518,9 +1533,34 @@ function fmtNum(n){
   if(n===null||n===undefined||isNaN(n)) n=0;
   return Number(n).toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2});
 }
-function fmtMoney(n){
+function fmtMoney(n, currency){
   if(n===null||n===undefined||isNaN(n)) n=0;
-  return Number(n).toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2})+' TL';
+  const cur = (currency && CURRENCY_INFO[currency]) ? currency : projectCurrency(activeProject());
+  return Number(n).toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2})+' '+CURRENCY_INFO[cur].label;
+}
+// Bir satır dizisindeki 'tutar' alanlarını, satırın kendi 'paraBirimi'ne göre gruplayıp
+// her para birimi için ayrı bir toplam döndürür. Avans/Masraf gibi kayıt bazında farklı
+// döviz cinsinden girilebilen listelerde, farklı para birimlerindeki tutarların
+// birbirine karıştırılmadan (yanlış) tek bir toplamda toplanmasını engellemek için
+// kullanılır — "malzeme" bölümündeki aynı mantığın (byCurrency) genelleştirilmiş hali.
+function groupRowsByCurrency(rows, proj){
+  const byCurrency = {};
+  rows.forEach(r=>{
+    const cur = (r.paraBirimi && CURRENCY_INFO[r.paraBirimi]) ? r.paraBirimi : projectCurrency(proj);
+    byCurrency[cur] = (byCurrency[cur]||0) + (parseFloat(r.tutar)||0);
+  });
+  return byCurrency;
+}
+// groupRowsByCurrency ile hesaplanan toplamları, birden fazla para birimi varsa ayrı ayrı
+// (her biri kendi etiketiyle), tek para birimi varsa tek bir kutucuk olarak gösterir.
+function currencyTotalChipsHtml(rows, proj, label){
+  const byCurrency = groupRowsByCurrency(rows, proj);
+  const currencies = Object.keys(byCurrency);
+  if(!currencies.length) return `<div class="total-chip"><span class="lbl">${esc(label)}</span><span class="val">${fmtMoney(0, projectCurrency(proj))}</span></div>`;
+  return currencies.map(cur=>{
+    const suffix = currencies.length>1 ? ` (${esc(CURRENCY_INFO[cur].label)})` : '';
+    return `<div class="total-chip"><span class="lbl">${esc(label)}${suffix}</span><span class="val">${fmtMoney(byCurrency[cur], cur)}</span></div>`;
+  }).join('');
 }
 function todayStr(){
   const d = new Date();
@@ -1580,6 +1620,18 @@ function distinctFromRows(rows, field){
     if(!map.has(key)) map.set(key, trimmed);
   });
   return Array.from(map.values()).sort((a,b)=>a.localeCompare(b,'tr'));
+}
+// Genel Arama üzerinden bir kayda gidildiğinde (ui.pendingHighlightId), o kaydın
+// tablo/satır/kart elemanını kısa süreliğine vurgular. data-id niteliği taşıyan her
+// eleman (bir tablo satırı ya da bir kart bloğu) için tek bir noktadan çalışır.
+function applyPendingRowHighlight(wrap){
+  if(!wrap || !ui.pendingHighlightId) return;
+  const el = wrap.querySelector(`[data-id="${ui.pendingHighlightId}"]`);
+  if(el){
+    el.classList.add('row-highlight');
+    setTimeout(()=>{ el.classList.remove('row-highlight'); }, 2600);
+  }
+  ui.pendingHighlightId = null;
 }
 function resizeImageDataUrl(dataUrl, maxDim=320, quality=0.82){
   return new Promise((resolve)=>{
@@ -1963,15 +2015,16 @@ function renderProjelerTab(main){
       </div>
     </div>
     ${renderGenelOzetHtml()}
-    ${renderPersonelAramaHtml()}
+    ${renderGlobalAramaHtml()}
     <div class="card glass">
       <h2>Proje Listesi <span class="badge">${projects.length}</span></h2>
       <div class="project-list" id="projectList">
         ${projects.length===0 ? `<div class="empty-state">Henüz proje eklenmedi.</div>` : projects.map(p=>`
           <div class="project-item ${p.id===state.activeProjectId?'active':''}" data-id="${p.id}">
             <div class="pinfo">
-              <b>${esc(p.name)}</b>
+              <b>${esc(p.name)} <span class="badge" style="font-size:0.68rem;">${esc(CURRENCY_INFO[projectCurrency(p)].label)}</span></b>
               <span>${p.employer? 'İşveren: '+esc(p.employer) : 'İşveren belirtilmedi'} · ${p.metrajRows.length} metraj satırı · ${p.teklifRows.length} teklif kalemi</span>
+              ${(p.baslangicTarihi || p.bitisTarihi) ? `<span>${p.baslangicTarihi? 'Başlangıç: '+fmtDateStr(p.baslangicTarihi) : 'Başlangıç belirtilmedi'} · ${p.bitisTarihi? 'Bitiş: '+fmtDateStr(p.bitisTarihi) : 'Bitiş belirtilmedi'}</span>` : ''}
             </div>
             <button class="icon-btn" data-act="select" title="Seç">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
@@ -2010,67 +2063,187 @@ function renderProjelerTab(main){
       });
     }
   });
-  wirePersonelArama();
+  wireGlobalArama();
 }
 
-/* ---- Personel Ara: tüm projelerdeki personeli isim/pozisyon/kimlik no ile arar ---- */
-function wirePersonelArama(){
-  const input = document.getElementById('personelAramaInput');
-  const sonucWrap = document.getElementById('personelAramaSonuc');
-  if(!input || !sonucWrap) return;
-  input.addEventListener('input', ()=>{
-    ui.personelAramaQuery = input.value;
-    sonucWrap.innerHTML = renderPersonelAramaResultsHtml();
-  });
-  sonucWrap.addEventListener('click',(e)=>{
-    const item = e.target.closest('.personel-arama-item');
-    if(!item) return;
-    goToPersonel(item.dataset.proj, item.dataset.pid);
-  });
-}
+/* ---- Genel Arama: tüm projelerdeki HER ŞEYİ arar (proje, personel, metraj, teklif,
+   masraf, avans/zimmet, tahsilat, yemek, şantiye günlüğü). Bulunan kayda tıklanınca
+   ilgili projeye ve bölüme geçilir, satır/kayıt kısa süreliğine vurgulanır. ---- */
+const ARAMA_KIND_META = {
+  proje:{label:'Proje', icon:'<path d="M3 11l9-8 9 8"/><path d="M5 10v10a1 1 0 001 1h4v-6h4v6h4a1 1 0 001-1V10"/>'},
+  personel:{label:'Personel', icon:'<path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/>'},
+  metraj:{label:'Metraj', icon:'<path d="M3 3h18v18H3z"/><path d="M9 3v18M15 3v18M3 9h18M3 15h18"/>'},
+  teklif:{label:'Teklif', icon:'<path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/>'},
+  masraf:{label:'Masraf', icon:'<path d="M20 12V8H6a2 2 0 010-4h12v4"/><path d="M4 6v12a2 2 0 002 2h14v-4"/><path d="M18 12a2 2 0 000 4h4v-4z"/>'},
+  avans:{label:'Avans', icon:'<rect x="2" y="6" width="20" height="13" rx="2"/><path d="M2 10h20"/><path d="M6 15h4"/>'},
+  zimmet:{label:'Zimmet', icon:'<rect x="2" y="6" width="20" height="13" rx="2"/><path d="M2 10h20"/><path d="M6 15h4"/>'},
+  tahsilat:{label:'Tahsilat', icon:'<path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/>'},
+  yemek:{label:'Yemek', icon:'<path d="M18 8h1a4 4 0 010 8h-1M2 8h16v9a4 4 0 01-4 4H6a4 4 0 01-4-4V8z"/>'},
+  gunluk:{label:'Şantiye Günlüğü', icon:'<path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/>'}
+};
 
-function renderPersonelAramaResultsHtml(){
-  const q = normKey(ui.personelAramaQuery||'');
-  if(!q) return '';
+function collectGlobalAramaResults(query){
+  const q = normKey(query);
+  if(!q) return [];
   const results = [];
   Object.values(state.projects).forEach(proj=>{
+    const projHay = normKey(proj.name) + ' ' + normKey(proj.employer);
+    if(projHay.includes(q)){
+      results.push({kind:'proje', proj, label:proj.name, sublabel: proj.employer? 'İşveren: '+proj.employer : 'Proje'});
+    }
     (proj.personel||[]).forEach(p=>{
       const hay = normKey(p.adSoyad) + ' ' + normKey(p.pozisyon) + ' ' + normKey(p.kimlikNo);
-      if(hay.includes(q)) results.push({proj, p});
+      if(hay.includes(q)) results.push({kind:'personel', proj, id:p.id, label:p.adSoyad, sublabel:(p.pozisyon||'Personel')+' · '+proj.name});
+    });
+    (proj.metrajRows||[]).forEach(r=>{
+      const hay = ['blok','kat','daire','mekan','eleman','imalat'].map(f=>normKey(r[f])).join(' ');
+      if(hay.includes(q)){
+        const parts = [r.blok,r.kat,r.daire,r.mekan,r.eleman].filter(Boolean).join(' / ');
+        results.push({kind:'metraj', proj, id:r.id, label:r.imalat||'Metraj Satırı', sublabel:(parts||'Metraj')+' · '+proj.name});
+      }
+    });
+    (proj.teklifRows||[]).forEach(r=>{
+      if(normKey(r.aciklama).includes(q)){
+        results.push({kind:'teklif', proj, id:r.id, label:r.aciklama||'Teklif Kalemi', sublabel:'Teklif · '+proj.name});
+      }
+    });
+    (proj.masraflar||[]).forEach(r=>{
+      const hay = normKey(r.masrafKalemi) + ' ' + normKey(r.aciklama);
+      if(hay.includes(q)){
+        results.push({kind:'masraf', proj, id:r.id, label:r.masrafKalemi||'Masraf', sublabel:(r.aciklama? r.aciklama+' · ':'')+proj.name});
+      }
+    });
+    (proj.avanslar||[]).forEach(r=>{
+      const hay = normKey(r.adSoyad) + ' ' + normKey(r.aciklama);
+      if(hay.includes(q)){
+        results.push({kind:'avans', proj, id:r.id, label:'Avans: '+(r.adSoyad||'—'), sublabel:(r.aciklama? r.aciklama+' · ':'')+proj.name});
+      }
+    });
+    (proj.zimmetler||[]).forEach(r=>{
+      const hay = normKey(r.adSoyad) + ' ' + normKey(r.markaModel) + ' ' + normKey(r.aciklama);
+      if(hay.includes(q)){
+        results.push({kind:'zimmet', proj, id:r.id, label:'Zimmet: '+(r.markaModel||r.adSoyad||'—'), sublabel:(r.adSoyad? r.adSoyad+' · ':'')+proj.name});
+      }
+    });
+    (proj.tahsilatlar||[]).forEach(r=>{
+      const hay = normKey(r.odemeYapan) + ' ' + normKey(r.odemeAlan) + ' ' + normKey(r.aciklama);
+      if(hay.includes(q)){
+        results.push({kind:'tahsilat', proj, id:r.id, label:'Tahsilat: '+fmtMoney(r.tutar, projectCurrency(proj)), sublabel:(r.aciklama? r.aciklama+' · ':'')+proj.name});
+      }
+    });
+    (proj.yemekler||[]).forEach(r=>{
+      if(normKey(r.aciklama).includes(q)){
+        results.push({kind:'yemek', proj, id:r.id, label:'Yemek: '+fmtDateStr(r.tarih), sublabel:(r.aciklama? r.aciklama+' · ':'')+proj.name});
+      }
+    });
+    (proj.gunlukKayitlar||[]).forEach(r=>{
+      const hay = normKey(r.yapilanIsler) + ' ' + normKey(r.notlar) + ' ' + normKey(r.hava);
+      if(hay.includes(q)){
+        results.push({kind:'gunluk', proj, id:r.id, label:'Günlük: '+fmtDateStr(r.tarih), sublabel:(r.yapilanIsler? r.yapilanIsler.slice(0,60):'Şantiye Günlüğü')+' · '+proj.name});
+      }
     });
   });
-  results.sort((a,b)=>a.p.adSoyad.localeCompare(b.p.adSoyad,'tr'));
-  if(results.length===0){
-    return `<div class="empty-state" style="padding:16px;">"${esc(ui.personelAramaQuery)}" için sonuç bulunamadı.</div>`;
+  return results;
+}
+
+function goToRecord({projId, tab, masraflarTab, rowId}){
+  const proj = state.projects[projId];
+  if(!proj) return;
+  state.activeProjectId = projId;
+  ui.tab = tab;
+  if(masraflarTab) ui.masraflarTab = masraflarTab;
+  if(rowId) ui.pendingHighlightId = rowId;
+  saveState();
+  renderAll();
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+const ARAMA_TAB_MAP = {
+  metraj:{tab:'metraj'},
+  teklif:{tab:'teklif'},
+  masraf:{tab:'masraflar', masraflarTab:'masraf'},
+  avans:{tab:'masraflar', masraflarTab:'avanszimmet'},
+  zimmet:{tab:'masraflar', masraflarTab:'avanszimmet'},
+  tahsilat:{tab:'masraflar', masraflarTab:'tahsilat'},
+  yemek:{tab:'masraflar', masraflarTab:'yemek'},
+  gunluk:{tab:'gunluk'}
+};
+function handleGlobalAramaClick(kind, projId, rowId){
+  const proj = state.projects[projId];
+  if(!proj) return;
+  if(kind==='proje'){
+    state.activeProjectId = projId;
+    ui.tab = 'projeler';
+    saveState(); renderAll();
+    window.scrollTo({top:0, behavior:'smooth'});
+    showToast(`${proj.name} projesine geçildi.`);
+    return;
   }
+  if(kind==='personel'){
+    goToPersonel(projId, rowId);
+    return;
+  }
+  const target = ARAMA_TAB_MAP[kind];
+  if(!target) return;
+  goToRecord({projId, tab:target.tab, masraflarTab:target.masraflarTab, rowId});
+  showToast('Kayıt bulundu.');
+}
+
+function wireGlobalArama(){
+  const input = document.getElementById('globalAramaInput');
+  const sonucWrap = document.getElementById('globalAramaSonuc');
+  if(!input || !sonucWrap) return;
+  input.addEventListener('input', ()=>{
+    ui.globalAramaQuery = input.value;
+    sonucWrap.innerHTML = renderGlobalAramaResultsHtml();
+  });
+  sonucWrap.addEventListener('click',(e)=>{
+    const item = e.target.closest('.arama-sonuc-item');
+    if(!item) return;
+    handleGlobalAramaClick(item.dataset.kind, item.dataset.proj, item.dataset.id);
+  });
+}
+
+function renderGlobalAramaResultsHtml(){
+  const q = ui.globalAramaQuery||'';
+  if(!normKey(q)) return '';
+  const results = collectGlobalAramaResults(q);
+  if(results.length===0){
+    return `<div class="empty-state" style="padding:16px;">"${esc(q)}" için sonuç bulunamadı.</div>`;
+  }
+  const LIMIT = 40;
+  const shown = results.slice(0, LIMIT);
   return `
     <div class="pick-list">
-      ${results.map(r=>{
-        const st = personelStatus(r.p);
+      ${shown.map(item=>{
+        const meta = ARAMA_KIND_META[item.kind] || {label:item.kind, icon:''};
         return `
-        <div class="pick-item personel-arama-item" data-proj="${r.proj.id}" data-pid="${r.p.id}">
-          <div style="display:flex;flex-direction:column;gap:2px;min-width:0;flex:1;">
-            <b style="font-family:var(--font-display);font-size:0.85rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(r.p.adSoyad)}</b>
-            <span style="font-size:0.7rem;color:var(--ink-soft);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(r.p.pozisyon)||'Pozisyon belirtilmedi'} · ${esc(r.proj.name)}</span>
+        <div class="pick-item arama-sonuc-item" data-kind="${item.kind}" data-proj="${item.proj.id}" data-id="${item.id||''}">
+          <div style="width:30px;height:30px;border-radius:8px;background:rgba(47,211,199,0.15);display:flex;align-items:center;justify-content:center;color:var(--aqua-dim);flex-shrink:0;">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">${meta.icon}</svg>
           </div>
-          <span class="status-badge ${st.cls}">${st.text}</span>
+          <div style="display:flex;flex-direction:column;gap:2px;min-width:0;flex:1;">
+            <b style="font-family:var(--font-display);font-size:0.85rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(item.label)}</b>
+            <span style="font-size:0.7rem;color:var(--ink-soft);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(item.sublabel)}</span>
+          </div>
+          <span class="badge" style="flex-shrink:0;">${meta.label}</span>
         </div>`;
       }).join('')}
+      ${results.length>LIMIT? `<div class="hint" style="padding:6px 4px;">${results.length-LIMIT} sonuç daha var. Aramanızı daraltmayı deneyin.</div>` : ''}
     </div>`;
 }
 
-function renderPersonelAramaHtml(){
+function renderGlobalAramaHtml(){
   return `
     <div class="card glass">
       <h2>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.3-4.3"/></svg>
-        Personel Ara
+        Genel Arama
       </h2>
-      <p class="hint">Adı soyadı, pozisyon ya da kimlik numarasına göre <b>tüm projelerdeki</b> personeli arayın. Bulduğunuz kişiye tıkladığınızda ilgili projeye geçilip Personel bölümünde tüm bilgileri açılır.</p>
+      <p class="hint">Tüm projelerinizdeki <b>her şeyi</b> arayın: proje, personel, metraj satırı, teklif kalemi, masraf, avans/zimmet, tahsilat, yemek ve şantiye günlüğü kayıtları. Bulduğunuz kayda tıkladığınızda ilgili projeye ve bölüme geçilip kayıt kısa süreliğine vurgulanır.</p>
       <div class="field">
-        <input type="text" id="personelAramaInput" value="${esc(ui.personelAramaQuery||'')}" placeholder="Örn: Ahmet Yılmaz">
+        <input type="text" id="globalAramaInput" value="${esc(ui.globalAramaQuery||'')}" placeholder="Örn: Ahmet Yılmaz, A Blok, çimento, dozer…">
       </div>
-      <div id="personelAramaSonuc">${renderPersonelAramaResultsHtml()}</div>
+      <div id="globalAramaSonuc">${renderGlobalAramaResultsHtml()}</div>
     </div>`;
 }
 
@@ -2106,60 +2279,71 @@ function renderGenelOzetHtml(){
     </div>`;
   }
   let toplamPersonel=0, toplamMetraj=0, toplamTeklif=0;
-  let toplamHakedis=0, toplamTahsilat=0, toplamOdenecek=0, toplamOdenen=0, toplamMasraf=0, toplamYemek=0;
+  // Farklı para birimindeki projelerin tutarlarını birbirine karıştırmamak için
+  // parasal toplamlar para birimine göre ayrı ayrı biriktirilir.
+  const paraToplamlari = {}; // { TRY: {hakedis,tahsilat,odenecek,odenen,masraf,yemek}, USD: {...}, ... }
   projects.forEach(p=>{
     toplamPersonel += (p.personel||[]).length;
     toplamMetraj += (p.metrajRows||[]).length;
     toplamTeklif += (p.teklifRows||[]).length;
-    toplamHakedis += projeIsverenAlacakToplam(p);
-    toplamTahsilat += (p.tahsilatlar||[]).reduce((s,r)=>s+(parseFloat(r.tutar)||0),0);
-    toplamOdenecek += projeCalisanaOdenecekToplam(p);
-    toplamOdenen += projeCalisanaOdenenToplam(p);
-    toplamMasraf += projeMasrafToplam(p);
-    toplamYemek += projeYemekToplam(p);
+    const cur = projectCurrency(p);
+    if(!paraToplamlari[cur]) paraToplamlari[cur] = {hakedis:0,tahsilat:0,odenecek:0,odenen:0,masraf:0,yemek:0};
+    const t = paraToplamlari[cur];
+    t.hakedis += projeIsverenAlacakToplam(p);
+    t.tahsilat += (p.tahsilatlar||[]).reduce((s,r)=>s+(parseFloat(r.tutar)||0),0);
+    t.odenecek += projeCalisanaOdenecekToplam(p);
+    t.odenen += projeCalisanaOdenenToplam(p);
+    t.masraf += projeMasrafToplam(p);
+    t.yemek += projeYemekToplam(p);
   });
-  const kalanIsveren = toplamHakedis - toplamTahsilat;
-  const kalanCalisan = toplamOdenecek - toplamOdenen;
-  const genelKalanKar = toplamHakedis - toplamOdenecek - toplamMasraf - toplamYemek;
+  const paraBlocklariHtml = Object.keys(paraToplamlari).map(cur=>{
+    const t = paraToplamlari[cur];
+    const kalanIsveren = t.hakedis - t.tahsilat;
+    const kalanCalisan = t.odenecek - t.odenen;
+    const genelKalanKar = t.hakedis - t.odenecek - t.masraf - t.yemek;
+    const paraBaslik = Object.keys(paraToplamlari).length>1 ? ` — ${esc(CURRENCY_INFO[cur].label)}` : '';
+    return `
+      <div class="field-grid" style="grid-template-columns:repeat(auto-fill,minmax(210px,1fr));">
+        <div class="card glass" style="padding:12px;gap:8px;">
+          <b style="font-family:var(--font-display);font-size:0.82rem;color:var(--tide);">İşveren Hesabı${paraBaslik}</b>
+          <div class="totals-strip">
+            <div class="total-chip"><span class="lbl">Toplam Hakediş</span><span class="val">${fmtMoney(t.hakedis, cur)}</span></div>
+            <div class="total-chip"><span class="lbl">Toplam Tahsilat</span><span class="val">${fmtMoney(t.tahsilat, cur)}</span></div>
+            <div class="total-chip"><span class="lbl">Kalan Ödeme</span><span class="val">${fmtMoney(kalanIsveren, cur)}</span></div>
+          </div>
+        </div>
+        <div class="card glass" style="padding:12px;gap:8px;">
+          <b style="font-family:var(--font-display);font-size:0.82rem;color:var(--tide);">Çalışan Hesabı${paraBaslik}</b>
+          <div class="totals-strip">
+            <div class="total-chip"><span class="lbl">Ödenecek</span><span class="val">${fmtMoney(t.odenecek, cur)}</span></div>
+            <div class="total-chip"><span class="lbl">Ödenen</span><span class="val">${fmtMoney(t.odenen, cur)}</span></div>
+            <div class="total-chip"><span class="lbl">Kalan</span><span class="val">${fmtMoney(kalanCalisan, cur)}</span></div>
+          </div>
+        </div>
+        <div class="card glass" style="padding:12px;gap:8px;">
+          <b style="font-family:var(--font-display);font-size:0.82rem;color:var(--tide);">Genel Kâr Özeti${paraBaslik}</b>
+          <div class="totals-strip">
+            <div class="total-chip"><span class="lbl">Masraf</span><span class="val">${fmtMoney(t.masraf, cur)}</span></div>
+            <div class="total-chip"><span class="lbl">Yemek</span><span class="val">${fmtMoney(t.yemek, cur)}</span></div>
+            <div class="total-chip"><span class="lbl">Genel Kalan Kâr</span><span class="val">${fmtMoney(genelKalanKar, cur)}</span></div>
+          </div>
+        </div>
+      </div>`;
+  }).join('');
   return `
     <div class="card glass">
       <h2>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/></svg>
         Tüm Projeler — Genel Özet <span class="badge">${projects.length} proje</span>
       </h2>
-      <p class="hint">Tüm projelerinizin toplam rakamları; her projedeki Teklif, Tahsilat, Puantaj/Mesai, Avans ve Masraf kayıtlarından otomatik hesaplanır.</p>
+      <p class="hint">Tüm projelerinizin toplam rakamları; her projedeki Teklif, Tahsilat, Puantaj/Mesai, Avans ve Masraf kayıtlarından otomatik hesaplanır.${Object.keys(paraToplamlari).length>1 ? ' Farklı para birimindeki projeler birbirine karıştırılmadan ayrı ayrı gösterilir.' : ''}</p>
       <div class="totals-strip">
         <div class="total-chip"><span class="lbl">Toplam Proje</span><span class="val">${projects.length}</span></div>
         <div class="total-chip"><span class="lbl">Toplam Personel</span><span class="val">${toplamPersonel}</span></div>
         <div class="total-chip"><span class="lbl">Metraj Satırı</span><span class="val">${toplamMetraj}</span></div>
         <div class="total-chip"><span class="lbl">Teklif Kalemi</span><span class="val">${toplamTeklif}</span></div>
       </div>
-      <div class="field-grid" style="grid-template-columns:repeat(auto-fill,minmax(210px,1fr));">
-        <div class="card glass" style="padding:12px;gap:8px;">
-          <b style="font-family:var(--font-display);font-size:0.82rem;color:var(--tide);">İşveren Hesabı (Tüm Projeler)</b>
-          <div class="totals-strip">
-            <div class="total-chip"><span class="lbl">Toplam Hakediş</span><span class="val">${fmtMoney(toplamHakedis)}</span></div>
-            <div class="total-chip"><span class="lbl">Toplam Tahsilat</span><span class="val">${fmtMoney(toplamTahsilat)}</span></div>
-            <div class="total-chip"><span class="lbl">Kalan Ödeme</span><span class="val">${fmtMoney(kalanIsveren)}</span></div>
-          </div>
-        </div>
-        <div class="card glass" style="padding:12px;gap:8px;">
-          <b style="font-family:var(--font-display);font-size:0.82rem;color:var(--tide);">Çalışan Hesabı (Tüm Projeler)</b>
-          <div class="totals-strip">
-            <div class="total-chip"><span class="lbl">Ödenecek</span><span class="val">${fmtMoney(toplamOdenecek)}</span></div>
-            <div class="total-chip"><span class="lbl">Ödenen</span><span class="val">${fmtMoney(toplamOdenen)}</span></div>
-            <div class="total-chip"><span class="lbl">Kalan</span><span class="val">${fmtMoney(kalanCalisan)}</span></div>
-          </div>
-        </div>
-        <div class="card glass" style="padding:12px;gap:8px;">
-          <b style="font-family:var(--font-display);font-size:0.82rem;color:var(--tide);">Genel Kâr Özeti</b>
-          <div class="totals-strip">
-            <div class="total-chip"><span class="lbl">Masraf</span><span class="val">${fmtMoney(toplamMasraf)}</span></div>
-            <div class="total-chip"><span class="lbl">Yemek</span><span class="val">${fmtMoney(toplamYemek)}</span></div>
-            <div class="total-chip"><span class="lbl">Genel Kalan Kâr</span><span class="val">${fmtMoney(genelKalanKar)}</span></div>
-          </div>
-        </div>
-      </div>
+      ${paraBlocklariHtml}
     </div>`;
 }
 
@@ -2187,6 +2371,7 @@ function renderProjeBilgiPanosuHtml(proj){
         Proje Bilgilendirme Panosu — <span style="color:var(--aqua-dim)">${esc(proj.name)}</span>
       </h2>
       <p class="hint">İşveren ve çalışan hesapları ile proje kârının genel görünümü. Tutarlar; Teklif, Tahsilat, Puantaj/Mesai, Avans ve Masraf modüllerindeki kayıtlardan otomatik hesaplanır.</p>
+      ${(proj.baslangicTarihi || proj.bitisTarihi) ? `<p class="hint"><b>Proje Süresi:</b> ${proj.baslangicTarihi? fmtDateStr(proj.baslangicTarihi) : 'Başlangıç belirtilmedi'} — ${proj.bitisTarihi? fmtDateStr(proj.bitisTarihi) : 'Bitiş belirtilmedi'}</p>` : ''}
       <div class="field-grid" style="grid-template-columns:repeat(auto-fill,minmax(210px,1fr));">
         <div class="card glass" style="padding:12px;gap:8px;">
           <b style="font-family:var(--font-display);font-size:0.82rem;color:var(--tide);">İşveren Hesabı</b>
@@ -2233,6 +2418,20 @@ function openProjectModal(project){
             <label>İşveren Adı</label>
             <input type="text" id="mProjEmployer" value="${isEdit?esc(project.employer):''}" placeholder="Örn: XYZ İnşaat A.Ş.">
           </div>
+          <div class="field">
+            <label>Para Birimi</label>
+            <select id="mProjCurrency">
+              ${Object.keys(CURRENCY_INFO).map(code=>`<option value="${code}" ${(isEdit?projectCurrency(project):'TRY')===code?'selected':''}>${esc(CURRENCY_INFO[code].name)}</option>`).join('')}
+            </select>
+          </div>
+          <div class="field">
+            <label>Proje Başlangıç Tarihi</label>
+            <input type="date" id="mProjBaslangic" value="${isEdit&&project.baslangicTarihi?esc(project.baslangicTarihi):''}">
+          </div>
+          <div class="field">
+            <label>Proje Bitiş Tarihi</label>
+            <input type="date" id="mProjBitis" value="${isEdit&&project.bitisTarihi?esc(project.bitisTarihi):''}">
+          </div>
         </div>
         <div class="btn-row" style="margin-top:8px;justify-content:flex-end;">
           <button class="btn btn-ghost" id="mCancel">Vazgeç</button>
@@ -2246,11 +2445,21 @@ function openProjectModal(project){
   document.getElementById('mSave').onclick = ()=>{
     const name = document.getElementById('mProjName').value.trim();
     const employer = document.getElementById('mProjEmployer').value.trim();
+    const currency = document.getElementById('mProjCurrency').value;
+    const baslangicTarihi = document.getElementById('mProjBaslangic').value;
+    const bitisTarihi = document.getElementById('mProjBitis').value;
     if(!name){ showToast('Lütfen proje adı girin.'); return; }
+    if(baslangicTarihi && bitisTarihi && bitisTarihi < baslangicTarihi){
+      showToast('Proje bitiş tarihi, başlangıç tarihinden önce olamaz.'); return;
+    }
     if(isEdit){
-      project.name = name; project.employer = employer;
+      project.name = name; project.employer = employer; project.currency = currency;
+      project.baslangicTarihi = baslangicTarihi; project.bitisTarihi = bitisTarihi;
     } else {
       const p = newProject(name, employer);
+      p.currency = currency;
+      p.baslangicTarihi = baslangicTarihi;
+      p.bitisTarihi = bitisTarihi;
       state.projects[p.id] = p;
       state.activeProjectId = p.id;
     }
@@ -2363,6 +2572,25 @@ function renderMetrajTab(main, proj){
 
     <div class="card glass">
       <h2>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
+        Excel'den Toplu Metraj Aktar
+      </h2>
+      <p class="hint">Önce şablonu indirip Excel'de doldurun, ardından aynı dosyayı buradan içe aktarın. İçe aktarılan satırlar mevcut listenin <b>üzerine yazılmaz</b>, listeye eklenir. Sütun başlıkları: Blok, Kat, Daire, Mekân, Uygulama Yeri, İmalat Cinsi, Adet, Kısa Kenar, Uzunluk, Yükseklik, Kapı Boşluğu (Minha), Birim.</p>
+      <div class="btn-row">
+        <button class="btn btn-ghost" id="btnMetrajSablon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
+          Şablon İndir
+        </button>
+        <button class="btn btn-primary" id="btnMetrajExcelImportTrigger">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></svg>
+          Excel'den İçe Aktar
+        </button>
+        <input type="file" id="metrajExcelInput" accept=".xlsx,.xls" style="display:none;">
+      </div>
+    </div>
+
+    <div class="card glass">
+      <h2>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 3H2l8 9.46V19l4 2v-8.54z"/></svg>
         Filtrele
       </h2>
@@ -2393,6 +2621,13 @@ function renderMetrajTab(main, proj){
   document.getElementById('btnSaveRow').onclick = ()=>saveMetrajRow(proj);
   document.getElementById('btnClearForm').onclick = ()=>{ metrajForm = emptyMetrajForm(); renderMetrajTab(main, proj); };
   document.getElementById('btnMetrajPdf').onclick = ()=>exportMetrajPdf(proj);
+  document.getElementById('btnMetrajSablon').onclick = downloadMetrajTemplate;
+  document.getElementById('btnMetrajExcelImportTrigger').onclick = ()=> document.getElementById('metrajExcelInput').click();
+  document.getElementById('metrajExcelInput').addEventListener('change', (e)=>{
+    const file = e.target.files[0];
+    handleMetrajExcelImport(proj, file);
+    e.target.value = '';
+  });
 }
 
 function renderMetrajFieldGrid(proj){
@@ -2515,6 +2750,110 @@ function saveMetrajRow(proj){
   showToast('Metraj satırı kaydedildi.');
 }
 
+/* ---- Excel Şablonu / İçe Aktarma: SheetJS (XLSX) zaten "Excel'e Aktar" için yüklü,
+   burada aynı kütüphaneyi hem şablon üretmek hem de kullanıcının doldurduğu dosyayı
+   okumak için kullanıyoruz. Yeni kayıtlar mevcut listeye EKLENİR, üzerine yazılmaz. ---- */
+// Türkçe karakterleri sadeleştirip küçük harfe çevirir; böylece "Mekân"/"mekan",
+// "Kısa Kenar"/"kisa kenar" gibi yazım farkları sütun eşlemesinde sorun çıkarmaz.
+function normHeaderKey(s){
+  return String(s||'').trim().toLocaleLowerCase('tr')
+    .replace(/ı/g,'i').replace(/ş/g,'s').replace(/ğ/g,'g').replace(/ü/g,'u').replace(/ö/g,'o').replace(/ç/g,'c')
+    .replace(/â/g,'a').replace(/î/g,'i').replace(/û/g,'u')
+    .replace(/\s+/g,' ');
+}
+const METRAJ_TEMPLATE_HEADERS = ['Blok','Kat','Daire','Mekân','Uygulama Yeri','İmalat Cinsi','Adet','Kısa Kenar','Uzunluk','Yükseklik','Kapı Boşluğu (Minha)','Birim'];
+const METRAJ_HEADER_FIELD_MAP = {
+  'blok':'blok', 'kat':'kat', 'daire':'daire', 'mekan':'mekan',
+  'uygulama yeri':'eleman', 'imalat cinsi':'imalat',
+  'adet':'adet', 'kisa kenar':'kisaKenar', 'uzunluk':'uzunluk',
+  'yukseklik':'yukseklik', 'kapi boslugu (minha)':'minha', 'minha':'minha', 'birim':'birim'
+};
+function downloadMetrajTemplate(){
+  try{
+    const sampleRow = ['A Blok','1. Kat','1. Daire','Salon','Duvar','Bölme Duvar İmalatı',1,'',4.2,2.8,'','m2'];
+    const ws = XLSX.utils.aoa_to_sheet([METRAJ_TEMPLATE_HEADERS, sampleRow]);
+    ws['!cols'] = METRAJ_TEMPLATE_HEADERS.map(()=>({wch:17}));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Metraj Şablonu');
+    const birimSheet = XLSX.utils.aoa_to_sheet([['Geçerli Birimler'], ...UNITS.map(u=>[u])]);
+    XLSX.utils.book_append_sheet(wb, birimSheet, 'Birimler');
+    XLSX.writeFile(wb, 'metraj-sablonu.xlsx');
+    showToast('Metraj şablonu indirildi.');
+  }catch(e){
+    console.error('Şablon indirme hatası', e);
+    showToast('Şablon indirilirken bir sorun oluştu.');
+  }
+}
+function handleMetrajExcelImport(proj, file){
+  if(!file) return;
+  showToast('Excel dosyası okunuyor…');
+  const reader = new FileReader();
+  reader.onload = (e)=>{
+    try{
+      const data = new Uint8Array(e.target.result);
+      const wb = XLSX.read(data, {type:'array'});
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      const raw = XLSX.utils.sheet_to_json(sheet, {defval:''});
+      if(!raw.length){ showToast('Excel dosyasında veri bulunamadı.'); return; }
+      const firstRowKeys = Object.keys(raw[0]);
+      const keyFieldMap = {};
+      firstRowKeys.forEach(k=>{
+        const norm = normHeaderKey(k);
+        if(METRAJ_HEADER_FIELD_MAP[norm]) keyFieldMap[k] = METRAJ_HEADER_FIELD_MAP[norm];
+      });
+      if(Object.keys(keyFieldMap).length===0){
+        showToast('Excel dosyasındaki sütun başlıkları tanınamadı. Lütfen "Şablon İndir" ile indirdiğiniz dosyayı kullanın.');
+        return;
+      }
+      const parsedRows = [];
+      let skipped = 0;
+      raw.forEach(rawRow=>{
+        const row = emptyMetrajForm();
+        Object.entries(keyFieldMap).forEach(([excelKey, field])=>{
+          let val = rawRow[excelKey];
+          if(val===undefined||val===null) val='';
+          row[field] = String(val).trim();
+        });
+        if(row.birim){
+          const normBirim = normHeaderKey(row.birim);
+          const match = UNITS.find(u=>normHeaderKey(u)===normBirim) || Object.keys(UNIT_LABEL).find(u=>normHeaderKey(UNIT_LABEL[u])===normBirim);
+          row.birim = match || 'm2';
+        } else {
+          row.birim = 'm2';
+        }
+        if(!row.adet) row.adet = '1';
+        ['blok','kat','daire','mekan','eleman','imalat'].forEach(f=>{ row[f] = (row[f]||'').trim(); });
+        if(!row.blok && !row.mekan && !row.imalat){ skipped++; return; }
+        const c = computeRow(row);
+        row.toplam = c.toplam;
+        row.altToplam = c.altToplam;
+        row.id = uid();
+        row.createdAt = Date.now();
+        parsedRows.push(row);
+      });
+      if(parsedRows.length===0){
+        showToast('İçe aktarılabilecek geçerli satır bulunamadı. Her satırda en az Blok, Mekân ya da İmalat Cinsi doldurulmalı.');
+        return;
+      }
+      const skipMsg = skipped>0 ? ` (${skipped} satır boş olduğu için atlanacak.)` : '';
+      confirmModal(`Excel dosyasında ${parsedRows.length} geçerli metraj satırı bulundu.${skipMsg} Bu satırlar mevcut listeye EKLENECEK (üzerine yazılmayacak). Devam edilsin mi?`, ()=>{
+        parsedRows.forEach(row=>{
+          proj.metrajRows.push(row);
+          ['blok','kat','daire','mekan','eleman','imalat'].forEach(f=>addMemory(proj, f, row[f]));
+        });
+        saveState();
+        renderMain();
+        showToast(`${parsedRows.length} metraj satırı içe aktarıldı.`);
+      });
+    }catch(err){
+      console.error('Excel içe aktarma hatası', err);
+      showToast('Excel dosyası okunurken bir sorun oluştu. Lütfen dosyayı kontrol edin.');
+    }
+  };
+  reader.onerror = ()=> showToast('Dosya okunamadı.');
+  reader.readAsArrayBuffer(file);
+}
+
 function renderFilterBar(proj){
   const bar = document.getElementById('filterBar');
   const fields = [['blok','Blok'],['kat','Kat'],['daire','Daire'],['mekan','Mekân'],['eleman','Uygulama Yeri'],['imalat','İmalat Cinsi'],['minha','Minha']];
@@ -2584,6 +2923,7 @@ function renderMetrajTable(proj){
       </tbody>
     </table>
   `;
+  applyPendingRowHighlight(wrap);
   wrap.querySelectorAll('tr[data-id]').forEach(tr=>{
     tr.addEventListener('click',(e)=>{
       const act = e.target.closest('[data-act]')?.dataset.act;
@@ -3231,6 +3571,7 @@ function renderTeklifTable(proj){
       </tbody>
     </table>
   `;
+  applyPendingRowHighlight(wrap);
   wrap.querySelectorAll('tr[data-id]').forEach(tr=>{
     tr.addEventListener('click',(e)=>{
       const act = e.target.closest('[data-act]')?.dataset.act;
@@ -3263,7 +3604,7 @@ function renderTeklifTotals(proj){
 // "Hesaplama Paneli"nde bir alan/ölçü girilerek malzeme miktarları otomatik hesaplanır.
 function emptyImalatSistemForm(){ return {id:null, ad:''}; }
 let imalatSistemForm = emptyImalatSistemForm();
-function emptyImalatMalzemeForm(){ return {id:null, ad:'', birim:'mt', sarfiyat:'', ebat:'', paketAdet:'', alisFiyat:'', satisFiyat:''}; }
+function emptyImalatMalzemeForm(){ return {id:null, ad:'', birim:'mt', sarfiyat:'', ebat:'', paketAdet:'', alisFiyat:'', satisFiyat:'', paraBirimi:'TRY'}; }
 let imalatMalzemeForm = emptyImalatMalzemeForm();
 
 // Ürün Fiyat Listesi: tüm imalat sistemlerinde ortak kullanılan bir ürün/malzeme adı +
@@ -3512,8 +3853,13 @@ function renderImalatMalzemeSectionHtml(sistem){
         <div class="field"><label>Sarfiyat (birim ölçü başına)</label><input class="mono" type="number" step="any" id="m-sarfiyat" value="${esc(imalatMalzemeForm.sarfiyat)}" placeholder="Örn: 2.55"></div>
         <div class="field"><label>Ebat (parça ölçüsü, opsiyonel)</label><input class="mono" type="number" step="any" id="m-ebat" value="${esc(imalatMalzemeForm.ebat)}" placeholder="Örn: 3"></div>
         <div class="field"><label>Paket İçi Adet (opsiyonel)</label><input class="mono" type="number" step="any" id="m-paketAdet" value="${esc(imalatMalzemeForm.paketAdet)}" placeholder="Örn: 12"></div>
-        <div class="field"><label>Alış Fiyatı (TL)</label><input class="mono" type="number" step="any" id="m-alisFiyat" value="${esc(imalatMalzemeForm.alisFiyat)}"></div>
-        <div class="field"><label>Satış Fiyatı (TL)</label><input class="mono" type="number" step="any" id="m-satisFiyat" value="${esc(imalatMalzemeForm.satisFiyat)}"></div>
+        <div class="field"><label>Fiyat Para Birimi</label>
+          <select id="m-paraBirimi">
+            ${Object.keys(CURRENCY_INFO).map(code=>`<option value="${code}" ${(imalatMalzemeForm.paraBirimi||'TRY')===code?'selected':''}>${esc(CURRENCY_INFO[code].name)}</option>`).join('')}
+          </select>
+        </div>
+        <div class="field"><label>Alış Fiyatı</label><input class="mono" type="number" step="any" id="m-alisFiyat" value="${esc(imalatMalzemeForm.alisFiyat)}"></div>
+        <div class="field"><label>Satış Fiyatı</label><input class="mono" type="number" step="any" id="m-satisFiyat" value="${esc(imalatMalzemeForm.satisFiyat)}"></div>
       </div>
       <div class="btn-row">
         <button class="btn btn-primary ripple-el-host" id="btnSaveMalzeme">
@@ -3534,7 +3880,7 @@ function renderMalzemeTableHtml(sistem){
   if(sistem.malzemeler.length===0) return `<div class="empty-state">Henüz malzeme eklenmedi.</div>`;
   return `
     <table>
-      <thead><tr><th>Malzeme</th><th>Birim</th><th class="num">Sarfiyat</th><th class="num">Ebat</th><th class="num">Paket İçi Adet</th><th class="num">Alış Fiyatı</th><th class="num">Satış Fiyatı</th><th></th></tr></thead>
+      <thead><tr><th>Malzeme</th><th>Birim</th><th class="num">Sarfiyat</th><th class="num">Ebat</th><th class="num">Paket İçi Adet</th><th>Para Birimi</th><th class="num">Alış Fiyatı</th><th class="num">Satış Fiyatı</th><th></th></tr></thead>
       <tbody>
         ${sistem.malzemeler.map(m=>`
           <tr data-id="${m.id}">
@@ -3543,8 +3889,9 @@ function renderMalzemeTableHtml(sistem){
             <td class="num">${fmtNum(m.sarfiyat)}</td>
             <td class="num">${m.ebat? fmtNum(m.ebat) : '—'}</td>
             <td class="num">${m.paketAdet? fmtNum(m.paketAdet) : '—'}</td>
-            <td class="num">${fmtMoney(m.alisFiyat)}</td>
-            <td class="num">${fmtMoney(m.satisFiyat)}</td>
+            <td>${esc(CURRENCY_INFO[m.paraBirimi||'TRY'].name)}</td>
+            <td class="num">${fmtMoney(m.alisFiyat, m.paraBirimi)}</td>
+            <td class="num">${fmtMoney(m.satisFiyat, m.paraBirimi)}</td>
             <td>
               <div class="row-actions">
                 <button class="icon-btn" data-act="edit" title="Düzenle">
@@ -3563,7 +3910,7 @@ function renderMalzemeTableHtml(sistem){
 }
 
 function bindImalatMalzemeSectionEvents(sistem){
-  ['ad','birim','sarfiyat','ebat','paketAdet','alisFiyat','satisFiyat'].forEach(k=>{
+  ['ad','birim','sarfiyat','ebat','paketAdet','alisFiyat','satisFiyat','paraBirimi'].forEach(k=>{
     const el = document.getElementById('m-'+k);
     if(el) el.addEventListener('input', ()=>{ imalatMalzemeForm[k] = el.value; });
   });
@@ -3694,7 +4041,8 @@ function saveImalatMalzeme(sistem){
     ebat: (!isNaN(ebatVal) && ebatVal>0) ? ebatVal : null,
     paketAdet: (!isNaN(paketVal) && paketVal>0) ? paketVal : null,
     alisFiyat: parseFloat(String(imalatMalzemeForm.alisFiyat).replace(',','.'))||0,
-    satisFiyat: parseFloat(String(imalatMalzemeForm.satisFiyat).replace(',','.'))||0
+    satisFiyat: parseFloat(String(imalatMalzemeForm.satisFiyat).replace(',','.'))||0,
+    paraBirimi: (imalatMalzemeForm.paraBirimi && CURRENCY_INFO[imalatMalzemeForm.paraBirimi]) ? imalatMalzemeForm.paraBirimi : 'TRY'
   };
   if(imalatMalzemeForm.id){
     const idx = sistem.malzemeler.findIndex(x=>x.id===row.id);
@@ -3746,10 +4094,17 @@ function computeMalzemeSonuc(malzeme, deger, opts){
   opts = opts || {};
   const sarfiyat = parseFloat(malzeme.sarfiyat)||0;
   const raw = (deger!=null) ? sarfiyat*deger : 0;
-  let miktar = raw, adetNote = null, paketNote = null;
+  // Kullanıcının Malzeme Sonuç Paneli'nde elle girdiği ekstra miktar (kesim payı,
+  // fire, ek stok vb. için) artık parça/paket yuvarlamasından ÖNCE toplam ihtiyaca
+  // eklenir. Böylece ebat/paket bazlı malzemelerde (örn. alçıpan, profil) ekstra
+  // eklendiğinde gereken adet/parça sayısı da otomatik artar.
+  // Örn: hesaplanan 102 m² (34 adet, ebat 3 m²), +3 m² eklenirse toplam 105 m² (35 adet) olur.
+  const ekstra = parseFloat(opts.ekstra)||0;
+  const rawWithEkstra = raw + ekstra;
+  let miktar = rawWithEkstra, adetNote = null, paketNote = null;
   const paketAdet = parseFloat(malzeme.paketAdet)||0;
   if(malzeme.ebat && malzeme.ebat>0){
-    let parca = Math.ceil((raw - 1e-9)/malzeme.ebat);
+    let parca = Math.ceil((rawWithEkstra - 1e-9)/malzeme.ebat);
     if(opts.paketTamamla && paketAdet>0){
       parca = Math.ceil((parca - 1e-9)/paketAdet)*paketAdet;
       paketNote = parca/paketAdet;
@@ -3757,23 +4112,19 @@ function computeMalzemeSonuc(malzeme, deger, opts){
     miktar = Math.round(parca*malzeme.ebat*100)/100;
     adetNote = parca;
   } else if(String(malzeme.birim).toLowerCase()==='adet'){
-    let parca = Math.ceil(raw - 1e-9);
+    let parca = Math.ceil(rawWithEkstra - 1e-9);
     if(opts.paketTamamla && paketAdet>0){
       parca = Math.ceil((parca - 1e-9)/paketAdet)*paketAdet;
       paketNote = parca/paketAdet;
     }
     miktar = parca;
   } else {
-    miktar = Math.round(raw*100)/100;
+    miktar = Math.round(rawWithEkstra*100)/100;
   }
-  // Kullanıcının Malzeme Sonuç Paneli'nde elle girdiği ekstra miktar (kesim payı,
-  // fire, ek stok vb. için), hesaplanan miktara doğrudan eklenir.
-  // Örn: hesaplanan 102 m², +3 m² eklenirse toplam 105 m² olur.
-  const ekstra = parseFloat(opts.ekstra)||0;
-  if(ekstra){ miktar = Math.round((miktar+ekstra)*100)/100; }
   const tutar = miktar*(parseFloat(malzeme.satisFiyat)||0);
   const maliyet = miktar*(parseFloat(malzeme.alisFiyat)||0);
-  return { raw: Math.round(raw*100)/100, miktar, adetNote, paketNote, ekstra, tutar: Math.round(tutar*100)/100, maliyet: Math.round(maliyet*100)/100 };
+  const paraBirimi = (malzeme.paraBirimi && CURRENCY_INFO[malzeme.paraBirimi]) ? malzeme.paraBirimi : 'TRY';
+  return { raw: Math.round(raw*100)/100, miktar, adetNote, paketNote, ekstra, paraBirimi, tutar: Math.round(tutar*100)/100, maliyet: Math.round(maliyet*100)/100 };
 }
 
 // ---- Poligon (köşeli / L-T-U-Z şeklinde oda) alan hesaplama — AutoCAD'deki "AREA"
@@ -4207,9 +4558,8 @@ function updateHesapPanel(opts){
   if(tot) tot.innerHTML = renderHesapTotalsHtml(sistem, parsed.value);
   const bmEl = document.getElementById('hesapBirimMaliyetDisplay');
   if(bmEl){
-    const {toplamTutar} = computeHesapToplamlar(sistem, parsed.value);
-    const bm = computeBirimMaliyet(toplamTutar, parsed.value);
-    bmEl.textContent = bm!=null ? `${fmtMoney(bm)} / ${parsed.unit==='m2'?'m²':'mt'}` : '—';
+    const toplamlar = computeHesapToplamlar(sistem, parsed.value);
+    bmEl.innerHTML = renderBirimMaliyetHtml(toplamlar, parsed.value, parsed.unit);
   }
   if(sistem) bindHesapSonucEvents(sistem, parsed.value, parsed.unit);
 }
@@ -4226,9 +4576,8 @@ function bindHesapSonucEvents(sistem, deger, unit){
     if(tot) tot.innerHTML = renderHesapTotalsHtml(sistem, deger);
     const bmEl = document.getElementById('hesapBirimMaliyetDisplay');
     if(bmEl){
-      const {toplamTutar} = computeHesapToplamlar(sistem, deger);
-      const bm = computeBirimMaliyet(toplamTutar, deger);
-      bmEl.textContent = bm!=null ? `${fmtMoney(bm)} / ${unit==='m2'?'m²':'mt'}` : '—';
+      const toplamlar = computeHesapToplamlar(sistem, deger);
+      bmEl.innerHTML = renderBirimMaliyetHtml(toplamlar, deger, unit);
     }
   };
   wrap.querySelectorAll('[data-fiyat-id]').forEach(inp=>{
@@ -4239,7 +4588,7 @@ function bindHesapSonucEvents(sistem, deger, unit){
       m.satisFiyat = parseFloat(String(e.target.value).replace(',','.'))||0;
       const r = computeMalzemeSonuc(m, deger, getPaketOpts(id));
       const tutarCell = wrap.querySelector(`[data-tutar-id="${id}"]`);
-      if(tutarCell) tutarCell.textContent = fmtMoney(r.tutar);
+      if(tutarCell) tutarCell.textContent = fmtMoney(r.tutar, r.paraBirimi);
       refreshTotals();
     });
     inp.addEventListener('change', ()=>{ saveState(); });
@@ -4256,9 +4605,17 @@ function bindHesapSonucEvents(sistem, deger, unit){
       const miktarSpan = wrap.querySelector(`[data-miktar-id="${id}"]`);
       if(miktarSpan) miktarSpan.textContent = `${fmtNum(r.miktar)} ${birimLabel}`;
       const baseSpan = wrap.querySelector(`[data-basemiktar-id="${id}"]`);
-      if(baseSpan) baseSpan.textContent = `${fmtNum(Math.round((r.miktar-r.ekstra)*100)/100)} ${birimLabel}`;
+      if(baseSpan) baseSpan.textContent = `${fmtNum(r.miktar)} ${birimLabel}`;
+      const adetNoteWrap = wrap.querySelector(`[data-adetnote-id="${id}"]`);
+      if(adetNoteWrap){
+        const isAdetBirim = String(birimLabel).toLowerCase()==='adet';
+        const pieceCount = r.adetNote!=null ? r.adetNote : (isAdetBirim ? r.miktar : null);
+        adetNoteWrap.innerHTML = (pieceCount!=null && !(isAdetBirim && !m.paketAdet))
+          ? `<div style="font-size:0.72rem;font-weight:500;color:var(--ink-soft);">(${formatPaketAdetNote(pieceCount, m.paketAdet)})</div>`
+          : '';
+      }
       const tutarCell = wrap.querySelector(`[data-tutar-id="${id}"]`);
-      if(tutarCell) tutarCell.textContent = fmtMoney(r.tutar);
+      if(tutarCell) tutarCell.textContent = fmtMoney(r.tutar, r.paraBirimi);
       refreshTotals();
     });
   });
@@ -4326,7 +4683,7 @@ function renderHesapSonucHtml(sistem, deger, basisUnit){
           if(pieceCount!=null && !(isAdetBirim && !m.paketAdet)){
             adetNoteHtml = `<div style="font-size:0.72rem;font-weight:500;color:var(--ink-soft);">(${formatPaketAdetNote(pieceCount, m.paketAdet)})</div>`;
           }
-          const baseMiktar = Math.round((r.miktar - r.ekstra)*100)/100;
+          const baseMiktar = r.miktar;
           return `<tr>
             <td>${esc(m.ad)}</td>
             <td>${fmtNum(m.sarfiyat)} ${esc(birimLabel)}/${basisLabel}</td>
@@ -4334,6 +4691,7 @@ function renderHesapSonucHtml(sistem, deger, basisUnit){
             <td>${esc(birimLabel)}</td>
             <td class="num">
               <input class="mono" type="number" step="any" data-fiyat-id="${m.id}" value="${esc(m.satisFiyat)}" style="width:92px;text-align:right;padding:6px 8px;border-radius:8px;border:1px solid rgba(11,36,54,0.15);background:rgba(255,255,255,0.7);">
+              <div style="font-size:0.68rem;color:var(--ink-soft);margin-top:2px;">${esc(CURRENCY_INFO[r.paraBirimi].label)}</div>
             </td>
             <td class="num">
               <span data-basemiktar-id="${m.id}">${fmtNum(baseMiktar)} ${esc(birimLabel)}</span>
@@ -4345,7 +4703,7 @@ function renderHesapSonucHtml(sistem, deger, basisUnit){
             <td class="num" style="font-weight:700;">
               <span data-miktar-id="${m.id}">${fmtNum(r.miktar)} ${esc(birimLabel)}</span>
             </td>
-            <td class="num" data-tutar-id="${m.id}">${fmtMoney(r.tutar)}</td>
+            <td class="num" data-tutar-id="${m.id}">${fmtMoney(r.tutar, r.paraBirimi)}</td>
             <td class="num">${m.paketAdet? `<label style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;white-space:nowrap;"><input type="checkbox" data-paket-id="${m.id}" ${opts.paketTamamla?'checked':''}> <span style="font-size:0.72rem;color:var(--ink-soft);">${fmtNum(m.paketAdet)}/paket</span></label>` : '—'}</td>
           </tr>`;
         }).join('')}
@@ -4357,24 +4715,49 @@ function renderHesapSonucHtml(sistem, deger, basisUnit){
 // Sistem malzemelerinden toplam maliyet/satış tutarı/kâr hesaplar. Birim Maliyet de
 // buradaki Toplam Satış Tutarı'na göre türetildiği için hem ekran hem PDF çıktısı
 // (Malzeme Sonuç Paneli ile Teklif Analizi) her zaman aynı rakamı gösterir.
+// Sistem malzemelerinden toplam maliyet/satış tutarı/kâr hesaplar. Malzemeler farklı
+// para birimlerinde olabileceği için (örn. alçıpan TL, profil USD) toplamlar her para
+// birimi için AYRI AYRI biriktirilir — farklı kurlar birbirine karıştırılmaz.
+// Birim Maliyet de buradaki Toplam Satış Tutarı'na göre türetildiği için hem ekran hem
+// PDF çıktısı (Malzeme Sonuç Paneli ile Teklif Analizi) her zaman aynı rakamı gösterir.
 function computeHesapToplamlar(sistem, deger){
-  if(!sistem || deger==null || !sistem.malzemeler.length) return { toplamTutar:0, toplamMaliyet:0, kar:0 };
-  let toplamTutar=0, toplamMaliyet=0;
+  const byCurrency = {};
+  if(!sistem || deger==null || !sistem.malzemeler.length) return { byCurrency };
   sistem.malzemeler.forEach(m=>{
     const r = computeMalzemeSonuc(m, deger, getPaketOpts(m.id));
-    toplamTutar += r.tutar; toplamMaliyet += r.maliyet;
+    if(!byCurrency[r.paraBirimi]) byCurrency[r.paraBirimi] = { toplamTutar:0, toplamMaliyet:0 };
+    byCurrency[r.paraBirimi].toplamTutar += r.tutar;
+    byCurrency[r.paraBirimi].toplamMaliyet += r.maliyet;
   });
-  return { toplamTutar, toplamMaliyet, kar: toplamTutar-toplamMaliyet };
+  Object.values(byCurrency).forEach(t=>{ t.kar = t.toplamTutar - t.toplamMaliyet; });
+  return { byCurrency };
 }
 
 function renderHesapTotalsHtml(sistem, deger){
   if(!sistem || deger==null || !sistem.malzemeler.length) return '';
-  const {toplamTutar, toplamMaliyet, kar} = computeHesapToplamlar(sistem, deger);
-  return `
-    <div class="total-chip"><span class="lbl">Toplam Maliyet</span><span class="val">${fmtMoney(toplamMaliyet)}</span></div>
-    <div class="total-chip"><span class="lbl">Toplam Satış Tutarı</span><span class="val">${fmtMoney(toplamTutar)}</span></div>
-    <div class="total-chip"><span class="lbl">Tahmini Kâr</span><span class="val">${fmtMoney(kar)}</span></div>
-  `;
+  const {byCurrency} = computeHesapToplamlar(sistem, deger);
+  const currencies = Object.keys(byCurrency);
+  return currencies.map(cur=>{
+    const t = byCurrency[cur];
+    const suffix = currencies.length>1 ? ` (${esc(CURRENCY_INFO[cur].label)})` : '';
+    return `
+    <div class="total-chip"><span class="lbl">Toplam Maliyet${suffix}</span><span class="val">${fmtMoney(t.toplamMaliyet, cur)}</span></div>
+    <div class="total-chip"><span class="lbl">Toplam Satış Tutarı${suffix}</span><span class="val">${fmtMoney(t.toplamTutar, cur)}</span></div>
+    <div class="total-chip"><span class="lbl">Tahmini Kâr${suffix}</span><span class="val">${fmtMoney(t.kar, cur)}</span></div>
+    `;
+  }).join('');
+}
+
+// Birim Maliyet (Toplam Satış Tutarı ÷ Hesaplanan Değer) satırını, sistemde birden
+// fazla para birimi varsa her biri için ayrı satır halinde döndürür.
+function renderBirimMaliyetHtml(toplamlar, metraj, unit){
+  const basisLabel = unit==='m2'?'m²':'mt';
+  const currencies = Object.keys(toplamlar.byCurrency||{});
+  if(currencies.length===0) return '—';
+  return currencies.map(cur=>{
+    const bm = computeBirimMaliyet(toplamlar.byCurrency[cur].toplamTutar, metraj);
+    return bm!=null ? `${fmtMoney(bm, cur)} / ${basisLabel}` : '—';
+  }).join('<br>');
 }
 
 /* ======================= PERSONEL TAB ======================= */
@@ -5356,6 +5739,7 @@ function renderGunlukList(proj){
       ${r.notlar? `<div style="font-size:0.78rem;color:var(--ink-soft);border-top:1px solid var(--glass-border);padding-top:6px;white-space:pre-wrap;"><b>Not:</b> ${esc(r.notlar)}</div>`:''}
     </div>
   `).join('');
+  applyPendingRowHighlight(wrap);
   wrap.querySelectorAll('.gunluk-entry').forEach(card=>{
     card.addEventListener('click',(e)=>{
       const act = e.target.closest('[data-act]')?.dataset.act;
@@ -5410,7 +5794,7 @@ async function exportGunlukPdf(proj){
 
 /* ======================= AVANS / ZİMMET TAB ======================= */
 const ODEME_SEKLI_OPTIONS = ['Nakit','Banka Havalesi','Diğer'];
-function emptyAvansForm(){ return {id:null, personelId:'', odemeTarihi: isoToday(), odemeSekli:'Nakit', aciklama:'', tutar:''}; }
+function emptyAvansForm(){ return {id:null, personelId:'', odemeTarihi: isoToday(), odemeSekli:'Nakit', aciklama:'', tutar:'', paraBirimi:''}; }
 function emptyZimmetForm(){ return {id:null, personelId:'', zimmetTarihi: todayStr(), markaModel:'', aciklama:'', teslimTarihi:''}; }
 let avansForm = emptyAvansForm();
 let zimmetForm = emptyZimmetForm();
@@ -5441,8 +5825,13 @@ function renderAvansZimmetTab(main, proj){
         <div class="field" style="grid-column:span 2;"><label>Açıklama</label>
           <input type="text" id="av-aciklama" value="${esc(avansForm.aciklama)}" placeholder="Örn: Bayram avansı">
         </div>
-        <div class="field"><label>Tutar (TL)</label>
+        <div class="field"><label>Tutar</label>
           <input class="mono" type="number" step="any" id="av-tutar" value="${esc(avansForm.tutar)}">
+        </div>
+        <div class="field"><label>Para Birimi</label>
+          <select id="av-paraBirimi">
+            ${Object.keys(CURRENCY_INFO).map(code=>`<option value="${code}" ${(avansForm.paraBirimi||projectCurrency(proj))===code?'selected':''}>${esc(CURRENCY_INFO[code].name)}</option>`).join('')}
+          </select>
         </div>
       </div>
       <div class="btn-row">
@@ -5510,7 +5899,7 @@ function renderAvansZimmetTab(main, proj){
       </div>
     </div>
   `;
-  ['personelId','odemeTarihi','odemeSekli','aciklama','tutar'].forEach(k=>{
+  ['personelId','odemeTarihi','odemeSekli','aciklama','tutar','paraBirimi'].forEach(k=>{
     document.getElementById('av-'+k).addEventListener('input', ()=>{ avansForm[k]=document.getElementById('av-'+k).value; });
   });
   ['personelId','zimmetTarihi','markaModel','aciklama','teslimTarihi'].forEach(k=>{
@@ -5538,6 +5927,7 @@ function saveAvansRow(proj){
   const tutar = parseFloat(avansForm.tutar)||0;
   if(tutar<=0){ showToast('Lütfen geçerli bir tutar girin.'); return; }
   const p = proj.personel.find(x=>x.id===avansForm.personelId);
+  const paraBirimi = (avansForm.paraBirimi && CURRENCY_INFO[avansForm.paraBirimi]) ? avansForm.paraBirimi : projectCurrency(proj);
   const row = {
     id: avansForm.id || uid(),
     personelId: avansForm.personelId,
@@ -5545,7 +5935,8 @@ function saveAvansRow(proj){
     odemeTarihi: avansForm.odemeTarihi,
     odemeSekli: avansForm.odemeSekli,
     aciklama: avansForm.aciklama.trim(),
-    tutar
+    tutar,
+    paraBirimi
   };
   if(avansForm.id){
     const idx = proj.avanslar.findIndex(r=>r.id===row.id);
@@ -5575,27 +5966,31 @@ function renderAvansTable(proj){
   }
   wrap.innerHTML = `
     <table>
-      <thead><tr><th>Adı Soyadı</th><th>Tarih</th><th>Ödeme Şekli</th><th>Açıklama</th><th class="num">Tutar</th><th></th></tr></thead>
+      <thead><tr><th>Adı Soyadı</th><th>Tarih</th><th>Ödeme Şekli</th><th>Açıklama</th><th>Para Birimi</th><th class="num">Tutar</th><th></th></tr></thead>
       <tbody>
-        ${rows.map(r=>`
+        ${rows.map(r=>{
+          const cur = (r.paraBirimi && CURRENCY_INFO[r.paraBirimi]) ? r.paraBirimi : projectCurrency(proj);
+          return `
           <tr data-id="${r.id}">
             <td>${esc(r.adSoyad)}</td>
             <td>${fmtDateStr(r.odemeTarihi)}</td>
             <td>${esc(r.odemeSekli)}</td>
             <td>${esc(r.aciklama)||'—'}</td>
-            <td class="num">${fmtMoney(r.tutar)}</td>
+            <td>${esc(CURRENCY_INFO[cur].label)}</td>
+            <td class="num">${fmtMoney(r.tutar, cur)}</td>
             <td>
               <div class="row-actions">
                 <button class="icon-btn" data-act="edit" title="Düzenle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg></button>
                 <button class="icon-btn danger" data-act="delete" title="Sil"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0l-1 14a2 2 0 01-2 2H7a2 2 0 01-2-2L4 6h16z"/></svg></button>
               </div>
             </td>
-          </tr>`).join('')}
+          </tr>`;
+        }).join('')}
       </tbody>
     </table>
   `;
-  const total = rows.reduce((s,r)=>s+(parseFloat(r.tutar)||0),0);
-  totalsEl.innerHTML = `<div class="total-chip"><span class="lbl">Alt Toplam</span><span class="val">${fmtMoney(total)}</span></div>`;
+  totalsEl.innerHTML = currencyTotalChipsHtml(rows, proj, 'Alt Toplam');
+  applyPendingRowHighlight(wrap);
   wrap.querySelectorAll('tr[data-id]').forEach(tr=>{
     tr.addEventListener('click',(e)=>{
       const act = e.target.closest('[data-act]')?.dataset.act;
@@ -5603,7 +5998,7 @@ function renderAvansTable(proj){
       const r = proj.avanslar.find(x=>x.id===tr.dataset.id);
       if(!r) return;
       if(act==='edit'){
-        avansForm = {id:r.id, personelId:r.personelId, odemeTarihi:r.odemeTarihi, odemeSekli:r.odemeSekli, aciklama:r.aciklama, tutar:String(r.tutar)};
+        avansForm = {id:r.id, personelId:r.personelId, odemeTarihi:r.odemeTarihi, odemeSekli:r.odemeSekli, aciklama:r.aciklama, tutar:String(r.tutar), paraBirimi:(r.paraBirimi && CURRENCY_INFO[r.paraBirimi]) ? r.paraBirimi : projectCurrency(proj)};
         renderMain(); window.scrollTo({top:0, behavior:'smooth'});
       } else if(act==='delete'){
         confirmModal('Bu avans kaydını silmek istediğinize emin misiniz?', ()=>{
@@ -5678,6 +6073,7 @@ function renderZimmetTable(proj){
       </tbody>
     </table>
   `;
+  applyPendingRowHighlight(wrap);
   wrap.querySelectorAll('tr[data-id]').forEach(tr=>{
     tr.addEventListener('click',(e)=>{
       const act = e.target.closest('[data-act]')?.dataset.act;
@@ -5703,25 +6099,32 @@ async function exportAvansPdf(proj){
   const rows = filteredAvans(proj);
   if(rows.length===0){ showToast('Listelenecek avans kaydı yok.'); return; }
   const cellStyle = 'border:1px solid #E4EFEF;padding:5px 6px;text-align:left;word-break:break-word;';
-  const total = rows.reduce((s,r)=>s+(parseFloat(r.tutar)||0),0);
+  const byCurrency = groupRowsByCurrency(rows, proj);
+  const currencies = Object.keys(byCurrency);
   const html = `
     ${pdfHeaderHtml(proj, 'Personel Avans Listesi')}
     <table style="width:100%;border-collapse:collapse;font-size:10px;table-layout:fixed;">
       <thead><tr style="background:#EAF6F5;">
-        <th style="${cellStyle}">Adı Soyadı</th><th style="${cellStyle}">Tarih</th><th style="${cellStyle}">Ödeme Şekli</th><th style="${cellStyle}">Açıklama</th><th style="${cellStyle}text-align:right;">Tutar</th>
+        <th style="${cellStyle}">Adı Soyadı</th><th style="${cellStyle}">Tarih</th><th style="${cellStyle}">Ödeme Şekli</th><th style="${cellStyle}">Açıklama</th><th style="${cellStyle}">Para Birimi</th><th style="${cellStyle}text-align:right;">Tutar</th>
       </tr></thead>
       <tbody>
-        ${rows.map(r=>`<tr>
+        ${rows.map(r=>{
+          const cur = (r.paraBirimi && CURRENCY_INFO[r.paraBirimi]) ? r.paraBirimi : projectCurrency(proj);
+          return `<tr>
           <td style="${cellStyle}">${esc(r.adSoyad)}</td>
           <td style="${cellStyle}">${fmtDateStr(r.odemeTarihi)}</td>
           <td style="${cellStyle}">${esc(r.odemeSekli)}</td>
           <td style="${cellStyle}">${esc(r.aciklama)||'—'}</td>
-          <td style="${cellStyle}text-align:right;">${fmtMoney(r.tutar)}</td>
-        </tr>`).join('')}
+          <td style="${cellStyle}">${esc(CURRENCY_INFO[cur].label)}</td>
+          <td style="${cellStyle}text-align:right;">${fmtMoney(r.tutar, cur)}</td>
+        </tr>`;
+        }).join('')}
       </tbody>
-      <tfoot><tr style="background:#EAF6F5;font-weight:700;">
-        <td style="${cellStyle}" colspan="4">Alt Toplam</td><td style="${cellStyle}text-align:right;">${fmtMoney(total)}</td>
-      </tr></tfoot>
+      <tfoot>
+        ${currencies.map((cur,i)=>`<tr style="background:#EAF6F5;font-weight:700;">
+          <td style="${cellStyle}" colspan="5">Alt Toplam${currencies.length>1?' ('+esc(CURRENCY_INFO[cur].label)+')':''}</td><td style="${cellStyle}text-align:right;">${fmtMoney(byCurrency[cur], cur)}</td>
+        </tr>`).join('')}
+      </tfoot>
     </table>
     <div style="margin-top:36px;font-size:9px;color:#8096A3;">DNZ Metraj &amp; Teklif Yönetimi ile oluşturulmuştur.</div>
   `;
@@ -6368,6 +6771,7 @@ function renderTahsilatTable(proj){
       </tbody>
     </table>
   `;
+  applyPendingRowHighlight(wrap);
   wrap.querySelectorAll('tr[data-id]').forEach(tr=>{
     tr.addEventListener('click',(e)=>{
       const act = e.target.closest('[data-act]')?.dataset.act;
@@ -6438,7 +6842,7 @@ async function exportTahsilatPdf(proj){
 }
 
 /* ======================= MASRAF TAB ======================= */
-function emptyMasrafForm(){ return {id:null, masrafKalemi:'', odemeTarihi: todayStr(), odemeSekli:'Nakit', aciklama:'', tutar:'', dosya:null}; }
+function emptyMasrafForm(){ return {id:null, masrafKalemi:'', odemeTarihi: todayStr(), odemeSekli:'Nakit', aciklama:'', tutar:'', paraBirimi:'', dosya:null}; }
 let masrafForm = emptyMasrafForm();
 
 function renderMasrafTab(main, proj){
@@ -6463,8 +6867,13 @@ function renderMasrafTab(main, proj){
         <div class="field" style="grid-column:span 2;"><label>Açıklama</label>
           <input type="text" id="ms-aciklama" value="${esc(masrafForm.aciklama)}" placeholder="Örn: Şantiye jeneratör yakıtı">
         </div>
-        <div class="field"><label>Tutar (TL)</label>
+        <div class="field"><label>Tutar</label>
           <input class="mono" type="number" step="any" id="ms-tutar" value="${esc(masrafForm.tutar)}">
+        </div>
+        <div class="field"><label>Para Birimi</label>
+          <select id="ms-paraBirimi">
+            ${Object.keys(CURRENCY_INFO).map(code=>`<option value="${code}" ${(masrafForm.paraBirimi||projectCurrency(proj))===code?'selected':''}>${esc(CURRENCY_INFO[code].name)}</option>`).join('')}
+          </select>
         </div>
         <div class="field" style="grid-column:span 2;"><label>Fiş / Fatura Dosyası (isteğe bağlı)</label>
           <div class="file-attach-row">
@@ -6498,7 +6907,7 @@ function renderMasrafTab(main, proj){
       </div>
     </div>
   `;
-  ['masrafKalemi','odemeTarihi','odemeSekli','aciklama','tutar'].forEach(k=>{
+  ['masrafKalemi','odemeTarihi','odemeSekli','aciklama','tutar','paraBirimi'].forEach(k=>{
     document.getElementById('ms-'+k).addEventListener('input', ()=>{ masrafForm[k]=document.getElementById('ms-'+k).value; });
   });
   document.getElementById('btnSaveMasraf').onclick = ()=>saveMasrafRow(proj);
@@ -6515,6 +6924,7 @@ function saveMasrafRow(proj){
   if(!masrafForm.odemeTarihi){ showToast('Lütfen ödeme tarihini girin.'); return; }
   const tutar = parseFloat(masrafForm.tutar)||0;
   if(tutar<=0){ showToast('Lütfen geçerli bir tutar girin.'); return; }
+  const paraBirimi = (masrafForm.paraBirimi && CURRENCY_INFO[masrafForm.paraBirimi]) ? masrafForm.paraBirimi : projectCurrency(proj);
   const row = {
     id: masrafForm.id || uid(),
     masrafKalemi: masrafForm.masrafKalemi.trim(),
@@ -6522,6 +6932,7 @@ function saveMasrafRow(proj){
     odemeSekli: masrafForm.odemeSekli,
     aciklama: masrafForm.aciklama.trim(),
     tutar,
+    paraBirimi,
     dosya: masrafForm.dosya || null
   };
   if(masrafForm.id){
@@ -6555,15 +6966,18 @@ function renderMasrafTable(proj){
   }
   wrap.innerHTML = `
     <table>
-      <thead><tr><th>Masraf Kalemi</th><th>Tarih</th><th>Ödeme Şekli</th><th>Açıklama</th><th class="num">Tutar</th><th></th></tr></thead>
+      <thead><tr><th>Masraf Kalemi</th><th>Tarih</th><th>Ödeme Şekli</th><th>Açıklama</th><th>Para Birimi</th><th class="num">Tutar</th><th></th></tr></thead>
       <tbody>
-        ${rows.map(r=>`
+        ${rows.map(r=>{
+          const cur = (r.paraBirimi && CURRENCY_INFO[r.paraBirimi]) ? r.paraBirimi : projectCurrency(proj);
+          return `
           <tr data-id="${r.id}">
             <td>${esc(r.masrafKalemi)}</td>
             <td>${fmtDateStr(r.odemeTarihi)}</td>
             <td>${esc(r.odemeSekli)}</td>
             <td>${esc(r.aciklama)||'—'}</td>
-            <td class="num">${fmtMoney(r.tutar)}</td>
+            <td>${esc(CURRENCY_INFO[cur].label)}</td>
+            <td class="num">${fmtMoney(r.tutar, cur)}</td>
             <td>
               <div class="row-actions">
                 ${r.dosya ? `<button class="icon-btn attach-active" data-act="dosya" title="Ekli dosyayı görüntüle: ${esc(r.dosya.name)}">${attachmentIconSvg(r.dosya)}</button>` : ''}
@@ -6571,12 +6985,13 @@ function renderMasrafTable(proj){
                 <button class="icon-btn danger" data-act="delete" title="Sil"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0l-1 14a2 2 0 01-2 2H7a2 2 0 01-2-2L4 6h16z"/></svg></button>
               </div>
             </td>
-          </tr>`).join('')}
+          </tr>`;
+        }).join('')}
       </tbody>
     </table>
   `;
-  const total = rows.reduce((s,r)=>s+(parseFloat(r.tutar)||0),0);
-  totalsEl.innerHTML = `<div class="total-chip"><span class="lbl">Alt Toplam</span><span class="val">${fmtMoney(total)}</span></div>`;
+  totalsEl.innerHTML = currencyTotalChipsHtml(rows, proj, 'Alt Toplam');
+  applyPendingRowHighlight(wrap);
   wrap.querySelectorAll('tr[data-id]').forEach(tr=>{
     tr.addEventListener('click',(e)=>{
       const act = e.target.closest('[data-act]')?.dataset.act;
@@ -6584,7 +6999,7 @@ function renderMasrafTable(proj){
       const r = proj.masraflar.find(x=>x.id===tr.dataset.id);
       if(!r) return;
       if(act==='edit'){
-        masrafForm = {id:r.id, masrafKalemi:r.masrafKalemi, odemeTarihi:r.odemeTarihi, odemeSekli:r.odemeSekli, aciklama:r.aciklama, tutar:String(r.tutar), dosya:r.dosya||null};
+        masrafForm = {id:r.id, masrafKalemi:r.masrafKalemi, odemeTarihi:r.odemeTarihi, odemeSekli:r.odemeSekli, aciklama:r.aciklama, tutar:String(r.tutar), paraBirimi:(r.paraBirimi && CURRENCY_INFO[r.paraBirimi]) ? r.paraBirimi : projectCurrency(proj), dosya:r.dosya||null};
         renderMain(); window.scrollTo({top:0, behavior:'smooth'});
       } else if(act==='delete'){
         confirmModal('Bu masraf kaydını silmek istediğinize emin misiniz?', ()=>{
@@ -6604,25 +7019,32 @@ async function exportMasrafPdf(proj){
   const rows = filteredMasraf(proj);
   if(rows.length===0){ showToast('Listelenecek masraf kaydı yok.'); return; }
   const cellStyle = 'border:1px solid #E4EFEF;padding:5px 6px;text-align:left;word-break:break-word;';
-  const total = rows.reduce((s,r)=>s+(parseFloat(r.tutar)||0),0);
+  const byCurrency = groupRowsByCurrency(rows, proj);
+  const currencies = Object.keys(byCurrency);
   const html = `
     ${pdfHeaderHtml(proj, 'Masraf Listesi')}
     <table style="width:100%;border-collapse:collapse;font-size:10px;table-layout:fixed;">
       <thead><tr style="background:#EAF6F5;">
-        <th style="${cellStyle}">Masraf Kalemi</th><th style="${cellStyle}">Tarih</th><th style="${cellStyle}">Ödeme Şekli</th><th style="${cellStyle}">Açıklama</th><th style="${cellStyle}text-align:right;">Tutar</th>
+        <th style="${cellStyle}">Masraf Kalemi</th><th style="${cellStyle}">Tarih</th><th style="${cellStyle}">Ödeme Şekli</th><th style="${cellStyle}">Açıklama</th><th style="${cellStyle}">Para Birimi</th><th style="${cellStyle}text-align:right;">Tutar</th>
       </tr></thead>
       <tbody>
-        ${rows.map(r=>`<tr>
+        ${rows.map(r=>{
+          const cur = (r.paraBirimi && CURRENCY_INFO[r.paraBirimi]) ? r.paraBirimi : projectCurrency(proj);
+          return `<tr>
           <td style="${cellStyle}">${esc(r.masrafKalemi)}</td>
           <td style="${cellStyle}">${fmtDateStr(r.odemeTarihi)}</td>
           <td style="${cellStyle}">${esc(r.odemeSekli)}</td>
           <td style="${cellStyle}">${esc(r.aciklama)||'—'}</td>
-          <td style="${cellStyle}text-align:right;">${fmtMoney(r.tutar)}</td>
-        </tr>`).join('')}
+          <td style="${cellStyle}">${esc(CURRENCY_INFO[cur].label)}</td>
+          <td style="${cellStyle}text-align:right;">${fmtMoney(r.tutar, cur)}</td>
+        </tr>`;
+        }).join('')}
       </tbody>
-      <tfoot><tr style="background:#EAF6F5;font-weight:700;">
-        <td style="${cellStyle}" colspan="4">Alt Toplam</td><td style="${cellStyle}text-align:right;">${fmtMoney(total)}</td>
-      </tr></tfoot>
+      <tfoot>
+        ${currencies.map(cur=>`<tr style="background:#EAF6F5;font-weight:700;">
+          <td style="${cellStyle}" colspan="5">Alt Toplam${currencies.length>1?' ('+esc(CURRENCY_INFO[cur].label)+')':''}</td><td style="${cellStyle}text-align:right;">${fmtMoney(byCurrency[cur], cur)}</td>
+        </tr>`).join('')}
+      </tfoot>
     </table>
     <div style="margin-top:36px;font-size:9px;color:#8096A3;">DNZ Metraj &amp; Teklif Yönetimi ile oluşturulmuştur.</div>
   `;
@@ -6864,6 +7286,7 @@ function renderYemekTable(proj){
       <div class="total-chip"><span class="lbl">Toplam Akşam</span><span class="val">${grand.aksam} adet</span></div>
       <div class="total-chip"><span class="lbl">Alt Toplam</span><span class="val">${fmtMoney(grand.toplam)}</span></div>
     </div>`;
+  applyPendingRowHighlight(wrap);
   wrap.querySelectorAll('tr[data-id]').forEach(tr=>{
     tr.addEventListener('click',(e)=>{
       const act = e.target.closest('[data-act]')?.dataset.act;
@@ -7031,6 +7454,18 @@ function renderAyarlarTab(main){
         <div class="field" style="grid-column:span 2;"><label>Firma Adı</label>
           <input type="text" id="s-companyName" value="${esc(state.company.name)}" placeholder="Örn: Deniz Yapı İnşaat Ltd. Şti.">
         </div>
+        <div class="field"><label>Vergi Dairesi</label>
+          <input type="text" id="s-companyVergiDairesi" value="${esc(state.company.vergiDairesi)}" placeholder="Örn: Çankaya V.D.">
+        </div>
+        <div class="field"><label>Vergi Numarası</label>
+          <input type="text" id="s-companyVergiNo" value="${esc(state.company.vergiNo)}" placeholder="Örn: 1234567890">
+        </div>
+        <div class="field" style="grid-column:span 2;"><label>Adres</label>
+          <input type="text" id="s-companyAdres" value="${esc(state.company.adres)}" placeholder="Firma adresi">
+        </div>
+        <div class="field"><label>Telefon</label>
+          <input type="text" id="s-companyTelefon" value="${esc(state.company.telefon)}" placeholder="Örn: 0312 000 00 00">
+        </div>
         <div class="field">
           <label>Logo</label>
           <div style="display:flex;align-items:center;gap:10px;">
@@ -7158,6 +7593,10 @@ function renderAyarlarTab(main){
   `;
   document.getElementById('btnSaveCompany').onclick = ()=>{
     state.company.name = document.getElementById('s-companyName').value.trim();
+    state.company.vergiDairesi = document.getElementById('s-companyVergiDairesi').value.trim();
+    state.company.vergiNo = document.getElementById('s-companyVergiNo').value.trim();
+    state.company.adres = document.getElementById('s-companyAdres').value.trim();
+    state.company.telefon = document.getElementById('s-companyTelefon').value.trim();
     saveState(); showToast('Firma bilgileri kaydedildi.');
     renderMain();
   };
@@ -7487,9 +7926,24 @@ async function chooseNewBackupFile(){
 }
 
 /* ======================= PDF EXPORT ======================= */
+// PDF başlıklarında firma adının altında gösterilecek vergi dairesi/no, adres ve
+// telefon satırı. Yalnızca doldurulmuş alanlar gösterilir; hiçbiri girilmemişse boş
+// döner ve eski çıktılarla görsel olarak birebir aynı kalır.
+function companyDetailLinesHtml(){
+  const vergiParts = [];
+  if(state.company.vergiDairesi) vergiParts.push(esc(state.company.vergiDairesi));
+  if(state.company.vergiNo) vergiParts.push('VN: '+esc(state.company.vergiNo));
+  const lines = [];
+  if(vergiParts.length) lines.push(vergiParts.join(' · '));
+  if(state.company.adres) lines.push(esc(state.company.adres));
+  if(state.company.telefon) lines.push('Tel: '+esc(state.company.telefon));
+  if(!lines.length) return '';
+  return `<div style="font-size:9px;color:#345264;line-height:1.4;">${lines.join('<br>')}</div>`;
+}
 function pdfHeaderHtml(proj, subtitle){
   const logo = state.company.logo ? `<img src="${state.company.logo}" style="max-height:56px;max-width:180px;object-fit:contain;">` : '';
   const nameLine = state.company.name ? `<div style="font-family:'Outfit',sans-serif;font-weight:800;font-size:18px;color:#0B2436;">${esc(state.company.name)}</div>` : '';
+  const detailLines = companyDetailLinesHtml();
   const subLine = subtitle ? `<div style="font-size:11px;color:#345264;">${esc(subtitle)}</div>` : '';
   return `
   <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #1C6E8C;padding-bottom:14px;margin-bottom:16px;">
@@ -7497,12 +7951,14 @@ function pdfHeaderHtml(proj, subtitle){
       ${logo}
       <div>
         ${nameLine}
+        ${detailLines}
         ${subLine}
       </div>
     </div>
     <div style="text-align:right;font-size:11px;color:#345264;">
       <div><b>Proje:</b> ${esc(proj.name)}</div>
       ${proj.employer?`<div><b>İşveren:</b> ${esc(proj.employer)}</div>`:''}
+      ${(proj.baslangicTarihi||proj.bitisTarihi)?`<div><b>Proje Süresi:</b> ${proj.baslangicTarihi?fmtDateStr(proj.baslangicTarihi):'—'} - ${proj.bitisTarihi?fmtDateStr(proj.bitisTarihi):'—'}</div>`:''}
       <div><b>Tarih:</b> ${todayStr()}</div>
     </div>
   </div>`;
@@ -7512,6 +7968,7 @@ function pdfHeaderHtml(proj, subtitle){
 function pdfHeaderHtmlSimple(subtitle){
   const logo = state.company.logo ? `<img src="${state.company.logo}" style="max-height:56px;max-width:180px;object-fit:contain;">` : '';
   const nameLine = state.company.name ? `<div style="font-family:'Outfit',sans-serif;font-weight:800;font-size:18px;color:#0B2436;">${esc(state.company.name)}</div>` : '';
+  const detailLines = companyDetailLinesHtml();
   const subLine = subtitle ? `<div style="font-size:11px;color:#345264;">${esc(subtitle)}</div>` : '';
   return `
   <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #1C6E8C;padding-bottom:14px;margin-bottom:16px;">
@@ -7519,6 +7976,7 @@ function pdfHeaderHtmlSimple(subtitle){
       ${logo}
       <div>
         ${nameLine}
+        ${detailLines}
         ${subLine}
       </div>
     </div>
@@ -7796,18 +8254,35 @@ async function exportHesapAnalizPdf(){
         <td style="word-break:break-word;">${esc(m.ad)}</td>
         <td style="text-align:right;">${miktarText}</td>
         <td>${esc(birimLabel)}</td>
-        <td style="text-align:right;">${fmtMoney(m.satisFiyat)}</td>
-        <td style="text-align:right;font-weight:700;">${fmtMoney(r.tutar)}</td>
+        <td style="text-align:right;">${fmtMoney(m.satisFiyat, r.paraBirimi)}</td>
+        <td style="text-align:right;font-weight:700;">${fmtMoney(r.tutar, r.paraBirimi)}</td>
       </tr>
     `;
   }).join('');
-  const genelToplam = sistem.malzemeler.reduce((s,m)=>s+computeMalzemeSonuc(m,deger,getPaketOpts(m.id)).tutar,0);
+  const toplamlar = computeHesapToplamlar(sistem, deger);
+  const paraBirimleri = Object.keys(toplamlar.byCurrency);
   const olcuAciklama = parsed.isPoligon
     ? `${parsed.poligonKenarSayisi} kenarlı köşeli alan hesaplaması`
     : parsed.isKenar
     ? `${parsed.kenarDetay.length} kenar toplamı (${parsed.kenarDetay.map(d=>fmtNum(d.value)).join(' + ')})`
     : (parsed.isArea ? `Girilen ölçü: ${esc(ui.imalatCalcInput)}` : '');
-  const birimMaliyet = computeBirimMaliyet(genelToplam, deger);
+  // Farklı para birimindeki malzemeler varsa, her para birimi için ayrı Birim Maliyet +
+  // Genel Toplam kutu çifti oluşturulur (tutarlar birbirine karıştırılmaz).
+  const toplamKutulariHtml = paraBirimleri.map(cur=>{
+    const t = toplamlar.byCurrency[cur];
+    const birimMaliyet = computeBirimMaliyet(t.toplamTutar, deger);
+    const curSuffix = paraBirimleri.length>1 ? ` (${esc(CURRENCY_INFO[cur].label)})` : '';
+    return `
+      ${birimMaliyet!=null ? `
+      <div style="min-width:180px;border:1.5px solid #1C6E8C55;border-radius:8px;padding:12px 16px;text-align:right;">
+        <div style="font-size:10px;color:#345264;font-weight:700;text-transform:uppercase;">Birim Maliyet${curSuffix}</div>
+        <div style="font-size:15px;font-weight:800;color:#0B2436;">${fmtMoney(birimMaliyet, cur)} / ${basisLabel}</div>
+      </div>` : ''}
+      <div style="min-width:220px;border:1.5px solid #1C6E8C;border-radius:8px;padding:12px 16px;text-align:right;">
+        <div style="font-size:10px;color:#345264;font-weight:700;text-transform:uppercase;">Genel Toplam${curSuffix}</div>
+        <div style="font-size:18px;font-weight:800;color:#0B2436;">${fmtMoney(t.toplamTutar, cur)}</div>
+      </div>`;
+  }).join('');
 
   const html = `
     ${pdfHeaderHtmlSimple('Teklif Analizi')}
@@ -7832,15 +8307,7 @@ async function exportHesapAnalizPdf(){
       <tbody>${tableRows || '<tr><td colspan="5" style="padding:10px;text-align:center;color:#345264;">Kayıt yok</td></tr>'}</tbody>
     </table>
     <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:14px;flex-wrap:wrap;">
-      ${birimMaliyet!=null ? `
-      <div style="min-width:180px;border:1.5px solid #1C6E8C55;border-radius:8px;padding:12px 16px;text-align:right;">
-        <div style="font-size:10px;color:#345264;font-weight:700;text-transform:uppercase;">Birim Maliyet</div>
-        <div style="font-size:15px;font-weight:800;color:#0B2436;">${fmtMoney(birimMaliyet)} / ${basisLabel}</div>
-      </div>` : ''}
-      <div style="min-width:220px;border:1.5px solid #1C6E8C;border-radius:8px;padding:12px 16px;text-align:right;">
-        <div style="font-size:10px;color:#345264;font-weight:700;text-transform:uppercase;">Genel Toplam</div>
-        <div style="font-size:18px;font-weight:800;color:#0B2436;">${fmtMoney(genelToplam)}</div>
-      </div>
+      ${toplamKutulariHtml}
     </div>
     ${ui.imalatCalcNot && ui.imalatCalcNot.trim() ? `
     <div style="margin-top:20px;padding:12px 14px;background:#F4FBFA;border:1px solid #1C6E8C55;border-radius:8px;font-size:10px;color:#345264;white-space:pre-wrap;">
@@ -7872,6 +8339,11 @@ window.__dnzInitApp = async function init(){
   // Eski kayıtlarda (bu modüller eklenmeden önce oluşturulmuş projelerde) eksik
   // alanları tamamla, böylece kod hiçbir yerde undefined'a takılmasın.
   if(!state.imalatCinsiFiyatListesi) state.imalatCinsiFiyatListesi = [];
+  if(!state.company) state.company = { name:'', logo:'' };
+  if(state.company.vergiDairesi===undefined || state.company.vergiDairesi===null) state.company.vergiDairesi = '';
+  if(state.company.vergiNo===undefined || state.company.vergiNo===null) state.company.vergiNo = '';
+  if(state.company.adres===undefined || state.company.adres===null) state.company.adres = '';
+  if(state.company.telefon===undefined || state.company.telefon===null) state.company.telefon = '';
   let imalatCinsiMigrated = false;
   Object.values(state.projects).forEach(p=>{
     if(!p.personel) p.personel = [];
@@ -7885,6 +8357,9 @@ window.__dnzInitApp = async function init(){
     if(p.manuelIsverenAlacak===undefined || p.manuelIsverenAlacak===null) p.manuelIsverenAlacak = '';
     if(p.teklifOnaylandi===undefined || p.teklifOnaylandi===null) p.teklifOnaylandi = true;
     if(!p.masraflar) p.masraflar = [];
+    if(!p.currency || !CURRENCY_INFO[p.currency]) p.currency = 'TRY';
+    if(p.baslangicTarihi===undefined || p.baslangicTarihi===null) p.baslangicTarihi = '';
+    if(p.bitisTarihi===undefined || p.bitisTarihi===null) p.bitisTarihi = '';
     // İmalat Cinsi Fiyat Listesi eskiden proje bazında tutuluyordu; artık tüm projelerde
     // ortak (state.imalatCinsiFiyatListesi). Daha önce bir projede kaydedilmiş kalemler
     // varsa bunları isim bazında tekilleştirerek genel listeye taşıyıp projeden kaldırıyoruz.
@@ -7907,7 +8382,13 @@ window.__dnzInitApp = async function init(){
       if(r.ogleFiyat==null) r.ogleFiyat = parseFloat(p.yemekFiyat.ogle)||0;
       if(r.aksamFiyat==null) r.aksamFiyat = parseFloat(p.yemekFiyat.aksam)||0;
     });
-    (p.avanslar||[]).forEach(a=>{ if(a.odemeTarihi) a.odemeTarihi = fixLegacyDateStr(a.odemeTarihi); });
+    (p.avanslar||[]).forEach(a=>{
+      if(a.odemeTarihi) a.odemeTarihi = fixLegacyDateStr(a.odemeTarihi);
+      if(!a.paraBirimi || !CURRENCY_INFO[a.paraBirimi]) a.paraBirimi = p.currency||'TRY';
+    });
+    (p.masraflar||[]).forEach(m=>{
+      if(!m.paraBirimi || !CURRENCY_INFO[m.paraBirimi]) m.paraBirimi = p.currency||'TRY';
+    });
   });
   if(state.company.logo && state.company.logo.length > 400000){
     try{
