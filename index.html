@@ -801,6 +801,7 @@ td.num,th.num{font-family:var(--font-mono);text-align:right;}
 .project-item.active{background:rgba(47,211,199,0.25);border-color:var(--aqua-dim);}
 .project-item .pinfo{flex:1;min-width:0;}
 .project-item .pinfo b{display:block;font-family:var(--font-display);font-size:0.92rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.project-item .pinfo .pbadges{display:flex;flex-wrap:wrap;gap:5px;margin:3px 0;}
 .project-item .pinfo span{font-size:0.72rem;color:var(--ink-soft);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;}
 
 /* modal */
@@ -830,6 +831,23 @@ td.num,th.num{font-family:var(--font-mono);text-align:right;}
   display:inline-flex;padding:3px 9px;border-radius:20px;font-size:0.68rem;font-weight:700;
   background:rgba(47,211,199,0.22);color:#0A5850;
 }
+.badge.durum-devam{background:rgba(230,168,0,0.2);color:#8A6300;}
+.badge.durum-tamamlandi{background:rgba(46,166,98,0.2);color:#1E7A46;}
+
+/* Anasayfa: Hızlı İşlemler */
+.quick-action-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px;}
+.quick-action-btn{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;
+  padding:14px 8px;border-radius:14px;border:1px solid var(--glass-border);cursor:pointer;
+  background:rgba(255,255,255,0.5);color:var(--ink);
+  font-family:var(--font-display);font-weight:600;font-size:0.72rem;text-align:center;
+  transition:background 160ms ease, transform 120ms ease, border-color 160ms ease;
+}
+.quick-action-btn svg{width:22px;height:22px;color:var(--aqua-dim);flex-shrink:0;}
+.quick-action-btn:hover{background:rgba(255,255,255,0.85);border-color:var(--aqua-dim);transform:translateY(-1px);}
+.quick-action-btn:active{transform:translateY(0);}
+html[data-theme="dark"] .quick-action-btn{background:rgba(255,255,255,0.06);}
+html[data-theme="dark"] .quick-action-btn:hover{background:rgba(255,255,255,0.1);}
 
 footer.appfoot{text-align:center;padding:14px;color:rgba(11,36,54,0.45);font-size:0.68rem;}
 
@@ -1216,7 +1234,13 @@ function defaultState(){
     imalatCinsiFiyatListesi:[],
     lastBackupAt:null,
     dirtySinceBackup:false,
-    metrajPdfFont:{ baslik:6, metin:6.5, rakam:7.5 }
+    metrajPdfFont:{ baslik:6, metin:6.5, rakam:7.5 },
+    dashboardHavaKonum:null,
+    // Anlık/manuel kur bilgisi: "1 [PARA_BİRİMİ] = ? TL" olarak TL'ye sabitlenmiş şekilde
+    // tutulur (Türkiye'deki kullanıcılar için en doğal referans TL olduğundan). USD/EUR
+    // dışındaki tüm dönüşümler bu tablo üzerinden TL köprüsüyle hesaplanır.
+    dovizKurlari: { USD:'', EUR:'' },
+    dovizKurGuncellenme: null
   };
 }
 function newProject(name, employer){
@@ -1227,6 +1251,7 @@ function newProject(name, employer){
     currency: 'TRY',
     baslangicTarihi: '',
     bitisTarihi: '',
+    durum: 'devam',
     metrajRows:[],
     teklifRows:[],
     teklifNote:'',
@@ -1257,6 +1282,7 @@ let state = defaultState();
 let lastCloudJsonSent = null;
 let ui = {
   tab:'projeler',
+  projeDurumFilter:'tumu', // 'tumu' | 'devam' | 'tamamlandi' — Anasayfa proje listesi filtresi
   metrajEditId:null,
   teklifEditId:null,
   filters:{blok:'',kat:'',daire:'',mekan:'',eleman:'',imalat:'',minha:''},
@@ -1562,6 +1588,55 @@ function currencyTotalChipsHtml(rows, proj, label){
     return `<div class="total-chip"><span class="lbl">${esc(label)}${suffix}</span><span class="val">${fmtMoney(byCurrency[cur], cur)}</span></div>`;
   }).join('');
 }
+// "1 [currency] = ? TL" kurunu döndürür. TRY için her zaman 1'dir. Kur girilmemiş/geçersizse
+// null döner (dönüşüm yapılamadığını belirtmek için).
+function krTRY(currency){
+  if(currency==='TRY') return 1;
+  const v = parseFloat(state.dovizKurlari && state.dovizKurlari[currency]);
+  return (v>0) ? v : null;
+}
+// Bir tutarı bir para biriminden başka bir para birimine çevirir. TL her zaman köprü
+// (anchor) para birimidir. rowKurToTRY verilmişse (örn. avans/masraf satırına özel
+// girilen "işlem anındaki kur"), fromCur -> TL dönüşümünde global ayarlar yerine bu
+// öncelikli kullanılır — böylece geçmişte farklı bir kurla yapılan ödemeler bugünün
+// kuruyla yanlış hesaplanmaz. Dönüşüm için gereken kur(lar) mevcut değilse null döner.
+function convertMoney(amount, fromCur, toCur, rowKurToTRY){
+  amount = parseFloat(amount)||0;
+  if(fromCur===toCur) return amount;
+  let fromRate;
+  if(fromCur==='TRY') fromRate = 1;
+  else fromRate = (parseFloat(rowKurToTRY)>0) ? parseFloat(rowKurToTRY) : krTRY(fromCur);
+  if(!(fromRate>0)) return null;
+  const amountTRY = amount*fromRate;
+  if(toCur==='TRY') return amountTRY;
+  const toRate = krTRY(toCur);
+  if(!(toRate>0)) return null;
+  return amountTRY/toRate;
+}
+// Avans/Masraf gibi kayıt bazında farklı para biriminde girilebilen bir satırı, projenin
+// kendi para birimine çevirir. Satırda kayıtlı kendi kuru varsa onu, yoksa Ayarlar'daki
+// güncel global kuru kullanır. Dönüşüm mümkün değilse (kur hiç girilmemişse), eski
+// davranışla (kur özelliği eklenmeden önceki) uyumlu kalmak için tutarı olduğu gibi
+// döndürür — yani sessizce veri kaybetmek yerine en iyi tahmini gösterir.
+function rowToProjectCurrency(row, proj){
+  const rowCur = (row.paraBirimi && CURRENCY_INFO[row.paraBirimi]) ? row.paraBirimi : projectCurrency(proj);
+  const converted = convertMoney(row.tutar, rowCur, projectCurrency(proj), row.kur);
+  return converted!=null ? converted : (parseFloat(row.tutar)||0);
+}
+// Bir satırın para birimi projenin para biriminden farklıysa, tutarın altında küçük
+// puntoyla "≈ [proje para biriminde] karşılığı" gösterir. Kur girilmemiş/hesaplanamıyorsa
+// (Ayarlar'da da kur yoksa) sessizce yanlış bir rakam göstermek yerine uyarı verir.
+function moneyEquivalentHtml(row, proj){
+  const rowCur = (row.paraBirimi && CURRENCY_INFO[row.paraBirimi]) ? row.paraBirimi : projectCurrency(proj);
+  const projCur = projectCurrency(proj);
+  if(rowCur===projCur) return '';
+  const converted = convertMoney(row.tutar, rowCur, projCur, row.kur);
+  if(converted==null){
+    return `<div style="font-size:0.66rem;color:#c77700;font-weight:600;">kur girilmedi</div>`;
+  }
+  return `<div style="font-size:0.66rem;color:var(--ink-soft);">≈ ${fmtMoney(converted, projCur)}</div>`;
+}
+
 function todayStr(){
   const d = new Date();
   return d.toLocaleDateString('tr-TR',{day:'2-digit',month:'2-digit',year:'numeric'});
@@ -1997,9 +2072,189 @@ function renderMasraflarTab(main, proj){
   else if(ui.masraflarTab==='yemek') renderYemekTab(sub, proj);
 }
 
-/* ======================= PROJELER TAB ======================= */
+/* ======================= PROJELER TAB (Anasayfa) ======================= */
+const PROJE_DURUM_META = {
+  devam:{ label:'Devam Ediyor', cls:'durum-devam' },
+  tamamlandi:{ label:'Tamamlandı', cls:'durum-tamamlandi' }
+};
+function projeDurum(p){ return (p.durum && PROJE_DURUM_META[p.durum]) ? p.durum : 'devam'; }
+// Anasayfa'daki hızlı işlem butonları: aktif proje gerektirenler için proje seçili
+// değilse kullanıcıyı uyarıp Proje Listesi'ne odaklar, aksi halde ilgili sekmeye
+// (gerekirse alt sekmesiyle birlikte) geçer.
+const DASHBOARD_QUICK_ACTIONS = [
+  {key:'avans', label:'Avans Ekle', needsProject:true, icon:'<rect x="2" y="6" width="20" height="13" rx="2"/><path d="M2 10h20"/><path d="M6 15h4"/>', go:()=>{ ui.tab='masraflar'; ui.masraflarTab='avanszimmet'; }},
+  {key:'masraf', label:'Masraf Ekle', needsProject:true, icon:'<path d="M20 12V8H6a2 2 0 010-4h12v4"/><path d="M4 6v12a2 2 0 002 2h14v-4"/><path d="M18 12a2 2 0 000 4h4v-4z"/>', go:()=>{ ui.tab='masraflar'; ui.masraflarTab='masraf'; }},
+  {key:'personel', label:'Personel Ekle', needsProject:true, icon:'<path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/>', go:()=>{ ui.tab='personel'; }},
+  {key:'metraj', label:'Metraj Ekle', needsProject:true, icon:'<path d="M3 3h18v18H3z"/><path d="M9 3v18M15 3v18M3 9h18M3 15h18"/>', go:()=>{ ui.tab='metraj'; }},
+  {key:'gunluk', label:'Şantiye Günlüğü', needsProject:true, icon:'<path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/>', go:()=>{ ui.tab='gunluk'; }},
+  {key:'raporlar', label:'Raporlar', needsProject:true, icon:'<path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/>', go:()=>{ ui.tab='raporlar'; }},
+  {key:'ayarlar', label:'Ayarlar', needsProject:false, icon:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.9l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.9-.3 1.7 1.7 0 00-1 1.6V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1-1.6 1.7 1.7 0 00-1.9.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.9 1.7 1.7 0 00-1.6-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.6-1 1.7 1.7 0 00-.3-1.9l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.9.3H9a1.7 1.7 0 001-1.6V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.6 1.7 1.7 0 001.9-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.9V9a1.7 1.7 0 001.6 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.6 1z"/>', go:()=>{ ui.tab='ayarlar'; }}
+];
+function runDashboardQuickAction(key){
+  const action = DASHBOARD_QUICK_ACTIONS.find(a=>a.key===key);
+  if(!action) return;
+  if(action.needsProject && !activeProject()){
+    showToast('Önce Proje Listesi\'nden bir proje seçin ya da yeni proje oluşturun.');
+    document.getElementById('projectList')?.scrollIntoView({behavior:'smooth', block:'center'});
+    return;
+  }
+  action.go();
+  renderTabs();
+  renderMain();
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+function focusGlobalArama(){
+  const input = document.getElementById('globalAramaInput');
+  if(input){
+    input.scrollIntoView({behavior:'smooth', block:'center'});
+    setTimeout(()=>input.focus(), 350);
+  }
+}
+/* ---- Anasayfa Hava Durumu: Şantiye Günlüğü'ndeki widget ile aynı ücretsiz open-meteo.com
+   servisini kullanır, ancak projeye değil doğrudan state.dashboardHavaKonum'a bağlıdır;
+   böylece hangi proje aktifken bakılırsa bakılsın Anasayfa'da hep aynı (örn. merkez ofis
+   ya da genel şantiye bölgesi) konum gösterilir. ---- */
+let dashboardHavaState = {status:'idle', error:''};
+async function fetchDashboardHava(){
+  if(!state.dashboardHavaKonum) return;
+  dashboardHavaState = {status:'loading', error:''};
+  refreshDashboardHavaWidget();
+  try{
+    const {lat, lon} = state.dashboardHavaKonum;
+    const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&timezone=auto`);
+    if(!res.ok) throw new Error('İstek başarısız');
+    const json = await res.json();
+    const cw = json.current_weather;
+    if(!cw) throw new Error('Veri alınamadı');
+    dashboardHavaState = {status:'ok', data:{temp:cw.temperature, wind:cw.windspeed, code:cw.weathercode, fetchedAt:Date.now()}, error:''};
+  }catch(e){
+    console.error(e);
+    dashboardHavaState = {status:'error', error:'Hava durumu alınamadı. İnternet bağlantınızı kontrol edip tekrar deneyin.'};
+  }
+  refreshDashboardHavaWidget();
+}
+function dashboardKonumumuKullan(){
+  if(!navigator.geolocation){ showToast('Tarayıcınız konum özelliğini desteklemiyor.'); return; }
+  dashboardHavaState = {status:'loading', error:''};
+  refreshDashboardHavaWidget();
+  navigator.geolocation.getCurrentPosition(async (pos)=>{
+    state.dashboardHavaKonum = {name:'Mevcut Konum', lat:+pos.coords.latitude.toFixed(4), lon:+pos.coords.longitude.toFixed(4)};
+    saveState();
+    await fetchDashboardHava();
+  }, ()=>{
+    dashboardHavaState = {status:'error', error:'Konum alınamadı. Lütfen tarayıcı izinlerini kontrol edin ya da şehir adıyla arayın.'};
+    refreshDashboardHavaWidget();
+  }, {timeout:10000});
+}
+async function dashboardSehirAra(query){
+  if(!query || !query.trim()){ showToast('Lütfen bir şehir adı girin.'); return; }
+  dashboardHavaState = {status:'loading', error:''};
+  refreshDashboardHavaWidget();
+  try{
+    const res = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(query.trim())}&count=1&language=tr&format=json`);
+    if(!res.ok) throw new Error('İstek başarısız');
+    const json = await res.json();
+    const first = json.results && json.results[0];
+    if(!first) throw new Error('Şehir bulunamadı');
+    const label = [first.name, first.admin1, first.country].filter(Boolean).join(', ');
+    state.dashboardHavaKonum = {name:label, lat:first.latitude, lon:first.longitude};
+    saveState();
+    await fetchDashboardHava();
+  }catch(e){
+    console.error(e);
+    dashboardHavaState = {status:'error', error:'Şehir bulunamadı. Lütfen farklı bir yazımla tekrar deneyin.'};
+    refreshDashboardHavaWidget();
+  }
+}
+function renderDashboardHavaWidgetHtml(){
+  const st = dashboardHavaState || {status:'idle'};
+  if(!state.dashboardHavaKonum){
+    return `
+      <div class="card glass" id="dashboardHavaWidget" style="gap:10px;">
+        <h2 style="font-size:0.95rem;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M17.5 19H6a4 4 0 01-.9-7.9A5.5 5.5 0 0116.9 8H17.5a4.5 4.5 0 010 9z"/></svg>
+          Hava Durumu
+        </h2>
+        <p class="hint">Merkez ofisin ya da şantiye bölgenizin bulunduğu şehri arayın ya da mevcut konumunuzu kullanın; Anasayfa'da her zaman bu konum gösterilir.</p>
+        ${st.status==='error' ? `<div class="empty-state" style="padding:10px;">${esc(st.error)}</div>` : ''}
+        <div class="field-grid" style="grid-template-columns:1fr auto;align-items:end;">
+          <div class="field"><label>Şehir</label><input type="text" id="dh-sehir" placeholder="Örn: Ankara"></div>
+          <button class="btn btn-ghost" id="btnDhAra" ${st.status==='loading'?'disabled':''}>${st.status==='loading'?'Aranıyor…':'Ara'}</button>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-primary" id="btnDhKonum" ${st.status==='loading'?'disabled':''}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+            Mevcut Konumumu Kullan
+          </button>
+        </div>
+      </div>`;
+  }
+  if(st.status==='loading' || st.status==='idle'){
+    return `<div class="card glass" id="dashboardHavaWidget"><h2 style="font-size:0.95rem;">Hava Durumu</h2><div class="hint">Hava durumu bilgisi getiriliyor…</div></div>`;
+  }
+  if(st.status==='error'){
+    return `
+      <div class="card glass" id="dashboardHavaWidget" style="gap:10px;">
+        <h2 style="font-size:0.95rem;">Hava Durumu — ${esc(state.dashboardHavaKonum.name)}</h2>
+        <div class="empty-state" style="padding:10px;">${esc(st.error)}</div>
+        <div class="btn-row">
+          <button class="btn btn-ghost btn-sm" id="btnDhYenile">Tekrar Dene</button>
+          <button class="btn btn-ghost btn-sm" id="btnDhDegistir">Konumu Değiştir</button>
+        </div>
+      </div>`;
+  }
+  const d = st.data;
+  const info = weatherCodeInfo(d.code);
+  return `
+    <div class="card glass" id="dashboardHavaWidget" style="gap:10px;">
+      <h2 style="font-size:0.95rem;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M17.5 19H6a4 4 0 01-.9-7.9A5.5 5.5 0 0116.9 8H17.5a4.5 4.5 0 010 9z"/></svg>
+        Hava Durumu — ${esc(state.dashboardHavaKonum.name)}
+      </h2>
+      <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+        <div style="width:48px;height:48px;color:var(--aqua-dim);flex-shrink:0;">${weatherIconSvg(info.cat)}</div>
+        <div>
+          <div style="font-family:var(--font-display);font-size:1.6rem;font-weight:800;color:var(--ink);">${Math.round(d.temp)}°C</div>
+          <div style="font-size:0.8rem;color:var(--ink-soft);">${esc(info.desc)} · Rüzgar ${fmtNum(d.wind)} km/s</div>
+        </div>
+        <div style="margin-left:auto;display:flex;gap:8px;">
+          <button class="icon-btn" id="btnDhYenile" title="Yenile">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+          </button>
+          <button class="icon-btn" id="btnDhDegistir" title="Konumu Değiştir">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+          </button>
+        </div>
+      </div>
+      <p class="hint" style="font-size:0.68rem;margin:0;">Kaynak: open-meteo.com — Son güncelleme: ${new Date(d.fetchedAt).toLocaleTimeString('tr-TR')}</p>
+    </div>`;
+}
+function wireDashboardHavaWidget(){
+  const araBtn = document.getElementById('btnDhAra');
+  const sehirInput = document.getElementById('dh-sehir');
+  if(araBtn && sehirInput){
+    araBtn.onclick = ()=> dashboardSehirAra(sehirInput.value);
+    sehirInput.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); dashboardSehirAra(sehirInput.value); } });
+  }
+  const konumBtn = document.getElementById('btnDhKonum');
+  if(konumBtn) konumBtn.onclick = ()=> dashboardKonumumuKullan();
+  const yenileBtn = document.getElementById('btnDhYenile');
+  if(yenileBtn) yenileBtn.onclick = ()=> fetchDashboardHava();
+  const degistirBtn = document.getElementById('btnDhDegistir');
+  if(degistirBtn) degistirBtn.onclick = ()=>{ state.dashboardHavaKonum = null; saveState(); refreshDashboardHavaWidget(); };
+}
+function refreshDashboardHavaWidget(){
+  const el = document.getElementById('dashboardHavaWidget');
+  if(!el) return;
+  el.outerHTML = renderDashboardHavaWidgetHtml();
+  wireDashboardHavaWidget();
+}
 function renderProjelerTab(main){
-  const projects = Object.values(state.projects).sort((a,b)=>b.createdAt-a.createdAt);
+  const allProjects = Object.values(state.projects).sort((a,b)=>b.createdAt-a.createdAt);
+  const devamCount = allProjects.filter(p=>projeDurum(p)==='devam').length;
+  const tamamlananCount = allProjects.filter(p=>projeDurum(p)==='tamamlandi').length;
+  if(!['tumu','devam','tamamlandi'].includes(ui.projeDurumFilter)) ui.projeDurumFilter = 'tumu';
+  const projects = allProjects.filter(p=> ui.projeDurumFilter==='tumu' || projeDurum(p)===ui.projeDurumFilter);
   main.innerHTML = `
     <div class="card glass">
       <h2>
@@ -2012,20 +2267,59 @@ function renderProjelerTab(main){
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
           Yeni Proje Ekle
         </button>
+        <button class="btn btn-ghost" id="btnDashboardBul">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.3-4.3"/></svg>
+          Bul
+        </button>
       </div>
     </div>
+
+    <div class="card glass">
+      <h2>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z"/></svg>
+        Hızlı İşlemler
+      </h2>
+      <p class="hint">Aktif proje: <b>${state.activeProjectId && state.projects[state.activeProjectId] ? esc(state.projects[state.activeProjectId].name) : 'seçili değil'}</b>. Proje gerektiren işlemler için önce aşağıdan bir proje seçin.</p>
+      <div class="quick-action-grid" id="dashboardQuickActions">
+        ${DASHBOARD_QUICK_ACTIONS.map(a=>`
+          <button class="quick-action-btn ripple-el-host" data-qa="${a.key}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${a.icon}</svg>
+            <span>${esc(a.label)}</span>
+          </button>
+        `).join('')}
+      </div>
+    </div>
+
+    ${renderDashboardHavaWidgetHtml()}
     ${renderGenelOzetHtml()}
     ${renderGlobalAramaHtml()}
     <div class="card glass">
-      <h2>Proje Listesi <span class="badge">${projects.length}</span></h2>
+      <h2>Proje Listesi <span class="badge">${projects.length}/${allProjects.length}</span></h2>
+      <div class="report-subnav" id="projeDurumFilterNav" style="margin-bottom:10px;">
+        <button class="report-subtab-btn ripple-el-host ${ui.projeDurumFilter==='tumu'?'active':''}" data-durum="tumu">Tümü <span class="badge">${allProjects.length}</span></button>
+        <button class="report-subtab-btn ripple-el-host ${ui.projeDurumFilter==='devam'?'active':''}" data-durum="devam">Devam Eden <span class="badge">${devamCount}</span></button>
+        <button class="report-subtab-btn ripple-el-host ${ui.projeDurumFilter==='tamamlandi'?'active':''}" data-durum="tamamlandi">Tamamlanan <span class="badge">${tamamlananCount}</span></button>
+      </div>
       <div class="project-list" id="projectList">
-        ${projects.length===0 ? `<div class="empty-state">Henüz proje eklenmedi.</div>` : projects.map(p=>`
+        ${projects.length===0 ? `<div class="empty-state">${allProjects.length===0?'Henüz proje eklenmedi.':'Bu filtreye uyan proje bulunamadı.'}</div>` : projects.map(p=>{
+          const durum = projeDurum(p);
+          const durumMeta = PROJE_DURUM_META[durum];
+          return `
           <div class="project-item ${p.id===state.activeProjectId?'active':''}" data-id="${p.id}">
             <div class="pinfo">
-              <b>${esc(p.name)} <span class="badge" style="font-size:0.68rem;">${esc(CURRENCY_INFO[projectCurrency(p)].label)}</span></b>
+              <b>${esc(p.name)}</b>
+              <div class="pbadges">
+                <span class="badge ${durumMeta.cls}">${esc(durumMeta.label)}</span>
+                <span class="badge">${esc(CURRENCY_INFO[projectCurrency(p)].label)}</span>
+              </div>
               <span>${p.employer? 'İşveren: '+esc(p.employer) : 'İşveren belirtilmedi'} · ${p.metrajRows.length} metraj satırı · ${p.teklifRows.length} teklif kalemi</span>
               ${(p.baslangicTarihi || p.bitisTarihi) ? `<span>${p.baslangicTarihi? 'Başlangıç: '+fmtDateStr(p.baslangicTarihi) : 'Başlangıç belirtilmedi'} · ${p.bitisTarihi? 'Bitiş: '+fmtDateStr(p.bitisTarihi) : 'Bitiş belirtilmedi'}</span>` : ''}
             </div>
+            <button class="icon-btn" data-act="toggleDurum" title="${durum==='devam'?'Tamamlandı olarak işaretle':'Devam Ediyor olarak işaretle'}">
+              ${durum==='devam'
+                ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 6L9 17l-5-5"/></svg>'
+                : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>'}
+            </button>
             <button class="icon-btn" data-act="select" title="Seç">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
             </button>
@@ -2036,12 +2330,26 @@ function renderProjelerTab(main){
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0l-1 14a2 2 0 01-2 2H7a2 2 0 01-2-2L4 6h16z"/></svg>
             </button>
           </div>
-        `).join('')}
+        `;}).join('')}
       </div>
     </div>
     ${renderProjeBilgiPanosuHtml(state.projects[state.activeProjectId])}
   `;
   document.getElementById('btnNewProject').onclick = ()=>openProjectModal(null);
+  document.getElementById('btnDashboardBul').onclick = ()=>focusGlobalArama();
+  document.getElementById('dashboardQuickActions').addEventListener('click',(e)=>{
+    const btn = e.target.closest('[data-qa]');
+    if(!btn) return;
+    runDashboardQuickAction(btn.dataset.qa);
+  });
+  wireDashboardHavaWidget();
+  if(state.dashboardHavaKonum && dashboardHavaState.status==='idle') fetchDashboardHava();
+  document.getElementById('projeDurumFilterNav').addEventListener('click',(e)=>{
+    const btn = e.target.closest('[data-durum]');
+    if(!btn) return;
+    ui.projeDurumFilter = btn.dataset.durum;
+    renderProjelerTab(main);
+  });
   document.getElementById('projectList').addEventListener('click',(e)=>{
     const item = e.target.closest('.project-item');
     if(!item) return;
@@ -2051,6 +2359,11 @@ function renderProjelerTab(main){
       state.activeProjectId = id; saveState(); renderAll();
     } else if(act==='edit'){
       openProjectModal(state.projects[id]);
+    } else if(act==='toggleDurum'){
+      const p = state.projects[id];
+      p.durum = projeDurum(p)==='devam' ? 'tamamlandi' : 'devam';
+      saveState(); renderMain();
+      showToast(p.durum==='tamamlandi' ? `"${p.name}" tamamlandı olarak işaretlendi.` : `"${p.name}" devam eden projelere alındı.`);
     } else if(act==='delete'){
       confirmModal(`"${state.projects[id].name}" projesini ve tüm metraj/teklif kayıtlarını silmek istediğinize emin misiniz? Bu işlem geri alınamaz.`, ()=>{
         delete state.projects[id];
@@ -2339,6 +2652,8 @@ function renderGenelOzetHtml(){
       <p class="hint">Tüm projelerinizin toplam rakamları; her projedeki Teklif, Tahsilat, Puantaj/Mesai, Avans ve Masraf kayıtlarından otomatik hesaplanır.${Object.keys(paraToplamlari).length>1 ? ' Farklı para birimindeki projeler birbirine karıştırılmadan ayrı ayrı gösterilir.' : ''}</p>
       <div class="totals-strip">
         <div class="total-chip"><span class="lbl">Toplam Proje</span><span class="val">${projects.length}</span></div>
+        <div class="total-chip"><span class="lbl">Devam Eden</span><span class="val">${projects.filter(p=>projeDurum(p)==='devam').length}</span></div>
+        <div class="total-chip"><span class="lbl">Tamamlanan</span><span class="val">${projects.filter(p=>projeDurum(p)==='tamamlandi').length}</span></div>
         <div class="total-chip"><span class="lbl">Toplam Personel</span><span class="val">${toplamPersonel}</span></div>
         <div class="total-chip"><span class="lbl">Metraj Satırı</span><span class="val">${toplamMetraj}</span></div>
         <div class="total-chip"><span class="lbl">Teklif Kalemi</span><span class="val">${toplamTeklif}</span></div>
@@ -2432,6 +2747,13 @@ function openProjectModal(project){
             <label>Proje Bitiş Tarihi</label>
             <input type="date" id="mProjBitis" value="${isEdit&&project.bitisTarihi?esc(project.bitisTarihi):''}">
           </div>
+          ${isEdit?`
+          <div class="field">
+            <label>Proje Durumu</label>
+            <select id="mProjDurum">
+              ${Object.keys(PROJE_DURUM_META).map(k=>`<option value="${k}" ${projeDurum(project)===k?'selected':''}>${esc(PROJE_DURUM_META[k].label)}</option>`).join('')}
+            </select>
+          </div>`:''}
         </div>
         <div class="btn-row" style="margin-top:8px;justify-content:flex-end;">
           <button class="btn btn-ghost" id="mCancel">Vazgeç</button>
@@ -2455,6 +2777,8 @@ function openProjectModal(project){
     if(isEdit){
       project.name = name; project.employer = employer; project.currency = currency;
       project.baslangicTarihi = baslangicTarihi; project.bitisTarihi = bitisTarihi;
+      const durumSel = document.getElementById('mProjDurum');
+      if(durumSel && PROJE_DURUM_META[durumSel.value]) project.durum = durumSel.value;
     } else {
       const p = newProject(name, employer);
       p.currency = currency;
@@ -4380,13 +4704,20 @@ function renderImalatHesapSection(sub){
       ` : ''}
 
       ${mode==='kenar' ? `
-      <p class="hint">Odanın/mekânın birden fazla kenarı (duvarı) varsa her birini ayrı girin, sistem toplamını otomatik hesaplar (en fazla 6 kenar).</p>
+      <p class="hint">Odanın/mekânın birden fazla kenarı (duvarı) varsa her birini ayrı girin, sistem toplamını otomatik hesaplar. "+ Kenar Ekle" ile istediğiniz kadar kenar ekleyebilir, ✕ ile fazla olanı silebilirsiniz.</p>
       <div class="field-grid" id="hesapKenarGrid">
-        ${[0,1,2,3,4,5].map(i=>`
-          <div class="field"><label>Kenar ${i+1}${i>=2?' (opsiyonel)':''}</label>
-            <input class="mono" type="text" data-kenar-idx="${i}" value="${esc(ui.imalatCalcKenarlar[i]||'')}" placeholder="Örn: 4  veya  3x5">
+        ${ui.imalatCalcKenarlar.map((k,i)=>`
+          <div class="field">
+            <label>Kenar ${i+1}${i>=2?' (opsiyonel)':''}</label>
+            <div style="display:flex;gap:6px;align-items:center;">
+              <input class="mono" type="text" data-kenar-idx="${i}" value="${esc(k||'')}" placeholder="Örn: 4  veya  3x5" style="flex:1;min-width:0;">
+              <button type="button" class="btn btn-ghost" data-kenar-del="${i}" style="padding:8px 10px;flex-shrink:0;" title="Bu kenarı sil">✕</button>
+            </div>
           </div>
         `).join('')}
+      </div>
+      <div class="btn-row">
+        <button type="button" class="btn btn-ghost" id="btnKenarEkle">+ Kenar Ekle</button>
       </div>
       ` : ''}
 
@@ -4467,6 +4798,21 @@ function renderImalatHesapSection(sub){
       updateHesapPanel();
     });
   });
+  sub.querySelectorAll('[data-kenar-del]').forEach(btn=>{
+    btn.addEventListener('click', e=>{
+      const idx = parseInt(e.target.closest('[data-kenar-del]').dataset.kenarDel,10);
+      if(ui.imalatCalcKenarlar.length<=1){ showToast('En az 1 kenar gerekir.'); return; }
+      ui.imalatCalcKenarlar.splice(idx,1);
+      renderImalatHesapSection(sub);
+    });
+  });
+  const addKenarButonu = document.getElementById('btnKenarEkle');
+  if(addKenarButonu){
+    addKenarButonu.onclick = ()=>{
+      ui.imalatCalcKenarlar.push('');
+      renderImalatHesapSection(sub);
+    };
+  }
   sub.querySelectorAll('[data-pol-len]').forEach(inp=>{
     inp.addEventListener('input', e=>{
       const idx = parseInt(e.target.dataset.polLen,10);
@@ -5794,7 +6140,7 @@ async function exportGunlukPdf(proj){
 
 /* ======================= AVANS / ZİMMET TAB ======================= */
 const ODEME_SEKLI_OPTIONS = ['Nakit','Banka Havalesi','Diğer'];
-function emptyAvansForm(){ return {id:null, personelId:'', odemeTarihi: isoToday(), odemeSekli:'Nakit', aciklama:'', tutar:'', paraBirimi:''}; }
+function emptyAvansForm(){ return {id:null, personelId:'', odemeTarihi: isoToday(), odemeSekli:'Nakit', aciklama:'', tutar:'', paraBirimi:'', kur:''}; }
 function emptyZimmetForm(){ return {id:null, personelId:'', zimmetTarihi: todayStr(), markaModel:'', aciklama:'', teslimTarihi:''}; }
 let avansForm = emptyAvansForm();
 let zimmetForm = emptyZimmetForm();
@@ -5806,6 +6152,9 @@ function personelOptionsHtml(list, selectedId, placeholder){
 
 function renderAvansZimmetTab(main, proj){
   const personelList = (proj.personel||[]).slice().sort((a,b)=>a.adSoyad.localeCompare(b.adSoyad,'tr'));
+  const avansSeciliPara = (avansForm.paraBirimi && CURRENCY_INFO[avansForm.paraBirimi]) ? avansForm.paraBirimi : projectCurrency(proj);
+  const avansKurGerekli = avansSeciliPara !== 'TRY';
+  const avansKurOneri = avansForm.kur || state.dovizKurlari[avansSeciliPara] || '';
   main.innerHTML = `
     <div class="card glass">
       <h2>
@@ -5830,9 +6179,13 @@ function renderAvansZimmetTab(main, proj){
         </div>
         <div class="field"><label>Para Birimi</label>
           <select id="av-paraBirimi">
-            ${Object.keys(CURRENCY_INFO).map(code=>`<option value="${code}" ${(avansForm.paraBirimi||projectCurrency(proj))===code?'selected':''}>${esc(CURRENCY_INFO[code].name)}</option>`).join('')}
+            ${Object.keys(CURRENCY_INFO).map(code=>`<option value="${code}" ${avansSeciliPara===code?'selected':''}>${esc(CURRENCY_INFO[code].name)}</option>`).join('')}
           </select>
         </div>
+        ${avansKurGerekli?`
+        <div class="field"><label>Kur (1 ${esc(CURRENCY_INFO[avansSeciliPara].label)} = ? TL)</label>
+          <input class="mono" type="number" step="any" min="0" id="av-kur" value="${esc(avansKurOneri)}" placeholder="Örn: 34.20">
+        </div>`:''}
       </div>
       <div class="btn-row">
         <button class="btn btn-primary" id="btnSaveAvans">${avansForm.id?'Avansı Güncelle':'Avans Kaydet'}</button>
@@ -5899,8 +6252,15 @@ function renderAvansZimmetTab(main, proj){
       </div>
     </div>
   `;
-  ['personelId','odemeTarihi','odemeSekli','aciklama','tutar','paraBirimi'].forEach(k=>{
-    document.getElementById('av-'+k).addEventListener('input', ()=>{ avansForm[k]=document.getElementById('av-'+k).value; });
+  ['personelId','odemeTarihi','odemeSekli','aciklama','tutar','kur'].forEach(k=>{
+    const el = document.getElementById('av-'+k);
+    if(el) el.addEventListener('input', ()=>{ avansForm[k]=el.value; });
+  });
+  const avParaSel = document.getElementById('av-paraBirimi');
+  if(avParaSel) avParaSel.addEventListener('change', ()=>{
+    avansForm.paraBirimi = avParaSel.value;
+    avansForm.kur = '';
+    renderAvansZimmetTab(main, proj);
   });
   ['personelId','zimmetTarihi','markaModel','aciklama','teslimTarihi'].forEach(k=>{
     document.getElementById('zm-'+k).addEventListener('input', ()=>{ zimmetForm[k]=document.getElementById('zm-'+k).value; });
@@ -5928,6 +6288,7 @@ function saveAvansRow(proj){
   if(tutar<=0){ showToast('Lütfen geçerli bir tutar girin.'); return; }
   const p = proj.personel.find(x=>x.id===avansForm.personelId);
   const paraBirimi = (avansForm.paraBirimi && CURRENCY_INFO[avansForm.paraBirimi]) ? avansForm.paraBirimi : projectCurrency(proj);
+  const kur = paraBirimi!=='TRY' ? (parseFloat(avansForm.kur)||null) : null;
   const row = {
     id: avansForm.id || uid(),
     personelId: avansForm.personelId,
@@ -5936,7 +6297,8 @@ function saveAvansRow(proj){
     odemeSekli: avansForm.odemeSekli,
     aciklama: avansForm.aciklama.trim(),
     tutar,
-    paraBirimi
+    paraBirimi,
+    kur
   };
   if(avansForm.id){
     const idx = proj.avanslar.findIndex(r=>r.id===row.id);
@@ -5977,7 +6339,7 @@ function renderAvansTable(proj){
             <td>${esc(r.odemeSekli)}</td>
             <td>${esc(r.aciklama)||'—'}</td>
             <td>${esc(CURRENCY_INFO[cur].label)}</td>
-            <td class="num">${fmtMoney(r.tutar, cur)}</td>
+            <td class="num">${fmtMoney(r.tutar, cur)}${moneyEquivalentHtml(r, proj)}</td>
             <td>
               <div class="row-actions">
                 <button class="icon-btn" data-act="edit" title="Düzenle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg></button>
@@ -5998,7 +6360,7 @@ function renderAvansTable(proj){
       const r = proj.avanslar.find(x=>x.id===tr.dataset.id);
       if(!r) return;
       if(act==='edit'){
-        avansForm = {id:r.id, personelId:r.personelId, odemeTarihi:r.odemeTarihi, odemeSekli:r.odemeSekli, aciklama:r.aciklama, tutar:String(r.tutar), paraBirimi:(r.paraBirimi && CURRENCY_INFO[r.paraBirimi]) ? r.paraBirimi : projectCurrency(proj)};
+        avansForm = {id:r.id, personelId:r.personelId, odemeTarihi:r.odemeTarihi, odemeSekli:r.odemeSekli, aciklama:r.aciklama, tutar:String(r.tutar), paraBirimi:(r.paraBirimi && CURRENCY_INFO[r.paraBirimi]) ? r.paraBirimi : projectCurrency(proj), kur: r.kur!=null? String(r.kur) : ''};
         renderMain(); window.scrollTo({top:0, behavior:'smooth'});
       } else if(act==='delete'){
         confirmModal('Bu avans kaydını silmek istediğinize emin misiniz?', ()=>{
@@ -6842,11 +7204,14 @@ async function exportTahsilatPdf(proj){
 }
 
 /* ======================= MASRAF TAB ======================= */
-function emptyMasrafForm(){ return {id:null, masrafKalemi:'', odemeTarihi: todayStr(), odemeSekli:'Nakit', aciklama:'', tutar:'', paraBirimi:'', dosya:null}; }
+function emptyMasrafForm(){ return {id:null, masrafKalemi:'', odemeTarihi: todayStr(), odemeSekli:'Nakit', aciklama:'', tutar:'', paraBirimi:'', kur:'', dosya:null}; }
 let masrafForm = emptyMasrafForm();
 
 function renderMasrafTab(main, proj){
   const kalemler = distinctFromRows(proj.masraflar||[], 'masrafKalemi');
+  const masrafSeciliPara = (masrafForm.paraBirimi && CURRENCY_INFO[masrafForm.paraBirimi]) ? masrafForm.paraBirimi : projectCurrency(proj);
+  const masrafKurGerekli = masrafSeciliPara !== 'TRY';
+  const masrafKurOneri = masrafForm.kur || state.dovizKurlari[masrafSeciliPara] || '';
   main.innerHTML = `
     <div class="card glass">
       <h2>
@@ -6872,9 +7237,13 @@ function renderMasrafTab(main, proj){
         </div>
         <div class="field"><label>Para Birimi</label>
           <select id="ms-paraBirimi">
-            ${Object.keys(CURRENCY_INFO).map(code=>`<option value="${code}" ${(masrafForm.paraBirimi||projectCurrency(proj))===code?'selected':''}>${esc(CURRENCY_INFO[code].name)}</option>`).join('')}
+            ${Object.keys(CURRENCY_INFO).map(code=>`<option value="${code}" ${masrafSeciliPara===code?'selected':''}>${esc(CURRENCY_INFO[code].name)}</option>`).join('')}
           </select>
         </div>
+        ${masrafKurGerekli?`
+        <div class="field"><label>Kur (1 ${esc(CURRENCY_INFO[masrafSeciliPara].label)} = ? TL)</label>
+          <input class="mono" type="number" step="any" min="0" id="ms-kur" value="${esc(masrafKurOneri)}" placeholder="Örn: 34.20">
+        </div>`:''}
         <div class="field" style="grid-column:span 2;"><label>Fiş / Fatura Dosyası (isteğe bağlı)</label>
           <div class="file-attach-row">
             <input type="file" id="ms-dosya" accept="image/*,application/pdf" style="font-size:0.75rem;max-width:220px;">
@@ -6907,8 +7276,15 @@ function renderMasrafTab(main, proj){
       </div>
     </div>
   `;
-  ['masrafKalemi','odemeTarihi','odemeSekli','aciklama','tutar','paraBirimi'].forEach(k=>{
-    document.getElementById('ms-'+k).addEventListener('input', ()=>{ masrafForm[k]=document.getElementById('ms-'+k).value; });
+  ['masrafKalemi','odemeTarihi','odemeSekli','aciklama','tutar','kur'].forEach(k=>{
+    const el = document.getElementById('ms-'+k);
+    if(el) el.addEventListener('input', ()=>{ masrafForm[k]=el.value; });
+  });
+  const msParaSel = document.getElementById('ms-paraBirimi');
+  if(msParaSel) msParaSel.addEventListener('change', ()=>{
+    masrafForm.paraBirimi = msParaSel.value;
+    masrafForm.kur = '';
+    renderMasrafTab(main, proj);
   });
   document.getElementById('btnSaveMasraf').onclick = ()=>saveMasrafRow(proj);
   document.getElementById('btnClearMasraf').onclick = ()=>{ masrafForm = emptyMasrafForm(); renderMain(); };
@@ -6977,7 +7353,7 @@ function renderMasrafTable(proj){
             <td>${esc(r.odemeSekli)}</td>
             <td>${esc(r.aciklama)||'—'}</td>
             <td>${esc(CURRENCY_INFO[cur].label)}</td>
-            <td class="num">${fmtMoney(r.tutar, cur)}</td>
+            <td class="num">${fmtMoney(r.tutar, cur)}${moneyEquivalentHtml(r, proj)}</td>
             <td>
               <div class="row-actions">
                 ${r.dosya ? `<button class="icon-btn attach-active" data-act="dosya" title="Ekli dosyayı görüntüle: ${esc(r.dosya.name)}">${attachmentIconSvg(r.dosya)}</button>` : ''}
@@ -7441,6 +7817,35 @@ function openTeklifTemplateModal(proj){
   document.getElementById('tplHakedis').onclick = ()=>{ closeModal(); exportTeklifPdf(proj, 'YAPILAN HAKEDİŞ LİSTESİ'); };
 }
 
+// Güncel "1 TL = ? USD/EUR" kurlarını dış kaynaktan çeker.
+// Birincil kaynak Frankfurter'dır (ECB verisi). NOT: Bu API'nin doğru parametreleri
+// "base" ve "symbols"tur — eski "from"/"to" parametreleri API tarafından sessizce
+// yok sayılır ve bu da kur çekmenin hep başarısız görünmesine yol açıyordu.
+// Birincil kaynak çeşitli sebeplerle (bakım, geçici kesinti, TRY için o gün veri
+// yayınlanmamış olması vb.) yanıt vermezse, aynı sonucu döndüren bağımsız bir
+// ikinci kaynağa (open.er-api.com) otomatik olarak geçilir.
+async function fetchGuncelDovizKur(){
+  try{
+    const res = await fetch('https://api.frankfurter.dev/v1/latest?base=TRY&symbols=USD,EUR');
+    if(!res.ok) throw new Error('Frankfurter isteği başarısız: '+res.status);
+    const json = await res.json();
+    const usdPerTry = json.rates && json.rates.USD;
+    const eurPerTry = json.rates && json.rates.EUR;
+    if(!(usdPerTry>0) || !(eurPerTry>0)) throw new Error('Frankfurter kur verisi eksik');
+    return { usdPerTry, eurPerTry };
+  }catch(primaryErr){
+    console.error('Birincil kur kaynağı (Frankfurter) başarısız, yedek kaynak deneniyor:', primaryErr);
+    const res = await fetch('https://open.er-api.com/v6/latest/TRY');
+    if(!res.ok) throw new Error('Yedek kaynak isteği başarısız: '+res.status);
+    const json = await res.json();
+    if(json.result !== 'success') throw new Error('Yedek kaynak kur verisi alınamadı');
+    const usdPerTry = json.rates && json.rates.USD;
+    const eurPerTry = json.rates && json.rates.EUR;
+    if(!(usdPerTry>0) || !(eurPerTry>0)) throw new Error('Yedek kaynak kur verisi eksik');
+    return { usdPerTry, eurPerTry };
+  }
+}
+
 function renderAyarlarTab(main){
   const fnt0 = Object.assign({baslik:6, metin:6.5, rakam:7.5}, state.metrajPdfFont||{});
   main.innerHTML = `
@@ -7477,6 +7882,30 @@ function renderAyarlarTab(main){
       <div class="btn-row">
         <button class="btn btn-primary" id="btnSaveCompany">Kaydet</button>
         ${state.company.logo? `<button class="btn btn-danger" id="btnRemoveLogo">Logoyu Kaldır</button>`:''}
+      </div>
+    </div>
+
+    <div class="card glass">
+      <h2>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+        Döviz Kurları
+      </h2>
+      <p class="hint">Avans, Masraf ve diğer para birimi seçilebilen kayıtlarda, TL dışındaki tutarların TL karşılığını hesaplamak için kullanılır. Girdiğiniz kur, o an için "güncel" kur olarak kaydedilir ve yeni eklenen kayıtlarda otomatik öneri olarak gelir; her kaydın kendi kuru düzenlenebilir olduğu için geçmiş işlemler etkilenmez.</p>
+      <div class="field-grid">
+        <div class="field"><label>1 USD = ? TL</label>
+          <input class="mono" type="number" step="any" min="0" id="s-kurUSD" value="${esc(state.dovizKurlari.USD)}" placeholder="Örn: 34.20">
+        </div>
+        <div class="field"><label>1 EUR = ? TL</label>
+          <input class="mono" type="number" step="any" min="0" id="s-kurEUR" value="${esc(state.dovizKurlari.EUR)}" placeholder="Örn: 37.10">
+        </div>
+      </div>
+      <p class="hint" style="font-size:0.72rem;">${state.dovizKurGuncellenme ? 'Son güncelleme: '+new Date(state.dovizKurGuncellenme).toLocaleString('tr-TR') : 'Henüz kur girilmedi.'}</p>
+      <div class="btn-row">
+        <button class="btn btn-primary" id="btnSaveKur">Kaydet</button>
+        <button class="btn btn-ghost" id="btnFetchKur">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+          Güncel Kuru Çek
+        </button>
       </div>
     </div>
 
@@ -7599,6 +8028,34 @@ function renderAyarlarTab(main){
     state.company.telefon = document.getElementById('s-companyTelefon').value.trim();
     saveState(); showToast('Firma bilgileri kaydedildi.');
     renderMain();
+  };
+  document.getElementById('btnSaveKur').onclick = ()=>{
+    const usd = document.getElementById('s-kurUSD').value;
+    const eur = document.getElementById('s-kurEUR').value;
+    state.dovizKurlari.USD = usd;
+    state.dovizKurlari.EUR = eur;
+    state.dovizKurGuncellenme = Date.now();
+    saveState(); showToast('Döviz kurları kaydedildi.');
+    renderMain();
+  };
+  document.getElementById('btnFetchKur').onclick = async ()=>{
+    const btn = document.getElementById('btnFetchKur');
+    btn.disabled = true; btn.textContent = 'Kur çekiliyor…';
+    try{
+      const { usdPerTry, eurPerTry } = await fetchGuncelDovizKur();
+      // Her iki kaynak da "1 TL = ? USD/EUR" döndürür; uygulamada "1 USD/EUR = ? TL"
+      // olarak tutulduğu için tersini alıyoruz.
+      state.dovizKurlari.USD = (1/usdPerTry).toFixed(4);
+      state.dovizKurlari.EUR = (1/eurPerTry).toFixed(4);
+      state.dovizKurGuncellenme = Date.now();
+      saveState();
+      showToast('Güncel kur çekildi ve kaydedildi.');
+      renderMain();
+    }catch(e){
+      console.error(e);
+      showToast('Kur alınamadı. İnternet bağlantınızı kontrol edip tekrar deneyin ya da kuru elle girin.');
+      btn.disabled = false; btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg> Güncel Kuru Çek`;
+    }
   };
   const logoInput = document.getElementById('s-logoFile');
   logoInput.onchange = ()=>{
@@ -8344,6 +8801,9 @@ window.__dnzInitApp = async function init(){
   if(state.company.vergiNo===undefined || state.company.vergiNo===null) state.company.vergiNo = '';
   if(state.company.adres===undefined || state.company.adres===null) state.company.adres = '';
   if(state.company.telefon===undefined || state.company.telefon===null) state.company.telefon = '';
+  if(state.dashboardHavaKonum===undefined) state.dashboardHavaKonum = null;
+  if(!state.dovizKurlari) state.dovizKurlari = { USD:'', EUR:'' };
+  if(state.dovizKurGuncellenme===undefined) state.dovizKurGuncellenme = null;
   let imalatCinsiMigrated = false;
   Object.values(state.projects).forEach(p=>{
     if(!p.personel) p.personel = [];
@@ -8360,6 +8820,7 @@ window.__dnzInitApp = async function init(){
     if(!p.currency || !CURRENCY_INFO[p.currency]) p.currency = 'TRY';
     if(p.baslangicTarihi===undefined || p.baslangicTarihi===null) p.baslangicTarihi = '';
     if(p.bitisTarihi===undefined || p.bitisTarihi===null) p.bitisTarihi = '';
+    if(!p.durum || !PROJE_DURUM_META[p.durum]) p.durum = 'devam';
     // İmalat Cinsi Fiyat Listesi eskiden proje bazında tutuluyordu; artık tüm projelerde
     // ortak (state.imalatCinsiFiyatListesi). Daha önce bir projede kaydedilmiş kalemler
     // varsa bunları isim bazında tekilleştirerek genel listeye taşıyıp projeden kaldırıyoruz.
