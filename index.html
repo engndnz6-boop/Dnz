@@ -946,6 +946,12 @@ footer.appfoot{text-align:center;padding:14px;color:rgba(11,36,54,0.45);font-siz
   .project-picker{flex:1 1 100%;max-width:none;order:3;}
   table{font-size:0.72rem;}
   .card{padding:14px;}
+  /* Teklifler sekmesindeki "Aktif Teklif" satırı (select + 3 buton) ve
+     "KDV Oranı" satırı (min 160px'lik 3 sütun) dar ekranda taşıyordu;
+     sadece bu iki satırı tek sütuna indiriyoruz, diğer field-grid'lere dokunmuyoruz. */
+  .field-grid.tk-aktif-row,
+  .field-grid.tk-kdv-row{grid-template-columns:1fr !important;}
+  .field-grid.tk-aktif-row > .btn{width:100%;}
 }
 
 /* personel arama sonuç kartı */
@@ -3748,7 +3754,7 @@ function renderTeklifTab(main, proj){
         Teklifler — <span style="color:var(--aqua-dim)">${esc(proj.name)}</span>
       </h2>
       <p class="hint">Aynı proje için birden fazla teklif oluşturabilirsiniz (ör. alternatif fiyatlandırma, revizyon veya ayrı bir ek iş teklifi). Her teklifin kendi kalemleri, notu, geçerlilik tarihi, KDV oranı ve onay durumu vardır.</p>
-      <div class="field-grid" style="grid-template-columns:2fr auto auto auto;align-items:end;">
+      <div class="field-grid tk-aktif-row" style="grid-template-columns:2fr auto auto auto;align-items:end;">
         <div class="field"><label>Aktif Teklif</label>
           <select id="t-teklifSecici">${tumTeklifler.map(t=>`<option value="${t.id}" ${t.id===aktif.id?'selected':''}>${esc(t.ad)} — ${fmtMoney(teklifKdvliToplam(t).brut)}</option>`).join('')}</select>
         </div>
@@ -3759,7 +3765,7 @@ function renderTeklifTab(main, proj){
         <button class="btn btn-ghost" id="btnTeklifYenidenAdlandir" title="Aktif teklifin adını değiştir">Adını Değiştir</button>
         <button class="btn btn-ghost" id="btnTeklifSil" ${tumTeklifler.length<2?'disabled':''} title="${tumTeklifler.length<2?'Projede en az bir teklif kalmalı':'Aktif teklifi sil'}">Sil</button>
       </div>
-      <div class="field-grid" style="grid-template-columns:repeat(3,minmax(160px,1fr));margin-top:6px;">
+      <div class="field-grid tk-kdv-row" style="grid-template-columns:repeat(3,minmax(160px,1fr));margin-top:6px;">
         <div class="field"><label>Teklif Geçerlilik Tarihi</label>
           <input type="date" id="t-gecerlilikTarihi" value="${esc(aktif.gecerlilikTarihi||'')}">
         </div>
