@@ -1243,8 +1243,21 @@ function defaultState(){
     dovizKurGuncellenme: null
   };
 }
+function yeniTeklifKaydi(ad){
+  return {
+    id: uid(),
+    ad: ad || 'Teklif 1',
+    teklifRows:[],
+    teklifNote:'',
+    teklifOnaylandi:true,
+    gecerlilikTarihi:'',
+    kdvOrani:0,
+    olusturmaTarihi: Date.now()
+  };
+}
 function newProject(name, employer){
   const id = uid();
+  const ilkTeklif = yeniTeklifKaydi('Teklif 1');
   return {
     id, name: name||'Yeni Proje', employer: employer||'',
     createdAt: Date.now(),
@@ -1253,14 +1266,23 @@ function newProject(name, employer){
     bitisTarihi: '',
     durum: 'devam',
     metrajRows:[],
-    teklifRows:[],
-    teklifNote:'',
+    // Bir projenin birden fazla teklifi olabilir (ör. alternatif fiyatlandırmalar,
+    // revizyonlar, farklı imalat paketleri). Tüm teklifler proj.teklifler dizisinde
+    // tutulur; proj.aktifTeklifId o an ekranda düzenlenen teklifi gösterir.
+    // proj.teklifRows / teklifNote / teklifOnaylandi alanları GERİYE DÖNÜK UYUMLULUK
+    // için korunur ve her zaman "aktif teklif" ile senkron tutulan bir aynadır — eski
+    // kod bu alanları doğrudan okuyup yazmaya devam edebilir (bkz. aktifTeklif(),
+    // loadAktifTeklifToProj(), syncProjToAktifTeklif()).
+    teklifler:[ilkTeklif],
+    aktifTeklifId: ilkTeklif.id,
+    teklifRows: ilkTeklif.teklifRows,
+    teklifNote: ilkTeklif.teklifNote,
+    teklifOnaylandi: ilkTeklif.teklifOnaylandi,
     personel:[],
     avanslar:[],
     zimmetler:[],
     tahsilatlar:[],
     manuelIsverenAlacak:'',
-    teklifOnaylandi:true,
     masraflar:[],
     yemekler:[],
     yemekFiyat:{ sabah:MEAL_PRICES.sabah, ogle:MEAL_PRICES.ogle, aksam:MEAL_PRICES.aksam },
@@ -1268,6 +1290,79 @@ function newProject(name, employer){
     havaKonum:null,
     memory:{ blok:[], kat:[], daire:[], mekan:[], eleman:[], imalat:[] }
   };
+}
+// ---- Çoklu Teklif yardımcı fonksiyonları ----
+// Bir projenin proj.teklifler dizisinde "şu an ekranda açık olan" teklifi döndürür.
+// Eksik/eski alanlar varsa (gecerlilikTarihi, kdvOrani, teklifOnaylandi vb.) güvenli
+// varsayılanlarla tamamlar; proj.teklifler hiç yoksa (çok eski kayıt) sıfırdan oluşturur.
+function aktifTeklif(proj){
+  if(!proj.teklifler || !proj.teklifler.length){
+    const t = yeniTeklifKaydi('Teklif 1');
+    t.teklifRows = proj.teklifRows || [];
+    t.teklifNote = proj.teklifNote || '';
+    t.teklifOnaylandi = proj.teklifOnaylandi!==false;
+    proj.teklifler = [t];
+    proj.aktifTeklifId = t.id;
+  }
+  let t = proj.teklifler.find(x=>x.id===proj.aktifTeklifId);
+  if(!t){ t = proj.teklifler[0]; proj.aktifTeklifId = t.id; }
+  if(!t.teklifRows) t.teklifRows = [];
+  if(t.teklifNote===undefined || t.teklifNote===null) t.teklifNote = '';
+  if(t.teklifOnaylandi===undefined || t.teklifOnaylandi===null) t.teklifOnaylandi = true;
+  if(t.gecerlilikTarihi===undefined || t.gecerlilikTarihi===null) t.gecerlilikTarihi = '';
+  if(t.kdvOrani===undefined || t.kdvOrani===null) t.kdvOrani = 0;
+  if(!t.ad) t.ad = 'Teklif';
+  return t;
+}
+// Aktif teklifin verilerini proj.teklifRows / teklifNote / teklifOnaylandi "ayna"
+// alanlarına yükler. Teklif sekmesi her render edildiğinde ve aktif teklif her
+// değiştiğinde çağrılır; böylece bu alanları doğrudan okuyan eski kod (tablo/PDF/
+// finans hesapları) değişmeden çalışmaya devam eder.
+function loadAktifTeklifToProj(proj){
+  const t = aktifTeklif(proj);
+  proj.teklifRows = t.teklifRows;
+  proj.teklifNote = t.teklifNote;
+  proj.teklifOnaylandi = t.teklifOnaylandi;
+  return t;
+}
+// Ayna alanlarındaki (proj.teklifRows/teklifNote/teklifOnaylandi) değişiklikleri
+// aktif teklif kaydına geri yazar. proj.teklifRows bazı yerlerde tamamen yeni bir
+// diziyle değiştirildiği için (ör. proj.teklifRows = merged) referans kaybolabilir;
+// bu yüzden her mutasyondan sonra açıkça çağrılması gerekir.
+function syncProjToAktifTeklif(proj){
+  const t = aktifTeklif(proj);
+  t.teklifRows = proj.teklifRows;
+  t.teklifNote = proj.teklifNote;
+  t.teklifOnaylandi = proj.teklifOnaylandi;
+  return t;
+}
+// Bir teklifin KDV hariç (net), KDV tutarı ve KDV dahil (brüt) toplamlarını hesaplar.
+function teklifKdvliToplam(teklif){
+  const net = (teklif.teklifRows||[]).reduce((s,r)=>s+(parseFloat(r.tutar)||0),0);
+  const oran = parseFloat(teklif.kdvOrani)||0;
+  const kdv = Math.round(net*(oran/100)*100)/100;
+  return { net, oran, kdv, brut: Math.round((net+kdv)*100)/100 };
+}
+// Projedeki TÜM tekliflerin tüm kalemlerini tek bir dizide döndürür (dashboard/arama
+// gibi projeler-arası toplam/arama ekranları için — düzenleme her zaman aktif teklif
+// üzerinden yapılır, bu fonksiyon sadece salt-okunur toplamalar içindir).
+function projeTumTeklifler(proj){
+  if(proj.teklifler && proj.teklifler.length) return proj.teklifler;
+  return [{ id: proj.aktifTeklifId||'legacy', ad:'Teklif', teklifRows: proj.teklifRows||[], teklifNote: proj.teklifNote||'', teklifOnaylandi: proj.teklifOnaylandi!==false, gecerlilikTarihi:'', kdvOrani:0 }];
+}
+function projeTumTeklifKalemleri(proj){
+  return projeTumTeklifler(proj).flatMap(t=>t.teklifRows||[]);
+}
+// Projeye yeni (boş) bir teklif ekler ve onu aktif teklif yapar.
+function yeniTeklifEkle(proj){
+  syncProjToAktifTeklif(proj);
+  const sira = (proj.teklifler||[]).length + 1;
+  const t = yeniTeklifKaydi('Teklif '+sira);
+  if(!proj.teklifler) proj.teklifler = [];
+  proj.teklifler.push(t);
+  proj.aktifTeklifId = t.id;
+  loadAktifTeklifToProj(proj);
+  return t;
 }
 function currentYm(){
   const d = new Date();
@@ -1529,7 +1624,7 @@ async function syncStateToCloud(){
   }
 }
 function hasAnyData(){
-  return Object.values(state.projects||{}).some(p=> (p.metrajRows&&p.metrajRows.length) || (p.teklifRows&&p.teklifRows.length));
+  return Object.values(state.projects||{}).some(p=> (p.metrajRows&&p.metrajRows.length) || projeTumTeklifKalemleri(p).length);
 }
 function needsBackupWarning(){
   return hasAnyData() && state.dirtySinceBackup===true;
@@ -2312,7 +2407,7 @@ function renderProjelerTab(main){
                 <span class="badge ${durumMeta.cls}">${esc(durumMeta.label)}</span>
                 <span class="badge">${esc(CURRENCY_INFO[projectCurrency(p)].label)}</span>
               </div>
-              <span>${p.employer? 'İşveren: '+esc(p.employer) : 'İşveren belirtilmedi'} · ${p.metrajRows.length} metraj satırı · ${p.teklifRows.length} teklif kalemi</span>
+              <span>${p.employer? 'İşveren: '+esc(p.employer) : 'İşveren belirtilmedi'} · ${p.metrajRows.length} metraj satırı · ${projeTumTeklifler(p).length>1 ? projeTumTeklifler(p).length+' teklif' : projeTumTeklifKalemleri(p).length+' teklif kalemi'}</span>
               ${(p.baslangicTarihi || p.bitisTarihi) ? `<span>${p.baslangicTarihi? 'Başlangıç: '+fmtDateStr(p.baslangicTarihi) : 'Başlangıç belirtilmedi'} · ${p.bitisTarihi? 'Bitiş: '+fmtDateStr(p.bitisTarihi) : 'Bitiş belirtilmedi'}</span>` : ''}
             </div>
             <button class="icon-btn" data-act="toggleDurum" title="${durum==='devam'?'Tamamlandı olarak işaretle':'Devam Ediyor olarak işaretle'}">
@@ -2415,10 +2510,13 @@ function collectGlobalAramaResults(query){
         results.push({kind:'metraj', proj, id:r.id, label:r.imalat||'Metraj Satırı', sublabel:(parts||'Metraj')+' · '+proj.name});
       }
     });
-    (proj.teklifRows||[]).forEach(r=>{
-      if(normKey(r.aciklama).includes(q)){
-        results.push({kind:'teklif', proj, id:r.id, label:r.aciklama||'Teklif Kalemi', sublabel:'Teklif · '+proj.name});
-      }
+    projeTumTeklifler(proj).forEach(t=>{
+      (t.teklifRows||[]).forEach(r=>{
+        if(normKey(r.aciklama).includes(q)){
+          const teklifEtiketi = projeTumTeklifler(proj).length>1 ? (t.ad||'Teklif')+' · ' : '';
+          results.push({kind:'teklif', proj, id:r.id, teklifId:t.id, label:r.aciklama||'Teklif Kalemi', sublabel:teklifEtiketi+'Teklif · '+proj.name});
+        }
+      });
     });
     (proj.masraflar||[]).forEach(r=>{
       const hay = normKey(r.masrafKalemi) + ' ' + normKey(r.aciklama);
@@ -2459,13 +2557,20 @@ function collectGlobalAramaResults(query){
   return results;
 }
 
-function goToRecord({projId, tab, masraflarTab, rowId}){
+function goToRecord({projId, tab, masraflarTab, rowId, teklifId}){
   const proj = state.projects[projId];
   if(!proj) return;
   state.activeProjectId = projId;
   ui.tab = tab;
   if(masraflarTab) ui.masraflarTab = masraflarTab;
   if(rowId) ui.pendingHighlightId = rowId;
+  // Bulunan kayıt farklı bir teklife aitse, o teklifi aktif hale getiriyoruz ki
+  // Teklif sekmesi açıldığında satır doğru tabloda görünüp vurgulanabilsin.
+  if(teklifId && proj.teklifler && proj.teklifler.some(t=>t.id===teklifId)){
+    syncProjToAktifTeklif(proj);
+    proj.aktifTeklifId = teklifId;
+    loadAktifTeklifToProj(proj);
+  }
   saveState();
   renderAll();
   window.scrollTo({top:0, behavior:'smooth'});
@@ -2480,7 +2585,7 @@ const ARAMA_TAB_MAP = {
   yemek:{tab:'masraflar', masraflarTab:'yemek'},
   gunluk:{tab:'gunluk'}
 };
-function handleGlobalAramaClick(kind, projId, rowId){
+function handleGlobalAramaClick(kind, projId, rowId, teklifId){
   const proj = state.projects[projId];
   if(!proj) return;
   if(kind==='proje'){
@@ -2497,7 +2602,7 @@ function handleGlobalAramaClick(kind, projId, rowId){
   }
   const target = ARAMA_TAB_MAP[kind];
   if(!target) return;
-  goToRecord({projId, tab:target.tab, masraflarTab:target.masraflarTab, rowId});
+  goToRecord({projId, tab:target.tab, masraflarTab:target.masraflarTab, rowId, teklifId});
   showToast('Kayıt bulundu.');
 }
 
@@ -2512,7 +2617,7 @@ function wireGlobalArama(){
   sonucWrap.addEventListener('click',(e)=>{
     const item = e.target.closest('.arama-sonuc-item');
     if(!item) return;
-    handleGlobalAramaClick(item.dataset.kind, item.dataset.proj, item.dataset.id);
+    handleGlobalAramaClick(item.dataset.kind, item.dataset.proj, item.dataset.id, item.dataset.teklif);
   });
 }
 
@@ -2530,7 +2635,7 @@ function renderGlobalAramaResultsHtml(){
       ${shown.map(item=>{
         const meta = ARAMA_KIND_META[item.kind] || {label:item.kind, icon:''};
         return `
-        <div class="pick-item arama-sonuc-item" data-kind="${item.kind}" data-proj="${item.proj.id}" data-id="${item.id||''}">
+        <div class="pick-item arama-sonuc-item" data-kind="${item.kind}" data-proj="${item.proj.id}" data-id="${item.id||''}" data-teklif="${item.teklifId||''}">
           <div style="width:30px;height:30px;border-radius:8px;background:rgba(47,211,199,0.15);display:flex;align-items:center;justify-content:center;color:var(--aqua-dim);flex-shrink:0;">
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">${meta.icon}</svg>
           </div>
@@ -2598,7 +2703,7 @@ function renderGenelOzetHtml(){
   projects.forEach(p=>{
     toplamPersonel += (p.personel||[]).length;
     toplamMetraj += (p.metrajRows||[]).length;
-    toplamTeklif += (p.teklifRows||[]).length;
+    toplamTeklif += projeTumTeklifKalemleri(p).length;
     const cur = projectCurrency(p);
     if(!paraToplamlari[cur]) paraToplamlari[cur] = {hakedis:0,tahsilat:0,odenecek:0,odenen:0,masraf:0,yemek:0};
     const t = paraToplamlari[cur];
@@ -2808,6 +2913,33 @@ function confirmModal(msg, onYes){
   document.getElementById('cCancel').onclick = closeModal;
   document.getElementById('modalBackdrop').addEventListener('click',(e)=>{ if(e.target.id==='modalBackdrop') closeModal(); });
   document.getElementById('cYes').onclick = ()=>{ closeModal(); onYes(); };
+}
+
+// Kullanıcıdan tek satırlık metin girişi almak için (ör. teklif adı) confirmModal ile
+// aynı görsel dile sahip küçük bir modal. onOk yalnızca "Kaydet"e basılırsa çağrılır.
+function promptModal(title, msg, initialValue, onOk){
+  const modalRoot = document.getElementById('modalRoot');
+  modalRoot.innerHTML = `
+    <div class="modal-backdrop" id="modalBackdrop">
+      <div class="modal glass-strong glass">
+        <h3>${esc(title)}</h3>
+        ${msg ? `<p class="hint">${esc(msg)}</p>` : ''}
+        <div class="field" style="margin-top:8px;">
+          <input type="text" id="pmInput" value="${esc(initialValue||'')}">
+        </div>
+        <div class="btn-row" style="margin-top:10px;justify-content:flex-end;">
+          <button class="btn btn-ghost" id="pmCancel">Vazgeç</button>
+          <button class="btn btn-primary" id="pmOk">Kaydet</button>
+        </div>
+      </div>
+    </div>`;
+  const input = document.getElementById('pmInput');
+  document.getElementById('pmCancel').onclick = closeModal;
+  document.getElementById('modalBackdrop').addEventListener('click',(e)=>{ if(e.target.id==='modalBackdrop') closeModal(); });
+  const submit = ()=>{ const val = input.value; closeModal(); onOk(val); };
+  document.getElementById('pmOk').onclick = submit;
+  input.addEventListener('keydown',(e)=>{ if(e.key==='Enter') submit(); });
+  input.focus(); input.select();
 }
 
 // KVKK / gizlilik bilgilendirme modalı. Bu, bir hukuki metin değil; kullanıcıya
@@ -3604,11 +3736,47 @@ function findImalatFiyat(imalatAdi){
 }
 
 function renderTeklifTab(main, proj){
+  // Ekranda gösterilecek teklifi (aktif teklif) ayna alanlarına yükle; böylece aşağıdaki
+  // tüm kod proj.teklifRows/teklifNote/teklifOnaylandi üzerinden çalışmaya devam edebilir.
+  const aktif = loadAktifTeklifToProj(proj);
+  const tumTeklifler = proj.teklifler;
+  const kdvli = teklifKdvliToplam(aktif);
   main.innerHTML = `
     <div class="card glass">
       <h2>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"/></svg>
+        Teklifler — <span style="color:var(--aqua-dim)">${esc(proj.name)}</span>
+      </h2>
+      <p class="hint">Aynı proje için birden fazla teklif oluşturabilirsiniz (ör. alternatif fiyatlandırma, revizyon veya ayrı bir ek iş teklifi). Her teklifin kendi kalemleri, notu, geçerlilik tarihi, KDV oranı ve onay durumu vardır.</p>
+      <div class="field-grid" style="grid-template-columns:2fr auto auto auto;align-items:end;">
+        <div class="field"><label>Aktif Teklif</label>
+          <select id="t-teklifSecici">${tumTeklifler.map(t=>`<option value="${t.id}" ${t.id===aktif.id?'selected':''}>${esc(t.ad)} — ${fmtMoney(teklifKdvliToplam(t).brut)}</option>`).join('')}</select>
+        </div>
+        <button class="btn btn-ghost" id="btnYeniTeklif" title="Bu projeye yeni bir teklif ekle">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+          Yeni Teklif
+        </button>
+        <button class="btn btn-ghost" id="btnTeklifYenidenAdlandir" title="Aktif teklifin adını değiştir">Adını Değiştir</button>
+        <button class="btn btn-ghost" id="btnTeklifSil" ${tumTeklifler.length<2?'disabled':''} title="${tumTeklifler.length<2?'Projede en az bir teklif kalmalı':'Aktif teklifi sil'}">Sil</button>
+      </div>
+      <div class="field-grid" style="grid-template-columns:repeat(3,minmax(160px,1fr));margin-top:6px;">
+        <div class="field"><label>Teklif Geçerlilik Tarihi</label>
+          <input type="date" id="t-gecerlilikTarihi" value="${esc(aktif.gecerlilikTarihi||'')}">
+        </div>
+        <div class="field"><label>KDV Oranı (%)</label>
+          <input class="mono" type="number" step="any" min="0" id="t-kdvOrani" value="${esc(aktif.kdvOrani)}">
+        </div>
+        <label style="display:flex;align-items:center;gap:8px;margin-top:22px;cursor:pointer;font-size:0.85rem;color:var(--ink-soft);">
+          <input type="checkbox" id="t-onay" ${aktif.teklifOnaylandi?'checked':''} style="width:18px;height:18px;">
+          <span>Bu teklif onaylı (İşverenden Alınacak toplamına dahil edilsin)</span>
+        </label>
+      </div>
+    </div>
+
+    <div class="card glass">
+      <h2>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
-        Teklif Kalemi Ekle — <span style="color:var(--aqua-dim)">${esc(proj.name)}</span>
+        Teklif Kalemi Ekle — <span style="color:var(--aqua-dim)">${esc(proj.name)}</span> · <span style="color:var(--aqua-dim)">${esc(aktif.ad)}</span>
       </h2>
       <div class="field-grid" style="grid-template-columns:repeat(2,minmax(140px,1fr));">
         <div class="field" style="grid-column:span 2;"><label>Açıklama</label>
@@ -3663,7 +3831,7 @@ function renderTeklifTab(main, proj){
     </div>
 
     <div class="card glass">
-      <h2>Teklif Kalemleri</h2>
+      <h2>Teklif Kalemleri — <span style="color:var(--aqua-dim)">${esc(aktif.ad)}</span></h2>
       <p class="hint">Aynı Blok, Kat, Daire, Mekân, Uygulama Yeri ve İmalat Cinsi'ne (ve aynı birime) sahip kalemler eklendikçe otomatik olarak tek satırda toplanır. Bu listede daha önce ayrı ayrı eklenmiş aynı kalemler varsa, aşağıdaki butonla tek seferde birleştirebilirsiniz.</p>
       <div class="table-scroll" id="teklifTableWrap"></div>
       <div class="totals-strip" id="teklifTotals"></div>
@@ -3690,6 +3858,7 @@ function renderTeklifTab(main, proj){
     const before = proj.teklifRows.length;
     mergeAllTeklifRows(proj);
     const after = proj.teklifRows.length;
+    syncProjToAktifTeklif(proj);
     saveState();
     renderMain();
     if(before===after){ showToast('Birleştirilecek aynı kalem bulunamadı.'); }
@@ -3698,8 +3867,62 @@ function renderTeklifTab(main, proj){
   let noteSaveTimer = null;
   document.getElementById('t-note').addEventListener('input',(e)=>{
     proj.teklifNote = e.target.value;
+    syncProjToAktifTeklif(proj);
     clearTimeout(noteSaveTimer);
     noteSaveTimer = setTimeout(()=>saveState(), 500);
+  });
+
+  // ---- Teklif seçici ve teklif yönetimi (yeni/yeniden adlandır/sil) ----
+  document.getElementById('t-teklifSecici').addEventListener('change',(e)=>{
+    syncProjToAktifTeklif(proj);
+    proj.aktifTeklifId = e.target.value;
+    loadAktifTeklifToProj(proj);
+    saveState();
+    teklifForm = emptyTeklifForm();
+    renderMain();
+  });
+  document.getElementById('btnYeniTeklif').onclick = ()=>{
+    yeniTeklifEkle(proj);
+    saveState();
+    teklifForm = emptyTeklifForm();
+    renderMain();
+    showToast('Yeni teklif oluşturuldu.');
+  };
+  document.getElementById('btnTeklifYenidenAdlandir').onclick = ()=>{
+    promptModal('Teklif Adı', 'Bu teklif için bir ad girin.', aktif.ad, (val)=>{
+      if(!val || !val.trim()) return;
+      aktif.ad = val.trim();
+      saveState();
+      renderMain();
+    });
+  };
+  const btnTeklifSil = document.getElementById('btnTeklifSil');
+  if(!btnTeklifSil.disabled){
+    btnTeklifSil.onclick = ()=>{
+      confirmModal(`"${aktif.ad}" teklifini ve içindeki tüm kalemleri silmek istediğinize emin misiniz? Bu işlem geri alınamaz.`, ()=>{
+        proj.teklifler = proj.teklifler.filter(t=>t.id!==aktif.id);
+        proj.aktifTeklifId = proj.teklifler[0].id;
+        loadAktifTeklifToProj(proj);
+        saveState();
+        teklifForm = emptyTeklifForm();
+        renderMain();
+        showToast('Teklif silindi.');
+      });
+    };
+  }
+  document.getElementById('t-gecerlilikTarihi').addEventListener('change',(e)=>{
+    aktif.gecerlilikTarihi = e.target.value;
+    saveState();
+  });
+  document.getElementById('t-kdvOrani').addEventListener('input',(e)=>{
+    aktif.kdvOrani = e.target.value;
+    renderTeklifTotals(proj);
+  });
+  document.getElementById('t-kdvOrani').addEventListener('change',()=>{ saveState(); });
+  document.getElementById('t-onay').addEventListener('change',(e)=>{
+    aktif.teklifOnaylandi = e.target.checked;
+    proj.teklifOnaylandi = e.target.checked;
+    saveState();
   });
 
   renderTeklifTable(proj);
@@ -3857,6 +4080,7 @@ function saveTeklifRow(proj){
     // zaten bir satır varsa, yeni satır açmak yerine mevcut satırla birleştirilir.
     mergeOrAddTeklifRow(proj, {aciklama, miktar, birim: teklifForm.birim, birimFiyat});
   }
+  syncProjToAktifTeklif(proj);
   saveState();
   teklifForm = emptyTeklifForm();
   renderMain();
@@ -3907,6 +4131,7 @@ function renderTeklifTable(proj){
       } else if(act==='delete'){
         confirmModal('Bu teklif kalemini silmek istediğinize emin misiniz?', ()=>{
           proj.teklifRows = proj.teklifRows.filter(r=>r.id!==id);
+          syncProjToAktifTeklif(proj);
           saveState(); renderMain();
           showToast('Kalem silindi.');
         });
@@ -3917,8 +4142,14 @@ function renderTeklifTable(proj){
 
 function renderTeklifTotals(proj){
   const el = document.getElementById('teklifTotals');
-  const total = proj.teklifRows.reduce((s,r)=>s+(parseFloat(r.tutar)||0),0);
-  el.innerHTML = `<div class="total-chip"><span class="lbl">Genel Toplam</span><span class="val">${fmtMoney(total)}</span></div>`;
+  if(!el) return;
+  const aktif = aktifTeklif(proj);
+  const k = teklifKdvliToplam(aktif);
+  el.innerHTML = `
+    <div class="total-chip"><span class="lbl">Ara Toplam (KDV Hariç)</span><span class="val">${fmtMoney(k.net)}</span></div>
+    <div class="total-chip"><span class="lbl">KDV (%${fmtNum(k.oran)})</span><span class="val">${fmtMoney(k.kdv)}</span></div>
+    <div class="total-chip"><span class="lbl">Genel Toplam (KDV Dahil)</span><span class="val">${fmtMoney(k.brut)}</span></div>
+  `;
 }
 
 /* ======================= İMALAT SİSTEMLERİ TAB ======================= */
@@ -6342,6 +6573,7 @@ function renderAvansTable(proj){
             <td class="num">${fmtMoney(r.tutar, cur)}${moneyEquivalentHtml(r, proj)}</td>
             <td>
               <div class="row-actions">
+                <button class="icon-btn" data-act="makbuz" title="Makbuz"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h6M9 9h1"/></svg></button>
                 <button class="icon-btn" data-act="edit" title="Düzenle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg></button>
                 <button class="icon-btn danger" data-act="delete" title="Sil"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0l-1 14a2 2 0 01-2 2H7a2 2 0 01-2-2L4 6h16z"/></svg></button>
               </div>
@@ -6359,7 +6591,9 @@ function renderAvansTable(proj){
       if(!act) return;
       const r = proj.avanslar.find(x=>x.id===tr.dataset.id);
       if(!r) return;
-      if(act==='edit'){
+      if(act==='makbuz'){
+        exportAvansMakbuzPdf(proj, r);
+      } else if(act==='edit'){
         avansForm = {id:r.id, personelId:r.personelId, odemeTarihi:r.odemeTarihi, odemeSekli:r.odemeSekli, aciklama:r.aciklama, tutar:String(r.tutar), paraBirimi:(r.paraBirimi && CURRENCY_INFO[r.paraBirimi]) ? r.paraBirimi : projectCurrency(proj), kur: r.kur!=null? String(r.kur) : ''};
         renderMain(); window.scrollTo({top:0, behavior:'smooth'});
       } else if(act==='delete'){
@@ -6491,6 +6725,31 @@ async function exportAvansPdf(proj){
     <div style="margin-top:36px;font-size:9px;color:#8096A3;">DNZ Metraj &amp; Teklif Yönetimi ile oluşturulmuştur.</div>
   `;
   showPdfPreview(html, `avans-listesi-${proj.name.replace(/[^a-z0-9ığüşöç]+/gi,'_')}.pdf`, 'p');
+}
+
+// Tek bir avans (personele yapılan ödeme) kaydı için makbuz PDF'i üretir.
+function exportAvansMakbuzPdf(proj, r){
+  showToast('Makbuz hazırlanıyor…');
+  const cur = (r.paraBirimi && CURRENCY_INFO[r.paraBirimi]) ? r.paraBirimi : projectCurrency(proj);
+  const html = makbuzHtml(proj, {
+    baslik: 'AVANS ÖDEME MAKBUZU',
+    makbuzNo: makbuzNoUret(r.id),
+    tarih: r.odemeTarihi,
+    tutar: r.tutar,
+    paraBirimi: cur,
+    tutarLabel: 'Ödenen Avans',
+    not: r.aciklama,
+    solImzaEtiket:'ÖDEYEN', solImzaAd: state.company.name||'',
+    sagImzaEtiket:'TESLİM ALAN', sagImzaAd: r.adSoyad||'',
+    satirlar:[
+      {label:'Proje', value:proj.name},
+      {label:'Adı Soyadı', value:r.adSoyad||'—'},
+      {label:'Ödeme Tarihi', value:fmtDateStr(r.odemeTarihi)},
+      {label:'Ödeme Şekli', value:r.odemeSekli||'—'},
+      {label:'Açıklama', value:r.aciklama||'—'}
+    ]
+  });
+  showPdfPreview(html, `makbuz-${makbuzNoUret(r.id)}.pdf`, 'p');
 }
 
 async function exportZimmetPdf(proj){
@@ -6980,17 +7239,21 @@ async function exportTopluHesapPdf(proj, start, end, rows, totals){
 function emptyTahsilatForm(){ return {id:null, odemeTarihi: todayStr(), odemeYapan:'', odemeAlan:'', odemeSekli:'Nakit', aciklama:'', tutar:''}; }
 let tahsilatForm = emptyTahsilatForm();
 
+// Projede ONAYLI olan tüm tekliflerin KDV DAHİL toplamlarının toplamını verir.
+// Bir projede birden fazla teklif olabileceğinden (ör. iki ayrı onaylı ek iş teklifi),
+// her teklifin kendi "Onayla" işareti ayrı ayrı değerlendirilir; onaylanmamış teklifler
+// bu toplama dahil edilmez. KDV oranı girilmemiş (0) tekliflerde brüt=net olduğundan,
+// eski (KDV'siz) projelerde davranış aynen korunur.
 function projeTeklifToplam(proj){
-  return (proj.teklifRows||[]).reduce((s,r)=>s+(parseFloat(r.tutar)||0),0);
+  return projeTumTeklifler(proj)
+    .filter(t=>t.teklifOnaylandi)
+    .reduce((s,t)=> s + teklifKdvliToplam(t).brut, 0);
 }
 
-// İşverenden Alınacak Toplam = manuel girilen tutar + (teklif onaylandıysa teklif toplamı).
-// "Teklifi Onayla" işaretli değilse teklif tutarı bu toplama dahil edilmez, sadece
-// manuel girilen tutar geçerli olur. İkisi de girilmişse (ve teklif onaylıysa) toplanır.
+// İşverenden Alınacak Toplam = manuel girilen tutar + onaylı tekliflerin KDV dahil toplamı.
 function projeIsverenAlacakToplam(proj){
   const manuel = parseFloat(proj.manuelIsverenAlacak)||0;
-  const teklif = proj.teklifOnaylandi ? projeTeklifToplam(proj) : 0;
-  return manuel + teklif;
+  return manuel + projeTeklifToplam(proj);
 }
 
 function renderTahsilatTab(main, proj){
@@ -7028,19 +7291,30 @@ function renderTahsilatTab(main, proj){
 
     <div class="card glass">
       <h2>İşverenden Alınacak</h2>
-      <p class="hint">Teklif kalemlerinden gelen tutarı doğrudan kullanabilir, üzerine kendiniz manuel bir tutar ekleyebilir veya teklifi hiç dahil etmeden sadece manuel tutarı esas alabilirsiniz.</p>
+      <p class="hint">Onayladığınız tekliflerin KDV dahil tutarları toplanır, üzerine dilerseniz manuel bir tutar da ekleyebilir veya hiçbir teklifi onaylamadan sadece manuel tutarı esas alabilirsiniz. Projede birden fazla teklif varsa her biri ayrı ayrı onaylanabilir.</p>
+      <div class="table-scroll" style="margin-bottom:10px;">
+        <table>
+          <thead><tr><th>Teklif</th><th class="num">Tutar (KDV Dahil)</th><th>Onaylı mı?</th></tr></thead>
+          <tbody>
+            ${proj.teklifler.map(t=>{
+              const kk = teklifKdvliToplam(t);
+              return `<tr data-teklif-id="${t.id}">
+                <td>${esc(t.ad)}${t.id===proj.aktifTeklifId?' <span class="badge">aktif</span>':''}</td>
+                <td class="num">${fmtMoney(kk.brut)}</td>
+                <td><input type="checkbox" class="th-teklifOnayItem" data-id="${t.id}" ${t.teklifOnaylandi?'checked':''} style="width:18px;height:18px;"></td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
       <div class="field-grid">
-        <div class="field"><label>Teklif Tutarı (Referans)</label>
-          <input class="mono" type="text" readonly style="opacity:0.75;" value="${fmtMoney(projeTeklifToplam(proj))}">
+        <div class="field"><label>Onaylı Teklifler Toplamı (Referans)</label>
+          <input class="mono" type="text" readonly style="opacity:0.75;" id="th-teklifToplamRef" value="${fmtMoney(projeTeklifToplam(proj))}">
         </div>
         <div class="field"><label>Manuel Tutar (TL)</label>
           <input class="mono" type="number" step="any" id="th-manuelAlacak" value="${esc(proj.manuelIsverenAlacak||'')}" placeholder="0">
         </div>
       </div>
-      <label style="display:flex;align-items:center;gap:8px;margin-top:10px;cursor:pointer;font-size:0.85rem;color:var(--ink-soft);">
-        <input type="checkbox" id="th-teklifOnay" ${proj.teklifOnaylandi?'checked':''} style="width:18px;height:18px;">
-        <span>Teklifi Onayla — teklif tutarını manuel tutara ekleyerek "İşverenden Alınacak" toplamını oluştur</span>
-      </label>
     </div>
 
     <div class="card glass">
@@ -7070,10 +7344,16 @@ function renderTahsilatTab(main, proj){
     saveState();
     renderTahsilatOzet(proj);
   });
-  document.getElementById('th-teklifOnay').addEventListener('change', (e)=>{
-    proj.teklifOnaylandi = e.target.checked;
-    saveState();
-    renderTahsilatOzet(proj);
+  document.querySelectorAll('.th-teklifOnayItem').forEach(cb=>{
+    cb.addEventListener('change',(e)=>{
+      const t = proj.teklifler.find(x=>x.id===e.target.dataset.id);
+      if(!t) return;
+      t.teklifOnaylandi = e.target.checked;
+      if(t.id===proj.aktifTeklifId) proj.teklifOnaylandi = e.target.checked; // ayna alanı da güncel kalsın
+      saveState();
+      document.getElementById('th-teklifToplamRef').value = fmtMoney(projeTeklifToplam(proj));
+      renderTahsilatOzet(proj);
+    });
   });
   renderTahsilatTable(proj);
   renderTahsilatOzet(proj);
@@ -7125,6 +7405,7 @@ function renderTahsilatTable(proj){
             <td class="num">${fmtMoney(r.tutar)}</td>
             <td>
               <div class="row-actions">
+                <button class="icon-btn" data-act="makbuz" title="Makbuz"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h6M9 9h1"/></svg></button>
                 <button class="icon-btn" data-act="edit" title="Düzenle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg></button>
                 <button class="icon-btn danger" data-act="delete" title="Sil"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0l-1 14a2 2 0 01-2 2H7a2 2 0 01-2-2L4 6h16z"/></svg></button>
               </div>
@@ -7140,7 +7421,9 @@ function renderTahsilatTable(proj){
       if(!act) return;
       const r = proj.tahsilatlar.find(x=>x.id===tr.dataset.id);
       if(!r) return;
-      if(act==='edit'){
+      if(act==='makbuz'){
+        exportTahsilatMakbuzPdf(proj, r);
+      } else if(act==='edit'){
         tahsilatForm = {id:r.id, odemeTarihi:r.odemeTarihi, odemeYapan:r.odemeYapan, odemeAlan:r.odemeAlan, odemeSekli:r.odemeSekli, aciklama:r.aciklama, tutar:String(r.tutar)};
         renderMain(); window.scrollTo({top:0, behavior:'smooth'});
       } else if(act==='delete'){
@@ -7201,6 +7484,74 @@ async function exportTahsilatPdf(proj){
     <div style="margin-top:36px;font-size:9px;color:#8096A3;">DNZ Metraj &amp; Teklif Yönetimi ile oluşturulmuştur.</div>
   `;
   showPdfPreview(html, `odeme-ozeti-${proj.name.replace(/[^a-z0-9ığüşöç]+/gi,'_')}.pdf`, 'p');
+}
+
+// Bir kaydın id'sinden kısa, okunabilir bir makbuz numarası türetir (ör. "MKB-K7QX3F").
+function makbuzNoUret(id){
+  return 'MKB-' + String(id||uid()).slice(-6).toUpperCase();
+}
+// Ortak makbuz gövdesi: tek bir ödeme kaydı için imza alanlı, resmi görünümlü bir
+// makbuz belgesi üretir. Tüm "ödeme" niteliğindeki kayıtlar (tahsilat, avans) bu
+// şablonu kullanır; sadece başlık/etiketler ve satır verileri değişir.
+function makbuzHtml(proj, opts){
+  return `
+    ${pdfHeaderHtml(proj, 'Ödeme Makbuzu')}
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+      <div style="font-family:'Outfit',sans-serif;font-weight:700;font-size:16px;letter-spacing:1px;color:#1C6E8C;">${esc(opts.baslik||'ÖDEME MAKBUZU')}</div>
+      <div style="font-size:10px;color:#345264;text-align:right;">
+        <div><b>Makbuz No:</b> ${esc(opts.makbuzNo)}</div>
+        <div><b>Tarih:</b> ${fmtDateStr(opts.tarih)}</div>
+      </div>
+    </div>
+    <table style="width:100%;border-collapse:collapse;font-size:11px;margin-bottom:18px;">
+      ${opts.satirlar.map(s=>`
+        <tr>
+          <td style="padding:7px 8px;border-bottom:1px solid #E4EFEF;color:#345264;width:40%;">${esc(s.label)}</td>
+          <td style="padding:7px 8px;border-bottom:1px solid #E4EFEF;font-weight:600;">${s.html!==undefined ? s.html : esc(s.value)}</td>
+        </tr>`).join('')}
+    </table>
+    <div style="display:flex;justify-content:flex-end;margin-bottom:30px;">
+      <div style="min-width:220px;border:1.5px solid #1C6E8C;border-radius:8px;padding:12px 16px;text-align:right;">
+        <div style="font-size:10px;color:#345264;font-weight:700;text-transform:uppercase;">${esc(opts.tutarLabel||'Tutar')}</div>
+        <div style="font-size:20px;font-weight:800;color:#0B2436;">${fmtMoney(opts.tutar, opts.paraBirimi)}</div>
+      </div>
+    </div>
+    ${opts.not ? `
+    <div style="margin-bottom:24px;padding:12px 14px;background:#F4FBFA;border:1px solid #1C6E8C55;border-radius:8px;font-size:10px;color:#345264;white-space:pre-wrap;">${esc(opts.not)}</div>` : ''}
+    <div style="display:flex;justify-content:space-between;margin-top:60px;">
+      <div style="text-align:center;width:45%;">
+        <div style="border-top:1px solid #0B2436;padding-top:6px;font-size:10px;">${esc(opts.solImzaEtiket||'ÖDEYEN')}<br>${esc(opts.solImzaAd||'')}</div>
+      </div>
+      <div style="text-align:center;width:45%;">
+        <div style="border-top:1px solid #0B2436;padding-top:6px;font-size:10px;">${esc(opts.sagImzaEtiket||'TESLİM ALAN')}<br>${esc(opts.sagImzaAd||state.company.name||'')}</div>
+      </div>
+    </div>
+    <div style="margin-top:36px;font-size:9px;color:#8096A3;">DNZ Metraj &amp; Teklif Yönetimi ile oluşturulmuştur.</div>
+  `;
+}
+// "Ödeme Listesi"ndeki (tahsilat) tek bir kayıt için makbuz PDF'i üretir.
+function exportTahsilatMakbuzPdf(proj, r){
+  showToast('Makbuz hazırlanıyor…');
+  const html = makbuzHtml(proj, {
+    baslik: 'ÖDEME MAKBUZU',
+    makbuzNo: makbuzNoUret(r.id),
+    tarih: r.odemeTarihi,
+    tutar: r.tutar,
+    paraBirimi: projectCurrency(proj),
+    tutarLabel: 'Alınan Tutar',
+    not: r.aciklama,
+    solImzaEtiket:'ÖDEYEN', solImzaAd: r.odemeYapan||proj.employer||'',
+    sagImzaEtiket:'TESLİM ALAN', sagImzaAd: r.odemeAlan||state.company.name||'',
+    satirlar:[
+      {label:'Proje', value:proj.name},
+      {label:'Ödeme Tarihi', value:fmtDateStr(r.odemeTarihi)},
+      {label:'Ödeme Yapan', value:r.odemeYapan||'—'},
+      {label:'Ödeme Alan', value:r.odemeAlan||'—'},
+      {label:'Ödeme Şekli', value:r.odemeSekli||'—'},
+      {label:'Açıklama', value:r.aciklama||'—'}
+    ]
+  });
+  showPdfPreview(html, `makbuz-${makbuzNoUret(r.id)}.pdf`, 'p');
 }
 
 /* ======================= MASRAF TAB ======================= */
@@ -8445,7 +8796,9 @@ function pdfHeaderHtmlSimple(subtitle){
 function pdfBaseStyles(width){
   return `font-family:'Inter',Arial,sans-serif;color:#0B2436;padding:24px;width:${width}px;background:#ffffff;`;
 }
-async function generateAndSavePdf(html, filename, orientation){
+// PDF'i jsPDF nesnesi olarak üretir (henüz kaydetmez/paylaşmaz) — hem indirme hem de
+// paylaşım fonksiyonları bu ortak adımı kullanır, böylece render mantığı tek yerde kalır.
+async function buildPdfDoc(html, orientation){
   // Varsayılan: dikey (portre). Sadece 'l' (yatay/landscape) açıkça belirtilirse
   // render genişliği ve PDF sayfası A4 yatay ölçülerine göre ayarlanır.
   orientation = orientation === 'l' ? 'l' : 'p';
@@ -8473,9 +8826,34 @@ async function generateAndSavePdf(html, filename, orientation){
     pdf.addImage(imgData,'PNG',0,position,imgWidth,imgHeight);
     heightLeft -= pageHeight;
   }
-  pdf.save(filename);
   root.innerHTML = '';
   root.style.width = '';
+  return pdf;
+}
+async function generateAndSavePdf(html, filename, orientation){
+  const pdf = await buildPdfDoc(html, orientation);
+  pdf.save(filename);
+}
+// TÜM PDF çıktıları için ortak paylaşım fonksiyonu. Mobil tarayıcılarda (Web Share API
+// Level 2 — navigator.canShare ile dosya desteği kontrol edilir) sistemin paylaşım
+// penceresini açar (WhatsApp, e-posta, diğer uygulamalar vb.). Bu API'yi desteklemeyen
+// tarayıcılarda (çoğu masaüstü tarayıcı) sessizce PDF'i indirir ve kullanıcıyı bilgilendirir.
+async function sharePdf(html, filename, orientation){
+  const pdf = await buildPdfDoc(html, orientation);
+  const blob = pdf.output('blob');
+  let file = null;
+  try{ file = new File([blob], filename, {type:'application/pdf'}); }catch(e){ file = null; }
+  if(file && navigator.canShare && navigator.canShare({files:[file]})){
+    try{
+      await navigator.share({files:[file], title: filename});
+      return 'shared';
+    }catch(e){
+      if(e && e.name==='AbortError') return 'cancelled';
+      console.error('Paylaşım hatası, PDF indiriliyor', e);
+    }
+  }
+  pdf.save(filename);
+  return 'downloaded';
 }
 
 // PDF dosya adından aynı isimde bir Excel (.xlsx) dosya adı türetir.
@@ -8530,6 +8908,10 @@ function showPdfPreview(html, filename, orientation){
         <div class="btn-row" style="margin-top:14px;justify-content:flex-end;flex-wrap:wrap;">
           <button class="btn btn-ghost" id="pvClose">Kapat</button>
           <button class="btn btn-ghost" id="pvExcel">Excel'e Aktar</button>
+          <button class="btn btn-ghost" id="pvShare">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.59 13.51l6.83 3.98M15.41 6.51L8.59 10.49"/></svg>
+            Paylaş
+          </button>
           <button class="btn btn-primary" id="pvDownload">PDF İndir</button>
         </div>
       </div>
@@ -8554,6 +8936,21 @@ function showPdfPreview(html, filename, orientation){
   document.getElementById('modalBackdrop').addEventListener('click',(e)=>{ if(e.target.id==='modalBackdrop') cleanupAndClose(); });
   document.getElementById('pvClose').onclick = cleanupAndClose;
   document.getElementById('pvExcel').onclick = ()=> exportHtmlTablesToExcel(previewNode, filename);
+  document.getElementById('pvShare').onclick = async ()=>{
+    const btn = document.getElementById('pvShare');
+    const orig = btn.innerHTML;
+    btn.disabled = true; btn.textContent = 'Hazırlanıyor…';
+    try{
+      const result = await sharePdf(html, filename, orientation);
+      if(result==='shared') showToast('Paylaşıldı.');
+      else if(result==='downloaded') showToast('Cihazınız/tarayıcınız doğrudan paylaşımı desteklemiyor, PDF indirildi.');
+    }catch(e){
+      console.error(e);
+      showToast('Paylaşılırken bir sorun oluştu.');
+    }finally{
+      btn.disabled = false; btn.innerHTML = orig;
+    }
+  };
   document.getElementById('pvDownload').onclick = async ()=>{
     const btn = document.getElementById('pvDownload');
     btn.disabled = true; btn.textContent = 'Hazırlanıyor…';
@@ -8629,7 +9026,8 @@ async function exportMetrajPdf(proj){
 async function exportTeklifPdf(proj, templateTitle){
   templateTitle = templateTitle || 'TEKLİF FORMU';
   showToast('PDF hazırlanıyor…');
-  const total = proj.teklifRows.reduce((s,r)=>s+(parseFloat(r.tutar)||0),0);
+  const aktif = aktifTeklif(proj);
+  const k = teklifKdvliToplam(aktif);
   const tableRows = proj.teklifRows.map(r=>`
     <tr>
       <td style="word-break:break-word;">${esc(r.aciklama)}</td>
@@ -8639,10 +9037,15 @@ async function exportTeklifPdf(proj, templateTitle){
       <td style="text-align:right;font-weight:700;">${fmtMoney(r.tutar)}</td>
     </tr>
   `).join('');
+  // Projede birden fazla teklif varsa, hangi teklife ait olduğunu başlıkta netleştiriyoruz.
+  const teklifAdSatiri = (proj.teklifler && proj.teklifler.length>1) ? `<div style="font-size:11px;color:#345264;">${esc(aktif.ad)}</div>` : '';
 
   const html = `
     ${pdfHeaderHtml(proj)}
-    <div style="font-family:'Outfit',sans-serif;font-weight:700;font-size:15px;letter-spacing:1px;margin-bottom:14px;color:#1C6E8C;text-align:center;">${esc(templateTitle)}</div>
+    <div style="font-family:'Outfit',sans-serif;font-weight:700;font-size:15px;letter-spacing:1px;margin-bottom:2px;color:#1C6E8C;text-align:center;">${esc(templateTitle)}</div>
+    <div style="text-align:center;margin-bottom:14px;">${teklifAdSatiri}</div>
+    ${aktif.gecerlilikTarihi ? `
+    <div style="text-align:right;font-size:10px;color:#345264;margin-bottom:8px;"><b>Teklif Geçerlilik Tarihi:</b> ${fmtDateStr(aktif.gecerlilikTarihi)}</div>` : ''}
     <table style="width:100%;border-collapse:collapse;font-size:10px;table-layout:fixed;">
       <colgroup>
         <col style="width:46%"><col style="width:12%"><col style="width:12%">
@@ -8660,15 +9063,21 @@ async function exportTeklifPdf(proj, templateTitle){
       <tbody>${tableRows || '<tr><td colspan="5" style="padding:10px;text-align:center;color:#345264;">Kayıt yok</td></tr>'}</tbody>
     </table>
     <div style="display:flex;justify-content:flex-end;margin-top:14px;">
-      <div style="min-width:220px;border:1.5px solid #1C6E8C;border-radius:8px;padding:12px 16px;text-align:right;">
-        <div style="font-size:10px;color:#345264;font-weight:700;text-transform:uppercase;">Genel Toplam</div>
-        <div style="font-size:18px;font-weight:800;color:#0B2436;">${fmtMoney(total)}</div>
-      </div>
+      <table style="border-collapse:collapse;font-size:11px;min-width:260px;">
+        <tr><td style="padding:4px 10px;text-align:right;color:#345264;">Ara Toplam (KDV Hariç)</td><td style="padding:4px 0 4px 10px;text-align:right;min-width:110px;">${fmtMoney(k.net)}</td></tr>
+        <tr><td style="padding:4px 10px;text-align:right;color:#345264;">KDV (%${fmtNum(k.oran)})</td><td style="padding:4px 0 4px 10px;text-align:right;">${fmtMoney(k.kdv)}</td></tr>
+        <tr>
+          <td style="padding:10px 10px 4px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;color:#345264;border-top:1.5px solid #1C6E8C;">Genel Toplam (KDV Dahil)</td>
+          <td style="padding:10px 0 4px 10px;text-align:right;font-size:15px;font-weight:800;color:#0B2436;border-top:1.5px solid #1C6E8C;">${fmtMoney(k.brut)}</td>
+        </tr>
+      </table>
     </div>
     ${proj.teklifNote && proj.teklifNote.trim() ? `
     <div style="margin-top:20px;padding:12px 14px;background:#F4FBFA;border:1px solid #1C6E8C55;border-radius:8px;font-size:10px;color:#345264;white-space:pre-wrap;">
       <b style="color:#0B2436;">Not:</b> ${esc(proj.teklifNote)}
     </div>` : ''}
+    ${aktif.gecerlilikTarihi ? `
+    <div style="margin-top:10px;font-size:10px;color:#345264;">Bu teklif <b>${fmtDateStr(aktif.gecerlilikTarihi)}</b> tarihine kadar geçerlidir.</div>` : ''}
     <div style="display:flex;justify-content:space-between;margin-top:70px;">
       <div style="text-align:center;width:45%;">
         <div style="border-top:1px solid #0B2436;padding-top:6px;font-size:10px;">İŞVEREN<br>${esc(proj.employer||'')}</div>
@@ -8679,7 +9088,8 @@ async function exportTeklifPdf(proj, templateTitle){
     </div>
   `;
   const fnamePrefix = templateTitle==='YAPILAN HAKEDİŞ LİSTESİ' ? 'hakedis' : 'teklif';
-  showPdfPreview(html, `${fnamePrefix}-${proj.name.replace(/[^a-z0-9ığüşöç]+/gi,'_')}.pdf`);
+  const teklifAdEki = (proj.teklifler && proj.teklifler.length>1) ? '-'+aktif.ad.replace(/[^a-z0-9ığüşöç]+/gi,'_') : '';
+  showPdfPreview(html, `${fnamePrefix}-${proj.name.replace(/[^a-z0-9ığüşöç]+/gi,'_')}${teklifAdEki}.pdf`);
 }
 
 // Hesaplama Paneli / Malzeme Sonuç Paneli'nden, müşteriye gösterilebilecek sade bir
@@ -8816,6 +9226,20 @@ window.__dnzInitApp = async function init(){
     if(!p.tahsilatlar) p.tahsilatlar = [];
     if(p.manuelIsverenAlacak===undefined || p.manuelIsverenAlacak===null) p.manuelIsverenAlacak = '';
     if(p.teklifOnaylandi===undefined || p.teklifOnaylandi===null) p.teklifOnaylandi = true;
+    // Eski kayıtlarda (çoklu teklif desteğinden önce) proje düz proj.teklifRows/teklifNote
+    // kullanıyordu. Bunları tek elemanlı bir proj.teklifler dizisine taşıyoruz; sonraki
+    // her açılışta aktifTeklif() zaten eksik alanları (kdvOrani, gecerlilikTarihi vb.)
+    // güvenli varsayılanlarla tamamlıyor, bu yüzden burada sadece diziyi oluşturmak yeterli.
+    if(!p.teklifler || !p.teklifler.length){
+      const migT = yeniTeklifKaydi('Teklif 1');
+      migT.teklifRows = p.teklifRows || [];
+      migT.teklifNote = p.teklifNote || '';
+      migT.teklifOnaylandi = p.teklifOnaylandi!==false;
+      migT.olusturmaTarihi = p.createdAt || Date.now();
+      p.teklifler = [migT];
+      p.aktifTeklifId = migT.id;
+    }
+    loadAktifTeklifToProj(p);
     if(!p.masraflar) p.masraflar = [];
     if(!p.currency || !CURRENCY_INFO[p.currency]) p.currency = 'TRY';
     if(p.baslangicTarihi===undefined || p.baslangicTarihi===null) p.baslangicTarihi = '';
