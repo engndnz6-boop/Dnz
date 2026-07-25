@@ -1238,6 +1238,7 @@ function defaultState(){
     imalatSistemleri:[],
     urunler:[],
     imalatCinsiFiyatListesi:[],
+    malzemeAnalizKayitlari:[],
     lastBackupAt:null,
     dirtySinceBackup:false,
     metrajPdfFont:{ baslik:6, metin:6.5, rakam:7.5 },
@@ -1420,6 +1421,8 @@ let ui = {
     {uzunluk:'', aci:90}
   ],
   imalatCalcNot:'',
+  imalatCalcMusteriAd:'',
+  imalatCalcMusteriTel:'',
   imalatCalcPaketTamamla:{},
   globalAramaQuery:'',
   personelHighlightId:null,
@@ -2665,7 +2668,7 @@ function renderGlobalAramaHtml(){
       </h2>
       <p class="hint">Tüm projelerinizdeki <b>her şeyi</b> arayın: proje, personel, metraj satırı, teklif kalemi, masraf, avans/zimmet, tahsilat, yemek ve şantiye günlüğü kayıtları. Bulduğunuz kayda tıkladığınızda ilgili projeye ve bölüme geçilip kayıt kısa süreliğine vurgulanır.</p>
       <div class="field">
-        <input type="text" id="globalAramaInput" value="${esc(ui.globalAramaQuery||'')}" placeholder="Örn: Ahmet Yılmaz, A Blok, çimento, dozer…">
+        <input type="text" id="globalAramaInput" value="${esc(ui.globalAramaQuery||'')}" placeholder="Örn: Engin Deniz, A Blok, çimento, dozer…">
       </div>
       <div id="globalAramaSonuc">${renderGlobalAramaResultsHtml()}</div>
     </div>`;
@@ -4173,7 +4176,7 @@ let imalatMalzemeForm = emptyImalatMalzemeForm();
 // ortaktır — imalatSistemleri ile aynı mantık). Bir sisteme malzeme eklerken "Malzeme Adı"
 // kutusuna bu listeden bir ürün seçilirse, Alış Fiyatı ve Satış Fiyatı otomatik doldurulur;
 // kullanıcı dilerse bu fiyatları elle değiştirebilir.
-function emptyUrunForm(){ return {id:null, ad:'', alisFiyat:'', satisFiyat:''}; }
+function emptyUrunForm(){ return {id:null, ad:'', birim:'', alisFiyat:'', satisFiyat:''}; }
 let urunForm = emptyUrunForm();
 function findUrunByAd(ad){
   if(!ad) return null;
@@ -4239,10 +4242,16 @@ function renderImalatTanimSection(sub){
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
         Ürün Ekle
       </h2>
-      <p class="hint">Kullandığınız ürünleri (ör. "Alçıpan Levha 12.5mm") alış ve satış fiyatlarıyla buraya kaydedin. Bu liste tüm imalat sistemlerinde ortak kullanılır: aşağıda bir sisteme malzeme eklerken "Malzeme Adı" kutusundan bu ürünlerden birini seçtiğinizde, Alış Fiyatı ve Satış Fiyatı otomatik gelir; isterseniz sonradan değiştirebilirsiniz.</p>
+      <p class="hint">Kullandığınız ürünleri (ör. "Alçıpan Levha 12.5mm") birimi, alış ve satış fiyatlarıyla buraya kaydedin. Bu liste tüm imalat sistemlerinde ortak kullanılır: aşağıda bir sisteme malzeme eklerken "Malzeme Adı" kutusundan bu ürünlerden birini seçtiğinizde, Birim, Alış Fiyatı ve Satış Fiyatı otomatik gelir; isterseniz sonradan değiştirebilirsiniz.</p>
       <div class="field-grid">
         <div class="field" style="grid-column:span 2;"><label>Ürün Adı</label>
           <input type="text" id="ur-ad" value="${esc(urunForm.ad)}" placeholder="Örn: Alçıpan Levha 12.5mm">
+        </div>
+        <div class="field"><label>Birim</label>
+          <select id="ur-birim">
+            <option value="">— Seçiniz —</option>
+            ${IMALAT_UNITS.map(u=>`<option value="${u}" ${(urunForm.birim||'')===u?'selected':''}>${esc(UNIT_LABEL[u]||u)}</option>`).join('')}
+          </select>
         </div>
         <div class="field"><label>Alış Fiyatı (TL)</label><input class="mono" type="number" step="any" id="ur-alisFiyat" value="${esc(urunForm.alisFiyat)}"></div>
         <div class="field"><label>Satış Fiyatı (TL)</label><input class="mono" type="number" step="any" id="ur-satisFiyat" value="${esc(urunForm.satisFiyat)}"></div>
@@ -4316,11 +4325,12 @@ function renderUrunTableHtml(){
   if(list.length===0) return `<div class="empty-state">Henüz ürün eklenmedi.</div>`;
   return `
     <table>
-      <thead><tr><th>Ürün</th><th class="num">Alış Fiyatı</th><th class="num">Satış Fiyatı</th><th></th></tr></thead>
+      <thead><tr><th>Ürün</th><th>Birim</th><th class="num">Alış Fiyatı</th><th class="num">Satış Fiyatı</th><th></th></tr></thead>
       <tbody>
         ${list.map(u=>`
           <tr data-id="${u.id}">
             <td>${esc(u.ad)}</td>
+            <td>${esc(UNIT_LABEL[u.birim]||u.birim||'—')}</td>
             <td class="num">${fmtMoney(u.alisFiyat)}</td>
             <td class="num">${fmtMoney(u.satisFiyat)}</td>
             <td>
@@ -4342,9 +4352,11 @@ function renderUrunTableHtml(){
 
 function bindUrunFiyatEvents(){
   const adEl = document.getElementById('ur-ad');
+  const birimEl = document.getElementById('ur-birim');
   const alisEl = document.getElementById('ur-alisFiyat');
   const satisEl = document.getElementById('ur-satisFiyat');
   if(adEl) adEl.addEventListener('input', ()=>{ urunForm.ad = adEl.value; });
+  if(birimEl) birimEl.addEventListener('change', ()=>{ urunForm.birim = birimEl.value; });
   if(alisEl) alisEl.addEventListener('input', ()=>{ urunForm.alisFiyat = alisEl.value; });
   if(satisEl) satisEl.addEventListener('input', ()=>{ urunForm.satisFiyat = satisEl.value; });
   const saveBtn = document.getElementById('btnSaveUrun');
@@ -4359,7 +4371,7 @@ function bindUrunFiyatEvents(){
       const id = tr.dataset.id;
       if(act==='edit'){
         const u = (state.urunler||[]).find(x=>x.id===id);
-        if(u){ urunForm = {id:u.id, ad:u.ad, alisFiyat:u.alisFiyat, satisFiyat:u.satisFiyat}; renderImalatTab(document.getElementById('mainContent')); window.scrollTo({top:0, behavior:'smooth'}); }
+        if(u){ urunForm = {id:u.id, ad:u.ad, birim:u.birim||'', alisFiyat:u.alisFiyat, satisFiyat:u.satisFiyat}; renderImalatTab(document.getElementById('mainContent')); window.scrollTo({top:0, behavior:'smooth'}); }
       } else if(act==='delete'){
         confirmModal('Bu ürünü fiyat listesinden silmek istediğinize emin misiniz?', ()=>{
           state.urunler = (state.urunler||[]).filter(x=>x.id!==id);
@@ -4373,20 +4385,21 @@ function bindUrunFiyatEvents(){
 
 function saveUrun(){
   const ad = (urunForm.ad||'').trim();
+  const birim = urunForm.birim || '';
   const alisFiyat = parseFloat(String(urunForm.alisFiyat).replace(',','.')) || 0;
   const satisFiyat = parseFloat(String(urunForm.satisFiyat).replace(',','.')) || 0;
   if(!ad){ showToast('Lütfen ürün adı girin.'); return; }
   if(!state.urunler) state.urunler = [];
   if(urunForm.id){
     const u = state.urunler.find(x=>x.id===urunForm.id);
-    if(u){ u.ad = ad; u.alisFiyat = alisFiyat; u.satisFiyat = satisFiyat; }
+    if(u){ u.ad = ad; u.birim = birim; u.alisFiyat = alisFiyat; u.satisFiyat = satisFiyat; }
   } else {
     // Aynı isimde (büyük/küçük harf ve boşluk farkı gözetmeksizin) zaten bir ürün varsa
     // yeni bir satır açmak yerine mevcut kaydın fiyatlarını günceller.
     const key = normKey(ad);
     const existing = state.urunler.find(x=>normKey(x.ad)===key);
-    if(existing){ existing.alisFiyat = alisFiyat; existing.satisFiyat = satisFiyat; }
-    else { state.urunler.push({id:uid(), ad, alisFiyat, satisFiyat}); }
+    if(existing){ existing.birim = birim; existing.alisFiyat = alisFiyat; existing.satisFiyat = satisFiyat; }
+    else { state.urunler.push({id:uid(), ad, birim, alisFiyat, satisFiyat}); }
   }
   saveState();
   urunForm = emptyUrunForm();
@@ -4439,12 +4452,23 @@ function renderImalatMalzemeSectionHtml(sistem){
 
 function renderMalzemeTableHtml(sistem){
   if(sistem.malzemeler.length===0) return `<div class="empty-state">Henüz malzeme eklenmedi.</div>`;
+  const lastIdx = sistem.malzemeler.length-1;
   return `
     <table>
-      <thead><tr><th>Malzeme</th><th>Birim</th><th class="num">Sarfiyat</th><th class="num">Ebat</th><th class="num">Paket İçi Adet</th><th>Para Birimi</th><th class="num">Alış Fiyatı</th><th class="num">Satış Fiyatı</th><th></th></tr></thead>
+      <thead><tr><th>Sıra</th><th>Malzeme</th><th>Birim</th><th class="num">Sarfiyat</th><th class="num">Ebat</th><th class="num">Paket İçi Adet</th><th>Para Birimi</th><th class="num">Alış Fiyatı</th><th class="num">Satış Fiyatı</th><th></th></tr></thead>
       <tbody>
-        ${sistem.malzemeler.map(m=>`
+        ${sistem.malzemeler.map((m,i)=>`
           <tr data-id="${m.id}">
+            <td>
+              <div class="row-actions">
+                <button class="icon-btn" data-act="moveup" title="Yukarı Taşı" ${i===0?'disabled':''}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+                </button>
+                <button class="icon-btn" data-act="movedown" title="Aşağı Taşı" ${i===lastIdx?'disabled':''}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
+                </button>
+              </div>
+            </td>
             <td>${esc(m.ad)}</td>
             <td>${esc(UNIT_LABEL[m.birim]||m.birim)}</td>
             <td class="num">${fmtNum(m.sarfiyat)}</td>
@@ -4495,8 +4519,10 @@ function bindImalatMalzemeSectionEvents(sistem){
           const u = matches[i];
           adInput.value = u.ad;
           adInput.dispatchEvent(new Event('input', {bubbles:true}));
+          const birimEl = document.getElementById('m-birim');
           const alisEl = document.getElementById('m-alisFiyat');
           const satisEl = document.getElementById('m-satisFiyat');
+          if(birimEl && u.birim){ birimEl.value = u.birim; birimEl.dispatchEvent(new Event('input', {bubbles:true})); }
           if(alisEl){ alisEl.value = u.alisFiyat; alisEl.dispatchEvent(new Event('input', {bubbles:true})); }
           if(satisEl){ satisEl.value = u.satisFiyat; satisEl.dispatchEvent(new Event('input', {bubbles:true})); }
           adList.style.display = 'none';
@@ -4564,6 +4590,15 @@ function bindImalatMalzemeSectionEvents(sistem){
           saveState(); renderImalatTab(document.getElementById('mainContent'));
           showToast('Malzeme silindi.');
         });
+      } else if(act==='moveup' || act==='movedown'){
+        const idx = sistem.malzemeler.findIndex(x=>x.id===id);
+        const swapWith = act==='moveup' ? idx-1 : idx+1;
+        if(idx<0 || swapWith<0 || swapWith>=sistem.malzemeler.length) return;
+        const tmp = sistem.malzemeler[idx];
+        sistem.malzemeler[idx] = sistem.malzemeler[swapWith];
+        sistem.malzemeler[swapWith] = tmp;
+        saveState();
+        renderImalatTab(document.getElementById('mainContent'));
       }
     });
   });
@@ -4993,6 +5028,15 @@ function renderImalatHesapSection(sub){
     </div>
     <div class="card glass">
       <h2>Malzeme Sonuç Paneli <span id="hesapSistemAdi" style="color:var(--aqua-dim)"></span></h2>
+      <p class="hint">Analiz sonucunu bir müşteriye ait olarak saklamak isterseniz, müşteri adı soyadı ve (isteğe bağlı) telefon numarasını girip "Analiz Sonucunu Müşteri Adına Kaydet" butonuna basın. Kaydedilen sonuçlara aşağıdaki "Kayıtlı Analiz Sonuçları" listesinden ulaşabilirsiniz.</p>
+      <div class="field-grid" style="grid-template-columns:repeat(2,minmax(160px,1fr));">
+        <div class="field"><label>Müşteri Adı Soyadı</label>
+          <input type="text" id="h-musteriAd" value="${esc(ui.imalatCalcMusteriAd||'')}" placeholder="Örn: Engin Deniz">
+        </div>
+        <div class="field"><label>Telefon No</label>
+          <input type="text" id="h-musteriTel" value="${esc(ui.imalatCalcMusteriTel||'')}" placeholder="Örn: 0532 000 00 00">
+        </div>
+      </div>
       <div class="table-scroll" id="hesapSonucWrap"></div>
       <div class="totals-strip" id="hesapTotals"></div>
       <div class="btn-row">
@@ -5000,7 +5044,16 @@ function renderImalatHesapSection(sub){
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M9 15h6M9 11h2"/></svg>
           Teklif Analizi Çıktısı Al (PDF)
         </button>
+        <button class="btn btn-ghost" id="btnAnalizKaydet">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg>
+          Analiz Sonucunu Müşteri Adına Kaydet
+        </button>
       </div>
+    </div>
+    <div class="card glass">
+      <h2>Kayıtlı Analiz Sonuçları <span class="badge">${(state.malzemeAnalizKayitlari||[]).length}</span></h2>
+      <p class="hint">Daha önce bir müşteri adına kaydettiğiniz analiz sonuçları burada listelenir.</p>
+      <div class="table-scroll" id="analizKayitWrap">${renderAnalizKayitlariHtml()}</div>
     </div>
   `;
   document.getElementById('h-sistem').addEventListener('change', e=>{
@@ -5083,8 +5136,182 @@ function renderImalatHesapSection(sub){
   document.getElementById('h-not').addEventListener('input', e=>{
     ui.imalatCalcNot = e.target.value;
   });
+  document.getElementById('h-musteriAd').addEventListener('input', e=>{
+    ui.imalatCalcMusteriAd = e.target.value;
+  });
+  document.getElementById('h-musteriTel').addEventListener('input', e=>{
+    ui.imalatCalcMusteriTel = e.target.value;
+  });
   document.getElementById('btnHesapCiktiPdf').onclick = ()=> exportHesapAnalizPdf();
+  document.getElementById('btnAnalizKaydet').onclick = ()=> saveAnalizKaydi(sub);
+  bindAnalizKayitlariEvents(sub);
   updateHesapPanel();
+}
+
+// Kayıtlı Analiz Sonuçları kartındaki tabloyu HTML olarak üretir.
+function renderAnalizKayitlariHtml(){
+  const list = (state.malzemeAnalizKayitlari||[]).slice().sort((a,b)=>b.tarih-a.tarih);
+  if(list.length===0) return `<div class="empty-state">Henüz kaydedilmiş analiz sonucu yok.</div>`;
+  return `
+    <table>
+      <thead><tr><th>Müşteri</th><th>Telefon</th><th>Sistem</th><th class="num">Ölçü</th><th class="num">Toplam Tutar</th><th>Tarih</th><th></th></tr></thead>
+      <tbody>
+        ${list.map(k=>{
+          const curs = Object.keys(k.toplamlar||{});
+          const toplamStr = curs.length ? curs.map(cur=>fmtMoney(k.toplamlar[cur].toplamTutar, cur)).join(' / ') : '—';
+          return `
+          <tr data-id="${k.id}">
+            <td>${esc(k.musteriAd)}</td>
+            <td>${esc(k.musteriTel||'—')}</td>
+            <td>${esc(k.sistemAd)}</td>
+            <td class="num">${fmtNum(k.deger)} ${esc(k.birim)}</td>
+            <td class="num">${toplamStr}</td>
+            <td>${esc(new Date(k.tarih).toLocaleDateString('tr-TR'))}</td>
+            <td>
+              <div class="row-actions">
+                <button class="icon-btn" data-act="pdf" title="PDF Al">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M9 15h6M9 11h2"/></svg>
+                </button>
+                <button class="icon-btn danger" data-act="delete" title="Sil">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0l-1 14a2 2 0 01-2 2H7a2 2 0 01-2-2L4 6h16z"/></svg>
+                </button>
+              </div>
+            </td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>
+  `;
+}
+
+function bindAnalizKayitlariEvents(sub){
+  const wrap = document.getElementById('analizKayitWrap');
+  if(!wrap) return;
+  wrap.querySelectorAll('tr[data-id]').forEach(tr=>{
+    tr.addEventListener('click',(e)=>{
+      const act = e.target.closest('[data-act]')?.dataset.act;
+      if(!act) return;
+      const id = tr.dataset.id;
+      const kayit = (state.malzemeAnalizKayitlari||[]).find(x=>x.id===id);
+      if(!kayit) return;
+      if(act==='pdf'){
+        exportAnalizKaydiPdf(kayit);
+      } else if(act==='delete'){
+        confirmModal(`"${kayit.musteriAd}" adına kayıtlı bu analiz sonucunu silmek istediğinize emin misiniz?`, ()=>{
+          state.malzemeAnalizKayitlari = (state.malzemeAnalizKayitlari||[]).filter(x=>x.id!==id);
+          saveState();
+          renderImalatHesapSection(sub);
+          showToast('Kayıtlı analiz sonucu silindi.');
+        });
+      }
+    });
+  });
+}
+
+// Malzeme Sonuç Paneli'nde girilmiş olan mevcut hesaplamayı ve müşteri bilgilerini
+// state.malzemeAnalizKayitlari listesine kalıcı olarak kaydeder. Sistemdeki malzeme
+// fiyatları sonradan değişse bile, kaydedilen analiz o anki miktar/fiyat/tutar
+// bilgileriyle sabit kalır (anlık bir "kopya" olarak saklanır).
+function saveAnalizKaydi(sub){
+  const sistem = state.imalatSistemleri.find(s=>s.id===ui.imalatCalcSistemId) || null;
+  if(!sistem){ showToast('Lütfen önce bir imalat sistemi seçin.'); return; }
+  if(!sistem.malzemeler.length){ showToast('Bu sistemde henüz malzeme tanımlı değil.'); return; }
+  const parsed = getHesapDeger();
+  if(parsed.value==null){ showToast('Lütfen hesaplama için bir ölçü/alan girin.'); return; }
+  const musteriAd = (ui.imalatCalcMusteriAd||'').trim();
+  if(!musteriAd){ showToast('Lütfen müşteri adı soyadı girin.'); return; }
+  const musteriTel = (ui.imalatCalcMusteriTel||'').trim();
+  const deger = parsed.value;
+  const basisLabel = parsed.unit==='mt' ? 'mt' : 'm²';
+  const kalemler = sistem.malzemeler.map(m=>{
+    const opts = getPaketOpts(m.id);
+    const r = computeMalzemeSonuc(m, deger, opts);
+    const birimLabel = UNIT_LABEL[m.birim]||m.birim;
+    return { ad:m.ad, miktar:r.miktar, birim:birimLabel, birimFiyat:m.satisFiyat, tutar:r.tutar, paraBirimi:r.paraBirimi };
+  });
+  const toplamlar = computeHesapToplamlar(sistem, deger);
+  if(!state.malzemeAnalizKayitlari) state.malzemeAnalizKayitlari = [];
+  state.malzemeAnalizKayitlari.push({
+    id: uid(),
+    tarih: Date.now(),
+    musteriAd, musteriTel,
+    sistemAd: sistem.ad,
+    deger, birim: basisLabel,
+    kalemler,
+    toplamlar: toplamlar.byCurrency,
+    not: ui.imalatCalcNot || ''
+  });
+  saveState();
+  renderImalatHesapSection(sub);
+  showToast(`Analiz sonucu "${musteriAd}" adına kaydedildi.`);
+}
+
+// Kayıtlı bir analiz sonucundan (o anki değerlerle, ekrandaki güncel sistemden
+// BAĞIMSIZ olarak) müşteriye gösterilebilecek bir PDF üretir.
+function exportAnalizKaydiPdf(kayit){
+  showToast('PDF hazırlanıyor…');
+  const tableRows = (kayit.kalemler||[]).map(k=>`
+    <tr>
+      <td style="word-break:break-word;">${esc(k.ad)}</td>
+      <td style="text-align:right;">${fmtNum(k.miktar)}</td>
+      <td>${esc(k.birim)}</td>
+      <td style="text-align:right;">${fmtMoney(k.birimFiyat, k.paraBirimi)}</td>
+      <td style="text-align:right;font-weight:700;">${fmtMoney(k.tutar, k.paraBirimi)}</td>
+    </tr>
+  `).join('');
+  const curs = Object.keys(kayit.toplamlar||{});
+  const toplamKutulariHtml = curs.map(cur=>{
+    const t = kayit.toplamlar[cur];
+    const birimMaliyet = computeBirimMaliyet(t.toplamTutar, kayit.deger);
+    const curSuffix = curs.length>1 ? ` (${esc(CURRENCY_INFO[cur].label)})` : '';
+    return `
+      ${birimMaliyet!=null ? `
+      <div style="min-width:180px;border:1.5px solid #1C6E8C55;border-radius:8px;padding:12px 16px;text-align:right;">
+        <div style="font-size:10px;color:#345264;font-weight:700;text-transform:uppercase;">Birim Maliyet${curSuffix}</div>
+        <div style="font-size:15px;font-weight:800;color:#0B2436;">${fmtMoney(birimMaliyet, cur)} / ${esc(kayit.birim)}</div>
+      </div>` : ''}
+      <div style="min-width:220px;border:1.5px solid #1C6E8C;border-radius:8px;padding:12px 16px;text-align:right;">
+        <div style="font-size:10px;color:#345264;font-weight:700;text-transform:uppercase;">Genel Toplam${curSuffix}</div>
+        <div style="font-size:18px;font-weight:800;color:#0B2436;">${fmtMoney(t.toplamTutar, cur)}</div>
+      </div>`;
+  }).join('');
+  const musteriSatiri = [
+    kayit.musteriAd ? `Müşteri: ${esc(kayit.musteriAd)}` : '',
+    kayit.musteriTel ? `Tel: ${esc(kayit.musteriTel)}` : ''
+  ].filter(Boolean).join(' &nbsp;•&nbsp; ');
+  const html = `
+    ${pdfHeaderHtmlSimple('Teklif Analizi')}
+    <div style="font-family:'Outfit',sans-serif;font-weight:700;font-size:15px;letter-spacing:1px;margin-bottom:6px;color:#1C6E8C;text-align:center;">TEKLİF ANALİZİ</div>
+    <div style="text-align:center;font-size:10px;color:#345264;margin-bottom:4px;">
+      ${esc(kayit.sistemAd)} &nbsp;•&nbsp; Hesaplanan Ölçü: ${fmtNum(kayit.deger)} ${esc(kayit.birim)}
+    </div>
+    ${musteriSatiri ? `<div style="text-align:center;font-size:10px;color:#0B2436;font-weight:700;margin-bottom:14px;">${musteriSatiri}</div>` : '<div style="margin-bottom:14px;"></div>'}
+    <table style="width:100%;border-collapse:collapse;font-size:10px;table-layout:fixed;">
+      <colgroup>
+        <col style="width:32%"><col style="width:18%"><col style="width:14%">
+        <col style="width:18%"><col style="width:18%">
+      </colgroup>
+      <thead>
+        <tr style="background:#EAF6F5;">
+          <th style="text-align:left;padding:7px 6px;border-bottom:1.5px solid #1C6E8C;">Malzeme</th>
+          <th style="text-align:right;padding:7px 6px;border-bottom:1.5px solid #1C6E8C;">Miktar</th>
+          <th style="text-align:left;padding:7px 6px;border-bottom:1.5px solid #1C6E8C;">Birim</th>
+          <th style="text-align:right;padding:7px 6px;border-bottom:1.5px solid #1C6E8C;">Birim Fiyat</th>
+          <th style="text-align:right;padding:7px 6px;border-bottom:1.5px solid #1C6E8C;">Tutar</th>
+        </tr>
+      </thead>
+      <tbody>${tableRows || '<tr><td colspan="5" style="padding:10px;text-align:center;color:#345264;">Kayıt yok</td></tr>'}</tbody>
+    </table>
+    <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:14px;flex-wrap:wrap;">
+      ${toplamKutulariHtml}
+    </div>
+    ${kayit.not && kayit.not.trim() ? `
+    <div style="margin-top:20px;padding:12px 14px;background:#F4FBFA;border:1px solid #1C6E8C55;border-radius:8px;font-size:10px;color:#345264;white-space:pre-wrap;">
+      <b style="color:#0B2436;">Not:</b> ${esc(kayit.not)}
+    </div>` : ''}
+    <div style="margin-top:36px;font-size:9px;color:#8096A3;">DNZ Metraj &amp; Teklif Yönetimi ile oluşturulmuştur.</div>
+  `;
+  showPdfPreview(html, `teklif-analizi-${(kayit.musteriAd||kayit.sistemAd).replace(/[^a-z0-9ığüşöç]+/gi,'_')}.pdf`);
 }
 
 // Aktif ui durumuna göre (tekli ölçü / çoklu kenar toplamı / poligon alan) hesaplamada
@@ -5358,7 +5585,7 @@ function renderPersonelTab(main, proj){
       </h2>
       <div class="field-grid">
         <div class="field" style="grid-column:span 2;"><label>Adı Soyadı</label>
-          <input type="text" id="p-adSoyad" value="${esc(personelForm.adSoyad)}" placeholder="Örn: Ahmet Yılmaz">
+          <input type="text" id="p-adSoyad" value="${esc(personelForm.adSoyad)}" placeholder="Örn: Engin Deniz">
         </div>
         <div class="field" style="grid-column:span 2;"><label>Baba Adı</label>
           <input type="text" id="p-babaAdi" value="${esc(personelForm.babaAdi)}" placeholder="Örn: Mehmet">
@@ -5370,7 +5597,7 @@ function renderPersonelTab(main, proj){
           <input class="mono" type="text" id="p-banka" value="${esc(personelForm.banka)}" placeholder="TR__ ____ ____ ____ ____ ____ __">
         </div>
         <div class="field"><label>Pozisyonu</label>
-          <input type="text" id="p-pozisyon" value="${esc(personelForm.pozisyon)}" placeholder="Örn: Kalıpçı, Demirci, Ustabaşı">
+          <input type="text" id="p-pozisyon" value="${esc(personelForm.pozisyon)}" placeholder="Örn: Alçıpancı, Demirci, Ustabaşı">
         </div>
         <div class="field"><label>İşe Giriş Tarihi</label>
           <input type="date" id="p-girisTarihi" value="${esc(personelForm.girisTarihi)}">
@@ -9212,6 +9439,7 @@ window.__dnzInitApp = async function init(){
   // Eski kayıtlarda (bu modüller eklenmeden önce oluşturulmuş projelerde) eksik
   // alanları tamamla, böylece kod hiçbir yerde undefined'a takılmasın.
   if(!state.imalatCinsiFiyatListesi) state.imalatCinsiFiyatListesi = [];
+  if(!state.malzemeAnalizKayitlari) state.malzemeAnalizKayitlari = [];
   if(!state.company) state.company = { name:'', logo:'' };
   if(state.company.vergiDairesi===undefined || state.company.vergiDairesi===null) state.company.vergiDairesi = '';
   if(state.company.vergiNo===undefined || state.company.vergiNo===null) state.company.vergiNo = '';
