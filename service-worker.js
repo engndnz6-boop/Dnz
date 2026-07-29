@@ -1,12 +1,9 @@
-/* DNZ PWA service worker — yalnızca http(s) isteklerini önbelleğe alır */
-const CACHE_NAME = 'dnz-cache-v2';
+/* DNZ PWA — yalnızca aynı origin (kendi site) GET isteklerini yönetir */
+const CACHE_NAME = 'dnz-cache-v3';
 
-function isCacheableRequest(request){
+function isSameOrigin(url){
   try{
-    const url = new URL(request.url);
-    if(url.protocol !== 'http:' && url.protocol !== 'https:') return false;
-    if(url.protocol === 'chrome-extension:') return false;
-    return true;
+    return new URL(url).origin === self.location.origin;
   }catch(e){
     return false;
   }
@@ -15,12 +12,9 @@ function isCacheableRequest(request){
 self.addEventListener('install', (event)=>{
   self.skipWaiting();
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache)=>{
-      return cache.addAll([
-        './',
-        './index.html'
-      ]).catch(()=>{ /* offline ilk kurulumda bazı dosyalar eksik olabilir */ });
-    })
+    caches.open(CACHE_NAME).then((cache)=>
+      cache.addAll(['./', './index.html']).catch(()=>{})
+    )
   );
 });
 
@@ -35,25 +29,26 @@ self.addEventListener('activate', (event)=>{
 self.addEventListener('fetch', (event)=>{
   const request = event.request;
   if(request.method !== 'GET') return;
-  if(!isCacheableRequest(request)) return;
+  // Uzantı / analytics / CDN — service worker'a hiç sokma
+  if(!isSameOrigin(request.url)) return;
 
-  event.respondWith(
-    caches.open(CACHE_NAME).then(async (cache)=>{
-      try{
-        const networkResponse = await fetch(request);
-        if(networkResponse && networkResponse.ok && isCacheableRequest(request)){
-          try{ await cache.put(request, networkResponse.clone()); }catch(_){ /* chrome-extension vb. atla */ }
-        }
-        return networkResponse;
-      }catch(e){
-        const cached = await cache.match(request);
-        if(cached) return cached;
-        if(request.mode === 'navigate'){
-          const fallback = await cache.match('./index.html');
-          if(fallback) return fallback;
-        }
-        throw e;
+  event.respondWith((async ()=>{
+    const cache = await caches.open(CACHE_NAME);
+    try{
+      const networkResponse = await fetch(request);
+      if(networkResponse && networkResponse.ok){
+        try{ await cache.put(request, networkResponse.clone()); }catch(_){}
       }
-    })
-  );
+      return networkResponse;
+    }catch(_){
+      const cached = await cache.match(request);
+      if(cached) return cached;
+      if(request.mode === 'navigate'){
+        const fallback = await cache.match('./index.html');
+        if(fallback) return fallback;
+      }
+      // Ağ yok + cache yok: boş 503 (uncaught TypeError üretme)
+      return new Response('', { status: 503, statusText: 'Offline' });
+    }
+  })());
 });
