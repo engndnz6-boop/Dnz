@@ -2533,6 +2533,32 @@ function getImalatCatalogPayload(s){
     imalatCinsiFiyatListesi: Array.isArray(s.imalatCinsiFiyatListesi) ? s.imalatCinsiFiyatListesi : []
   };
 }
+// Ortak katalog / eski yedeklerde malzeme dizisi eksik olabilir; render çökmemesi için tamamla.
+function normalizeImalatCatalogState(s){
+  s = s || state;
+  if(!Array.isArray(s.imalatSistemleri)) s.imalatSistemleri = [];
+  if(!Array.isArray(s.urunler)) s.urunler = [];
+  if(!Array.isArray(s.imalatCinsiFiyatListesi)) s.imalatCinsiFiyatListesi = [];
+  s.imalatSistemleri.forEach(sys=>{
+    if(!sys || typeof sys !== 'object') return;
+    if(!Array.isArray(sys.malzemeler)) sys.malzemeler = [];
+    if(!sys.id) sys.id = uid();
+    if(!sys.ad) sys.ad = 'İsimsiz Sistem';
+    sys.uygulamaTipi = normalizeUygulamaTipi(sys.uygulamaTipi);
+    sys.malzemeler.forEach(m=>{
+      if(!m || typeof m !== 'object') return;
+      if(!m.id) m.id = uid();
+      m.urunTipi = normalizeUrunTipleri(m.urunTipi);
+      if(!m.tasiyiciAyarlari || typeof m.tasiyiciAyarlari !== 'object') m.tasiyiciAyarlari = {};
+      if(!m.tipAyarlari || typeof m.tipAyarlari !== 'object') m.tipAyarlari = {};
+      if(!m.paraBirimi || !CURRENCY_INFO[m.paraBirimi]) m.paraBirimi = 'TRY';
+    });
+  });
+  s.urunler.forEach(u=>{
+    if(!u || typeof u !== 'object') return;
+    if(!u.id) u.id = uid();
+  });
+}
 function imalatCatalogHasData(catalog){
   if(!catalog || typeof catalog !== 'object') return false;
   return (catalog.imalatSistemleri&&catalog.imalatSistemleri.length)
@@ -2559,6 +2585,7 @@ function applyImalatCatalogToState(catalog, opts){
       }
     }
   });
+  normalizeImalatCatalogState(state);
   if(changed && opts.render !== false){
     try{
       if(ui && ui.tab==='imalat') renderMain();
@@ -2572,6 +2599,7 @@ async function persistImalatCatalogToCloud(){
   if(typeof window.dnzCanEditImalatCatalog === 'function' && !window.dnzCanEditImalatCatalog()){
     return false; // yalnız katalog sahibi yazar
   }
+  normalizeImalatCatalogState(state);
   const payload = getImalatCatalogPayload(state);
   const json = JSON.stringify(payload);
   if(json === lastImalatCatalogJsonSent) return true;
@@ -5565,6 +5593,7 @@ function findUrunByAd(ad){
 function renderImalatTab(main){
   if(!ui.imalatSubTab) ui.imalatSubTab = 'tanim';
   if(ui.imalatSubTab==='sema') ui.imalatSubTab = 'hesap';
+  normalizeImalatCatalogState(state);
   main.innerHTML = `
     <div class="card glass">
       <h2>
@@ -5599,8 +5628,9 @@ function renderImalatTab(main){
 
 /* ---- Bölüm 1: Sistem ve malzeme tanımı ---- */
 function renderImalatTanimSection(sub){
+  normalizeImalatCatalogState(state);
   const filterTip = ui.imalatTanimFilterTip || 'all';
-  const allSistemler = state.imalatSistemleri.slice().sort((a,b)=>{
+  const allSistemler = (state.imalatSistemleri||[]).slice().sort((a,b)=>{
     const ta = getSistemUygulamaTipi(a), tb = getSistemUygulamaTipi(b);
     if(ta!==tb) return IMALAT_UYGULAMA_TIPLERI.findIndex(t=>t.id===ta) - IMALAT_UYGULAMA_TIPLERI.findIndex(t=>t.id===tb);
     return a.ad.localeCompare(b.ad,'tr');
@@ -5687,7 +5717,7 @@ function renderImalatTanimSection(sub){
           <div class="project-item ${s.id===ui.imalatSelectedId?'active':''}" data-id="${s.id}">
             <div class="pinfo">
               <b>${esc(s.ad)}</b>
-              <span>${s.malzemeler.length} malzeme kalemi</span>
+              <span>${(s.malzemeler||[]).length} malzeme kalemi</span>
             </div>
             <select class="sistem-tip-select" data-act="set-tip" title="Uygulama tipini değiştir" aria-label="Uygulama tipi">
               ${IMALAT_UYGULAMA_TIPLERI.map(t=>`<option value="${t.id}" ${tip===t.id?'selected':''}>${esc(t.label)}</option>`).join('')}
@@ -5955,20 +5985,21 @@ function renderImalatMalzemeSectionHtml(sistem){
       </div>
     </div>
     <div class="card glass">
-      <h2>Malzeme Listesi <span class="badge">${sistem.malzemeler.length}</span></h2>
+      <h2>Malzeme Listesi <span class="badge">${(sistem.malzemeler||[]).length}</span></h2>
       <div class="table-scroll" id="malzemeTableWrap">${renderMalzemeTableHtml(sistem)}</div>
     </div>
   `;
 }
 
 function renderMalzemeTableHtml(sistem){
-  if(sistem.malzemeler.length===0) return `<div class="empty-state">Henüz malzeme eklenmedi.</div>`;
-  const lastIdx = sistem.malzemeler.length-1;
+  const malzemeler = sistem.malzemeler || [];
+  if(malzemeler.length===0) return `<div class="empty-state">Henüz malzeme eklenmedi.</div>`;
+  const lastIdx = malzemeler.length-1;
   return `
     <table>
       <thead><tr><th>Sıra</th><th>Malzeme</th><th>Ürün Tipi</th><th class="num">Paket İçi Adet</th><th>Para Birimi</th><th class="num">Alış Fiyatı</th><th class="num">Satış Fiyatı</th><th></th></tr></thead>
       <tbody>
-        ${sistem.malzemeler.map((m,i)=>`
+        ${malzemeler.map((m,i)=>`
           <tr data-id="${m.id}">
             <td>
               <div class="row-actions">
@@ -5988,7 +6019,7 @@ function renderMalzemeTableHtml(sistem){
               ${renderTipAyarOzetHtml(m, getSistemUygulamaTipi(sistem))}
             </td>
             <td class="num">${m.paketAdet? fmtNum(m.paketAdet) : '—'}</td>
-            <td>${esc(CURRENCY_INFO[m.paraBirimi||'TRY'].name)}</td>
+            <td>${esc(CURRENCY_INFO[(m.paraBirimi && CURRENCY_INFO[m.paraBirimi]) ? m.paraBirimi : 'TRY'].name)}</td>
             <td class="num">${fmtMoney(m.alisFiyat, m.paraBirimi)}</td>
             <td class="num">${fmtMoney(m.satisFiyat, m.paraBirimi)}</td>
             <td>
@@ -6242,6 +6273,7 @@ function saveImalatSistem(){
 
 function saveImalatMalzeme(sistem){
   if(!assertCanEditImalatCatalog()) return;
+  if(!Array.isArray(sistem.malzemeler)) sistem.malzemeler = [];
   const ad = (imalatMalzemeForm.ad||'').trim();
   if(!ad){ showToast('Lütfen malzeme adı girin.'); return; }
   const tips = normalizeUrunTipleri(imalatMalzemeForm.urunTipi);
@@ -6342,7 +6374,7 @@ function thinSemaPoints(pts, step, maxN){
   return out;
 }
 function renderSemaTipLegendHtml(sistem){
-  if(!sistem || !sistem.malzemeler.length) return '';
+  if(!sistem || !(sistem.malzemeler||[]).length) return '';
   const used = new Set();
   sistemMalzemeleriHesap(sistem).forEach(m=> normalizeUrunTipleri(m.urunTipi).forEach(id=>used.add(id)));
   if(used.size===0) return '';
@@ -8517,7 +8549,8 @@ function onPoligonVertexPointerDown(e){
 }
 
 function renderImalatHesapSection(sub){
-  const sistemler = state.imalatSistemleri.slice().sort((a,b)=>a.ad.localeCompare(b.ad,'tr'));
+  normalizeImalatCatalogState(state);
+  const sistemler = (state.imalatSistemleri||[]).slice().sort((a,b)=>a.ad.localeCompare(b.ad,'tr'));
   if(ui.imalatCalcSistemId && !sistemler.find(s=>s.id===ui.imalatCalcSistemId)) ui.imalatCalcSistemId = null;
   const aktifSistem = sistemler.find(s=>s.id===ui.imalatCalcSistemId) || null;
   syncCalcModeForSistem(aktifSistem);
@@ -13851,6 +13884,7 @@ window.__dnzInitApp = async function init(){
   if(!state.malzemeAnalizKayitlari) state.malzemeAnalizKayitlari = [];
   if(!state.urunler) state.urunler = [];
   if(!state.imalatSistemleri) state.imalatSistemleri = [];
+  normalizeImalatCatalogState(state);
   if(!state.company) state.company = { name:'', logo:'' };
   if(state.company.vergiDairesi===undefined || state.company.vergiDairesi===null) state.company.vergiDairesi = '';
   if(state.company.vergiNo===undefined || state.company.vergiNo===null) state.company.vergiNo = '';
