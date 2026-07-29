@@ -187,8 +187,8 @@
   // Firma state'inden bağımsız: tanımlı imalat sistemleri, ürün fiyat listesi ve
   // imalat cinsi fiyatları her giriş yapan kullanıcıda aynıdır.
   const GLOBAL_IMALAT_PATH = 'globalCatalog/imalat';
+  // Yazma yetkisi bu e-postaya kilitli (UI'da gösterilmez).
   const IMALAT_CATALOG_OWNER_EMAIL = 'dnz.engindeniz@gmail.com';
-  window.DNZ_IMALAT_CATALOG_OWNER_EMAIL = IMALAT_CATALOG_OWNER_EMAIL;
   window.dnzCanEditImalatCatalog = function(){
     const user = auth.currentUser;
     if(!user || !user.email) return false;
@@ -526,9 +526,6 @@
         window.__dnzInitApp();
       }
       startRealtimeSync(companyId);
-      if(typeof window.dnzStartImalatCatalogSync === 'function'){
-        window.dnzStartImalatCatalogSync();
-      }
     } else {
       stopRealtimeSync();
       if(typeof window.dnzStopImalatCatalogSync === 'function'){
@@ -2586,6 +2583,15 @@ async function persistImalatCatalogToCloud(){
 window.dnzApplyRemoteImalatCatalog = function(catalog){
   if(!catalog || typeof catalog !== 'object') return;
   const payload = getImalatCatalogPayload(catalog);
+  // Boş bulut kataloğu, yereldeki dolu veriyi silmesin
+  if(!imalatCatalogHasData(payload)){
+    if(imalatCatalogHasData(getImalatCatalogPayload(state)) && canEditImalatCatalog()){
+      // Yönetici: yerel tanımları buluta geri yükle
+      imalatCatalogSeedAttempted = false;
+      window.dnzSeedImalatCatalogIfEmpty();
+    }
+    return;
+  }
   const json = JSON.stringify(payload);
   if(json === lastImalatCatalogJsonSent) return;
   if(json === JSON.stringify(getImalatCatalogPayload(state))){
@@ -2603,14 +2609,14 @@ window.dnzApplyRemoteImalatCatalog = function(catalog){
   }
 };
 window.dnzSeedImalatCatalogIfEmpty = function(){
-  if(imalatCatalogSeedAttempted) return;
-  imalatCatalogSeedAttempted = true;
   if(typeof window.dnzCanEditImalatCatalog === 'function' && !window.dnzCanEditImalatCatalog()) return;
   const local = getImalatCatalogPayload(state);
   if(!imalatCatalogHasData(local)) return;
-  // Bulut boşsa bu cihazdaki mevcut tanımları ortak kataloğa ilk kez yükle
+  if(imalatCatalogSeedAttempted) return;
+  imalatCatalogSeedAttempted = true;
   persistImalatCatalogToCloud().then(ok=>{
     if(ok) showToast('İmalat sistemleri ortak kataloğa yüklendi.');
+    else imalatCatalogSeedAttempted = false;
   });
 };
 
@@ -2619,8 +2625,23 @@ function canEditImalatCatalog(){
 }
 function assertCanEditImalatCatalog(){
   if(canEditImalatCatalog()) return true;
-  showToast('Ortak imalat kataloğunu yalnızca ' + (window.DNZ_IMALAT_CATALOG_OWNER_EMAIL||'katalog sahibi') + ' düzenleyebilir.');
+  showToast('Düzenleme yalnızca yönetici hesabına açıktır.');
   return false;
+}
+async function recoverImalatCatalogFromLocalCache(){
+  // Firma bulutu imalat alanlarını taşımıyor; tarayıcı önbelleğinde kaldıysa geri al
+  if(imalatCatalogHasData(getImalatCatalogPayload(state))) return false;
+  try{
+    const raw = localStorage.getItem(currentLsCacheKey());
+    if(!raw) return false;
+    const parsed = JSON.parse(raw);
+    const cat = getImalatCatalogPayload(parsed);
+    if(!imalatCatalogHasData(cat)) return false;
+    applyImalatCatalogToState(cat, { render:false });
+    return true;
+  }catch(e){
+    return false;
+  }
 }
 
 // Ham kayıt: state'i olduğu gibi depolar, "yedeklendi" bayrağına dokunmaz.
@@ -5547,7 +5568,7 @@ function renderImalatTab(main){
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg>
         İmalat Sistemleri
       </h2>
-      <p class="hint">Önce bir imalat sistemi tanımlayıp içine malzeme listesi ekleyin. Sonra <b>Hesaplama Paneli</b>nden ölçü girerek miktarları hesaplayın. Tanımlı sistemler ve fiyatlar tüm kullanıcılarda ortaktır; düzenleme yalnızca <b>${esc(window.DNZ_IMALAT_CATALOG_OWNER_EMAIL||'katalog sahibi')}</b> hesabına açıktır.${canEditImalatCatalog()?'':' <span style="color:var(--coral,#E8776B);">Bu hesap salt okunur.</span>'}</p>
+      <p class="hint">Önce bir imalat sistemi tanımlayıp içine malzeme listesi ekleyin. Sonra <b>Hesaplama Paneli</b>nden ölçü girerek miktarları hesaplayın. Tanımlı sistemler ve fiyatlar tüm kullanıcılarda ortaktır; <b>düzenleme yalnızca yönetici hesabına açıktır</b>.${canEditImalatCatalog()?'':' <span style="color:var(--coral,#E8776B);">Bu hesap salt okunur.</span>'}</p>
       <div class="report-subnav" id="imalatSubnav">
         <button class="report-subtab-btn ripple-el-host ${ui.imalatSubTab==='tanim'?'active':''}" data-isub="tanim">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
@@ -5645,6 +5666,13 @@ function renderImalatTanimSection(sub){
     </div>
     <div class="card glass">
       <h2>Tanımlı İmalat Sistemleri <span class="badge">${allSistemler.length}</span></h2>
+      ${canEditImalatCatalog() ? `
+      <div class="btn-row" style="margin:0 0 10px;">
+        <button type="button" class="btn btn-ghost" id="btnPublishImalatCatalog" title="Yerel tanımları tüm kullanıcılara yayınla">
+          Ortak Kataloğu Yayınla
+        </button>
+        <span class="hint" style="margin:0;font-size:0.72rem;">Sistem/fiyat değişikliklerinden sonra diğer kullanıcıların görmesi için yayınlayın (kayıt da otomatik yayınlar).</span>
+      </div>` : ''}
       <div class="report-subnav" id="sistemTipFilter" style="margin:0 0 12px;">
         <button type="button" class="report-subtab-btn ripple-el-host ${filterTip==='all'?'active':''}" data-tip-filter="all">Tümü</button>
         ${IMALAT_UYGULAMA_TIPLERI.map(t=>`<button type="button" class="report-subtab-btn ripple-el-host ${filterTip===t.id?'active':''}" data-tip-filter="${t.id}">${esc(t.label)} <span class="badge" style="margin-left:4px;">${allSistemler.filter(s=>getSistemUygulamaTipi(s)===t.id).length}</span></button>`).join('')}
@@ -5677,6 +5705,23 @@ function renderImalatTanimSection(sub){
     ${selected ? renderImalatMalzemeSectionHtml(selected) : ''}
   `;
   document.getElementById('is-ad').addEventListener('input', e=>{ imalatSistemForm.ad = e.target.value; });
+  const pubBtn = document.getElementById('btnPublishImalatCatalog');
+  if(pubBtn){
+    pubBtn.onclick = async ()=>{
+      if(!assertCanEditImalatCatalog()) return;
+      await recoverImalatCatalogFromLocalCache();
+      if(!imalatCatalogHasData(getImalatCatalogPayload(state))){
+        showToast('Yayınlanacak imalat sistemi / ürün bulunamadı.');
+        return;
+      }
+      imalatCatalogSeedAttempted = false;
+      lastImalatCatalogJsonSent = null;
+      pubBtn.disabled = true;
+      const ok = await persistImalatCatalogToCloud();
+      pubBtn.disabled = false;
+      showToast(ok ? 'Ortak katalog yayınlandı. Tüm kullanıcılar güncel veriyi görecek.' : 'Yayın başarısız. Firebase kurallarını ve interneti kontrol edin.');
+    };
+  }
   document.getElementById('is-uygulamaTipi').addEventListener('click', e=>{
     const btn = e.target.closest('[data-uygulama-tip]');
     if(!btn) return;
@@ -13777,7 +13822,8 @@ if('serviceWorker' in navigator){
 // giriş yaptıktan SONRA (bkz. yukarıdaki Firebase auth module script'i) çalıştırılır.
 window.__dnzInitApp = async function init(){
   await loadState();
-  // Ortak imalat kataloğunu buluttan çek (firma state'inden bağımsız)
+  // Firma bulutu imalatı taşımaz; yerel önbellekten geri al, sonra ortak kataloğu uygula
+  await recoverImalatCatalogFromLocalCache();
   try{
     if(typeof window.dnzLoadImalatCatalog === 'function'){
       const cat = await window.dnzLoadImalatCatalog();
@@ -13785,8 +13831,10 @@ window.__dnzInitApp = async function init(){
         applyImalatCatalogToState(getImalatCatalogPayload(cat), { render:false });
         lastImalatCatalogJsonSent = JSON.stringify(getImalatCatalogPayload(cat));
       } else if(imalatCatalogHasData(getImalatCatalogPayload(state))){
-        // Bulut boş, yerelde var → yalnız katalog sahibi ilk yüklemeyi yapar
-        if(canEditImalatCatalog()) await persistImalatCatalogToCloud();
+        if(canEditImalatCatalog()){
+          imalatCatalogSeedAttempted = false;
+          await persistImalatCatalogToCloud();
+        }
       }
     }
   }catch(e){ console.error('Ortak imalat kataloğu ilk yükleme', e); }
