@@ -38,11 +38,6 @@
     update,
     onValue
   } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
-  // TODO: Add SDKs for Firebase products that you want to use
-  // https://firebase.google.com/docs/web/setup#available-libraries
-
-  // Your web app's Firebase configuration
-  // For Firebase JS SDK v7.20.0 and later, measurementId is optional
   const firebaseConfig = {
     apiKey: "AIzaSyDDf6nEFNiJb1jubQX5ZF8XxOAol8K6laE",
     authDomain: "dnzhesap-b2d0f.firebaseapp.com",
@@ -122,16 +117,11 @@
     return bytes.buffer;
   }
   async function dnzEncryptState(companyId, plainJson){
-    try{
-      const key = await deriveDnzKey(companyId);
-      const iv = crypto.getRandomValues(new Uint8Array(12));
-      const enc = new TextEncoder();
-      const cipherBuf = await crypto.subtle.encrypt({name:'AES-GCM', iv}, key, enc.encode(plainJson));
-      return ENC_PREFIX + dnzBufToB64(iv) + ':' + dnzBufToB64(cipherBuf);
-    }catch(e){
-      console.error('Şifreleme hatası, veri düz metin olarak gönderiliyor', e);
-      return plainJson; // şifreleme başarısız olursa veriyi hiç göndermemek yerine düz metne düş
-    }
+    const key = await deriveDnzKey(companyId);
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const enc = new TextEncoder();
+    const cipherBuf = await crypto.subtle.encrypt({name:'AES-GCM', iv}, key, enc.encode(plainJson));
+    return ENC_PREFIX + dnzBufToB64(iv) + ':' + dnzBufToB64(cipherBuf);
   }
   async function dnzDecryptState(companyId, raw){
     // Bu güncellemeden ÖNCE buluta yazılmış eski kayıtlar düz JSON'dur (ENC_PREFIX yok);
@@ -164,8 +154,14 @@
     const user = auth.currentUser;
     const companyId = window.dnzCompanyId;
     if(!user || !companyId) return false;
+    if(typeof jsonString !== 'string') return false;
     try{
+      // Şifreleme başarısızsa düz metin ASLA yazılmaz (fail-closed).
       const encrypted = await dnzEncryptState(companyId, jsonString);
+      if(typeof encrypted !== 'string' || !encrypted.startsWith(ENC_PREFIX)){
+        console.error('Şifreleme çıktısı geçersiz, buluta yazılmadı');
+        return false;
+      }
       await set(ref(db, 'companies/' + companyId + '/stateJson'), encrypted);
       return true;
     }catch(e){
@@ -185,6 +181,72 @@
       console.error('Realtime Database okuma hatası', e);
       return null;
     }
+  };
+
+  // ---- Ortak İmalat Kataloğu (TÜM kullanıcılar okur; yalnız katalog sahibi yazar) ----
+  // Firma state'inden bağımsız: tanımlı imalat sistemleri, ürün fiyat listesi ve
+  // imalat cinsi fiyatları her giriş yapan kullanıcıda aynıdır.
+  const GLOBAL_IMALAT_PATH = 'globalCatalog/imalat';
+  const IMALAT_CATALOG_OWNER_EMAIL = 'dnz.engindeniz@gmail.com';
+  window.DNZ_IMALAT_CATALOG_OWNER_EMAIL = IMALAT_CATALOG_OWNER_EMAIL;
+  window.dnzCanEditImalatCatalog = function(){
+    const user = auth.currentUser;
+    if(!user || !user.email) return false;
+    return String(user.email).trim().toLowerCase() === IMALAT_CATALOG_OWNER_EMAIL.toLowerCase();
+  };
+  let imalatCatalogUnsub = null;
+  window.dnzSaveImalatCatalog = async function(catalog){
+    const user = auth.currentUser;
+    if(!user || !catalog || typeof catalog !== 'object') return false;
+    if(!window.dnzCanEditImalatCatalog()){
+      console.warn('Ortak imalat kataloğunu yalnızca katalog sahibi güncelleyebilir.');
+      return false;
+    }
+    try{
+      await set(ref(db, GLOBAL_IMALAT_PATH), {
+        imalatSistemleri: Array.isArray(catalog.imalatSistemleri) ? catalog.imalatSistemleri : [],
+        urunler: Array.isArray(catalog.urunler) ? catalog.urunler : [],
+        imalatCinsiFiyatListesi: Array.isArray(catalog.imalatCinsiFiyatListesi) ? catalog.imalatCinsiFiyatListesi : [],
+        updatedAt: Date.now(),
+        updatedBy: user.uid,
+        updatedByEmail: user.email || ''
+      });
+      return true;
+    }catch(e){
+      console.error('Ortak imalat kataloğu kayıt hatası', e);
+      return false;
+    }
+  };
+  window.dnzLoadImalatCatalog = async function(){
+    const user = auth.currentUser;
+    if(!user) return null;
+    try{
+      const snap = await get(ref(db, GLOBAL_IMALAT_PATH));
+      return snap.exists() ? snap.val() : null;
+    }catch(e){
+      console.error('Ortak imalat kataloğu okuma hatası', e);
+      return null;
+    }
+  };
+  window.dnzStartImalatCatalogSync = function(){
+    if(imalatCatalogUnsub){ imalatCatalogUnsub(); imalatCatalogUnsub = null; }
+    const catalogRef = ref(db, GLOBAL_IMALAT_PATH);
+    imalatCatalogUnsub = onValue(catalogRef, (snapshot)=>{
+      if(!snapshot.exists()){
+        if(typeof window.dnzSeedImalatCatalogIfEmpty === 'function'){
+          window.dnzSeedImalatCatalogIfEmpty();
+        }
+        return;
+      }
+      if(typeof window.dnzApplyRemoteImalatCatalog === 'function'){
+        window.dnzApplyRemoteImalatCatalog(snapshot.val());
+      }
+    }, (err)=>{
+      console.error('Ortak imalat kataloğu senkron hatası', err);
+    });
+  };
+  window.dnzStopImalatCatalogSync = function(){
+    if(imalatCatalogUnsub){ imalatCatalogUnsub(); imalatCatalogUnsub = null; }
   };
 
   // ---- Firma (tenant) yönetimi: oluşturma, davetle katılma, davet kodu üretme ----
@@ -219,16 +281,29 @@
     const user = auth.currentUser;
     if(!user) return {ok:false, error:'Oturum bulunamadı.'};
     const cleanCode = (code||'').trim().toUpperCase();
-    if(!cleanCode) return {ok:false, error:'Davet kodunu girin.'};
+    if(!/^[A-Z0-9]{6,16}$/.test(cleanCode)) return {ok:false, error:'Geçersiz davet kodu formatı.'};
     try{
       const codeSnap = await get(ref(db, 'inviteCodes/' + cleanCode));
       if(!codeSnap.exists()) return {ok:false, error:'Geçersiz davet kodu.'};
-      const codeData = codeSnap.val();
+      const codeData = codeSnap.val() || {};
+      if(!codeData.companyId || typeof codeData.companyId !== 'string'){
+        return {ok:false, error:'Geçersiz davet kodu.'};
+      }
+      if(codeData.expiresAt && Date.now() > Number(codeData.expiresAt)){
+        // Süresi dolmuş kodu temizle
+        try{ await set(ref(db, 'inviteCodes/' + cleanCode), null); }catch(_){}
+        return {ok:false, error:'Davet kodunun süresi dolmuş. Yeni kod isteyin.'};
+      }
+      if(codeData.usedAt){
+        return {ok:false, error:'Bu davet kodu daha önce kullanılmış.'};
+      }
       const companyId = codeData.companyId;
       const role = codeData.role === 'admin' ? 'admin' : 'personel';
       const updates = {};
       updates['userCompany/' + user.uid] = companyId;
       updates['companies/' + companyId + '/members/' + user.uid] = { role, email:user.email||'', joinedAt: Date.now(), viaCode: cleanCode };
+      // Tek kullanımlık: katılımla birlikte kodu sil
+      updates['inviteCodes/' + cleanCode] = null;
       await update(ref(db), updates);
       return {ok:true, companyId, role};
     }catch(e){
@@ -241,12 +316,26 @@
     const companyId = window.dnzCompanyId;
     if(!user || !companyId) return {ok:false, error:'Oturum/firma bulunamadı.'};
     if(window.dnzUserRole !== 'admin') return {ok:false, error:'Bu işlem için yönetici yetkisi gerekir.'};
+    // Sunucu tarafında da rol doğrula (istemci bayrağına güvenme)
+    try{
+      const roleSnap = await get(ref(db, 'companies/' + companyId + '/members/' + user.uid + '/role'));
+      if(!roleSnap.exists() || roleSnap.val() !== 'admin'){
+        return {ok:false, error:'Bu işlem için yönetici yetkisi gerekir.'};
+      }
+    }catch(e){
+      return {ok:false, error:'Yetki doğrulanamadı.'};
+    }
     const code = genInviteCode();
+    const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 gün
     try{
       await set(ref(db, 'inviteCodes/' + code), {
-        companyId, role: role==='admin'?'admin':'personel', createdBy:user.uid, createdAt:Date.now()
+        companyId,
+        role: role==='admin'?'admin':'personel',
+        createdBy:user.uid,
+        createdAt:Date.now(),
+        expiresAt: Date.now() + INVITE_TTL_MS
       });
-      return {ok:true, code};
+      return {ok:true, code, expiresAt: Date.now() + INVITE_TTL_MS};
     }catch(e){
       console.error('Davet kodu oluşturma hatası', e);
       return {ok:false, error:'Davet kodu oluşturulamadı: ' + (e && e.message ? e.message : '')};
@@ -345,10 +434,8 @@
     registerBtn.disabled = true;
     createUserWithEmailAndPassword(auth, email, pass)
       .then((cred)=>{
-        // E-posta doğrulaması ZORUNLU değil (hesap yine de oluşturulup kullanılabilir
-        // durumda kalır, böylece mevcut kullanıcı akışı bozulmaz); ama gerçek olmayan
-        // bir e-postayla kayıt olunmasını caydırmak için doğrulama bağlantısı gönderilir
-        // ve uygulama içinde doğrulanmamış hesaplar için hatırlatma banner'ı gösterilir.
+        // E-posta doğrulaması zorunlu: resolveAndRoute doğrulanmamış hesapları
+        // verifyGate ekranında tutar. Kayıt sonrası doğrulama maili gönderilir.
         return sendEmailVerification(cred.user).catch(e=>{
           console.error('Doğrulama e-postası gönderilemedi', e);
         });
@@ -384,37 +471,6 @@
 
   // Diğer script (klasik, module olmayan) bu fonksiyonu çağırabilsin diye global yapıyoruz.
   window.dnzLogout = ()=> signOut(auth);
-
-  // --- E-posta doğrulama hatırlatma banner'ı ---
-  // Zorunlu bir e-posta doğrulaması UYGULAMIYORUZ (mevcut/az önce kayıt olmuş
-  // kullanıcıların erişimini kesmemek için), sadece doğrulanmamışsa nazik bir
-  // hatırlatma gösteriyor ve tekrar gönderme imkânı sunuyoruz.
-  function updateEmailVerifyBanner(user){
-    const el = document.getElementById('emailVerifyBanner');
-    if(!el) return;
-    if(user && !user.emailVerified){
-      el.style.display = 'flex';
-    } else {
-      el.style.display = 'none';
-    }
-  }
-  window.dnzResendVerification = function(){
-    const user = auth.currentUser;
-    if(!user) return;
-    const btn = document.getElementById('btnResendVerify');
-    if(btn) btn.disabled = true;
-    sendEmailVerification(user)
-      .then(()=>{
-        const msg = document.getElementById('emailVerifyMsg');
-        if(msg) msg.textContent = 'Doğrulama e-postası tekrar gönderildi.';
-      })
-      .catch((e)=>{
-        console.error('Doğrulama e-postası gönderilemedi', e);
-        const msg = document.getElementById('emailVerifyMsg');
-        if(msg) msg.textContent = 'Gönderilemedi, lütfen daha sonra tekrar deneyin.';
-      })
-      .finally(()=>{ if(btn) btn.disabled = false; });
-  };
 
   // --- Gerçek zamanlı senkron (firma verisi) ---
   // Bu firmaya ait bulut verisi her değiştiğinde (bu cihazdan, BAŞKA bir cihazdan ya da
@@ -470,8 +526,14 @@
         window.__dnzInitApp();
       }
       startRealtimeSync(companyId);
+      if(typeof window.dnzStartImalatCatalogSync === 'function'){
+        window.dnzStartImalatCatalogSync();
+      }
     } else {
       stopRealtimeSync();
+      if(typeof window.dnzStopImalatCatalogSync === 'function'){
+        window.dnzStopImalatCatalogSync();
+      }
       hideAllGates();
       pendingGate.style.display = 'flex';
     }
@@ -485,6 +547,9 @@
     if(!user.emailVerified){
       stopRealtimeSync();
       stopWatchCompanyActive();
+      if(typeof window.dnzStopImalatCatalogSync === 'function'){
+        window.dnzStopImalatCatalogSync();
+      }
       hideAllGates();
       verifyGate.style.display = 'flex';
       return;
@@ -495,6 +560,9 @@
         // Henüz bir firmaya bağlı değil: firma oluştur / davetle katıl ekranı.
         stopRealtimeSync();
         stopWatchCompanyActive();
+        if(typeof window.dnzStopImalatCatalogSync === 'function'){
+          window.dnzStopImalatCatalogSync();
+        }
         window.dnzCompanyId = null;
         window.dnzUserRole = null;
         hideAllGates();
@@ -522,7 +590,6 @@
     }
     if(user){
       window.__dnzUserAlreadySignedIn = true;
-      updateEmailVerifyBanner(user);
       resolveAndRoute(user);
     }else{
       window.__dnzUserAlreadySignedIn = false;
@@ -530,9 +597,11 @@
       window.dnzUserRole = null;
       stopRealtimeSync();
       stopWatchCompanyActive();
+      if(typeof window.dnzStopImalatCatalogSync === 'function'){
+        window.dnzStopImalatCatalogSync();
+      }
       hideAllGates();
       gate.style.display = 'flex';
-      updateEmailVerifyBanner(null);
     }
   });
 </script>
@@ -1032,10 +1101,6 @@ footer.appfoot{text-align:center;padding:14px;color:rgba(11,36,54,0.45);font-siz
 .backup-banner svg{flex-shrink:0;width:20px;height:20px;color:#c77700;}
 .backup-banner span{flex:1;min-width:200px;}
 .backup-banner .btn{white-space:nowrap;}
-.backup-banner.verify-banner{
-  background:rgba(28,110,140,0.14);border:1px solid rgba(28,110,140,0.5);color:#0F3B4C;
-}
-.backup-banner.verify-banner svg{color:#1C6E8C;}
 
 /* personel durum rozeti */
 .status-badge{display:inline-flex;padding:3px 9px;border-radius:20px;font-size:0.66rem;font-weight:700;white-space:nowrap;}
@@ -1152,7 +1217,6 @@ html[data-theme="dark"] .file-attach-chip{background:rgba(47,211,199,0.16);color
 html[data-theme="dark"] footer.appfoot{color:rgba(234,246,245,0.35);}
 html[data-theme="dark"] .logo-preview{background:rgba(255,255,255,0.08);border-color:rgba(255,255,255,0.14);}
 html[data-theme="dark"] .backup-banner{color:#ffd8a3;}
-html[data-theme="dark"] .backup-banner.verify-banner{color:#bfe6ee;}
 html[data-theme="dark"] #dnzThemeBtn svg,
 html[data-theme="dark"] #dnzLogoutBtn svg{stroke:currentColor;}
 </style>
@@ -1244,12 +1308,6 @@ html[data-theme="dark"] #dnzLogoutBtn svg{stroke:currentColor;}
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4M12 17h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
     <span>Kaydedilmemiş yedeğiniz var. Verilerinizi kaybetmemek için Ayarlar &gt; "Yedeği İndir" ile yedek alın.</span>
     <button class="btn btn-sm btn-primary" id="bannerBackupBtn">Şimdi Yedekle</button>
-  </div>
-
-  <div id="emailVerifyBanner" class="backup-banner verify-banner" style="display:none;">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 6l-10 7L2 6"/></svg>
-    <span id="emailVerifyMsg">E-posta adresiniz henüz doğrulanmadı. Hesabınızın güvenliği için gelen kutunuzdaki doğrulama bağlantısına tıklayın.</span>
-    <button class="btn btn-sm btn-primary" id="btnResendVerify" onclick="window.dnzResendVerification && window.dnzResendVerification();">Doğrulama E-postasını Tekrar Gönder</button>
   </div>
 
   <div class="nav-backdrop" id="navBackdrop"></div>
@@ -2029,7 +2087,7 @@ function renderDigerTipFormsHtml(tips, ayarlar, uygulamaTipi){
             <input class="mono" type="number" step="any" min="0" data-tip-field="${tip}" data-field="carpan" value="${esc(a.carpan??'1')}" placeholder="Örn: 1">
           </div>
         </div>
-        <p class="hint" style="margin:0;font-size:0.68rem;">Kesişim tabanında şemadaki birleşim noktası sayısı kullanılır (çarpan uygulanmaz). Diğer tabanlarda sonuç = taban × çarpan.</p>`);
+        <p class="hint" style="margin:0;font-size:0.68rem;">Sonuç = taban × çarpan. Kesişim: birleşim noktası sayısı × çarpan (örn. çarpan 2 → her noktada 2 birleştirici).</p>`);
     }
     if(tip==='aski'){
       return tipFormShell(tip, `
@@ -2461,6 +2519,110 @@ async function writeAutoBackup(text){
     return false;
   }
 }
+// ---- Ortak İmalat Kataloğu yardımcıları ----
+// Tanımlı imalat sistemleri + ürün fiyatları + imalat cinsi fiyatları TÜM kullanıcılarda ortaktır.
+// Firma stateJson'una yazılmaz; globalCatalog/imalat düğümünde tutulur.
+const IMALAT_CATALOG_KEYS = ['imalatSistemleri', 'urunler', 'imalatCinsiFiyatListesi'];
+let lastImalatCatalogJsonSent = null;
+let imalatCatalogSeedAttempted = false;
+function getImalatCatalogPayload(s){
+  s = s || state;
+  return {
+    imalatSistemleri: Array.isArray(s.imalatSistemleri) ? s.imalatSistemleri : [],
+    urunler: Array.isArray(s.urunler) ? s.urunler : [],
+    imalatCinsiFiyatListesi: Array.isArray(s.imalatCinsiFiyatListesi) ? s.imalatCinsiFiyatListesi : []
+  };
+}
+function imalatCatalogHasData(catalog){
+  if(!catalog || typeof catalog !== 'object') return false;
+  return (catalog.imalatSistemleri&&catalog.imalatSistemleri.length)
+    || (catalog.urunler&&catalog.urunler.length)
+    || (catalog.imalatCinsiFiyatListesi&&catalog.imalatCinsiFiyatListesi.length);
+}
+function stateJsonWithoutImalatCatalog(s){
+  const copy = Object.assign({}, s || state);
+  IMALAT_CATALOG_KEYS.forEach(k=> delete copy[k]);
+  return JSON.stringify(copy);
+}
+function applyImalatCatalogToState(catalog, opts){
+  opts = opts || {};
+  if(!catalog || typeof catalog !== 'object') return false;
+  let changed = false;
+  IMALAT_CATALOG_KEYS.forEach(k=>{
+    if(Array.isArray(catalog[k])){
+      const next = catalog[k];
+      const prev = JSON.stringify(state[k]||[]);
+      const nxt = JSON.stringify(next);
+      if(prev !== nxt){
+        state[k] = next;
+        changed = true;
+      }
+    }
+  });
+  if(changed && opts.render !== false){
+    try{
+      if(ui && ui.tab==='imalat') renderMain();
+      else if(typeof renderAll === 'function' && opts.forceAll) renderAll();
+    }catch(e){ /* yoksay */ }
+  }
+  return changed;
+}
+async function persistImalatCatalogToCloud(){
+  if(typeof window.dnzSaveImalatCatalog !== 'function') return false;
+  if(typeof window.dnzCanEditImalatCatalog === 'function' && !window.dnzCanEditImalatCatalog()){
+    return false; // yalnız katalog sahibi yazar
+  }
+  const payload = getImalatCatalogPayload(state);
+  const json = JSON.stringify(payload);
+  if(json === lastImalatCatalogJsonSent) return true;
+  try{
+    lastImalatCatalogJsonSent = json;
+    return await window.dnzSaveImalatCatalog(payload);
+  }catch(e){
+    console.error('Ortak imalat kataloğu kaydı başarısız', e);
+    return false;
+  }
+}
+window.dnzApplyRemoteImalatCatalog = function(catalog){
+  if(!catalog || typeof catalog !== 'object') return;
+  const payload = getImalatCatalogPayload(catalog);
+  const json = JSON.stringify(payload);
+  if(json === lastImalatCatalogJsonSent) return;
+  if(json === JSON.stringify(getImalatCatalogPayload(state))){
+    lastImalatCatalogJsonSent = json;
+    return;
+  }
+  const changed = applyImalatCatalogToState(payload, { render:true, forceAll:false });
+  lastImalatCatalogJsonSent = json;
+  try{
+    localStorage.setItem(currentLsCacheKey(), JSON.stringify(state));
+  }catch(e){ /* yoksay */ }
+  if(changed){
+    if(ui && ui.tab==='imalat') renderMain();
+    showToast('Ortak imalat kataloğu güncellendi.');
+  }
+};
+window.dnzSeedImalatCatalogIfEmpty = function(){
+  if(imalatCatalogSeedAttempted) return;
+  imalatCatalogSeedAttempted = true;
+  if(typeof window.dnzCanEditImalatCatalog === 'function' && !window.dnzCanEditImalatCatalog()) return;
+  const local = getImalatCatalogPayload(state);
+  if(!imalatCatalogHasData(local)) return;
+  // Bulut boşsa bu cihazdaki mevcut tanımları ortak kataloğa ilk kez yükle
+  persistImalatCatalogToCloud().then(ok=>{
+    if(ok) showToast('İmalat sistemleri ortak kataloğa yüklendi.');
+  });
+};
+
+function canEditImalatCatalog(){
+  return typeof window.dnzCanEditImalatCatalog === 'function' && window.dnzCanEditImalatCatalog();
+}
+function assertCanEditImalatCatalog(){
+  if(canEditImalatCatalog()) return true;
+  showToast('Ortak imalat kataloğunu yalnızca ' + (window.DNZ_IMALAT_CATALOG_OWNER_EMAIL||'katalog sahibi') + ' düzenleyebilir.');
+  return false;
+}
+
 // Ham kayıt: state'i olduğu gibi depolar, "yedeklendi" bayrağına dokunmaz.
 async function persistStateRaw(){
   const json = JSON.stringify(state);
@@ -2483,17 +2645,18 @@ async function persistStateRaw(){
   //    o dosyayı da güncelle. Bu isteğe bağlı bir ek güvencedir (özellikle masaüstünde);
   //    desteklenmiyorsa veya izin yoksa sessizce atlanır, hata göstermez.
   await writeAutoBackup(json);
-  // 4) Firebase Realtime Database: hesabınıza bağlı, cihazlar arasında senkron olan
-  //    bulut kopyası. Böylece bir cihazda girdiğiniz veri, aynı hesapla giriş yaptığınız
-  //    diğer cihazlarda da görünür.
+  // 4) Firebase Realtime Database — firma verisi (imalat kataloğu HARİÇ; o ayrı ortak düğümde)
   if(typeof window.dnzDbSaveState === 'function'){
     try{
-      lastCloudJsonSent = json;
-      await window.dnzDbSaveState(json);
+      const companyJson = stateJsonWithoutImalatCatalog(state);
+      lastCloudJsonSent = companyJson;
+      await window.dnzDbSaveState(companyJson);
     }catch(e){
       console.error('Bulut kaydetme hatası', e);
     }
   }
+  // 5) Ortak imalat kataloğu (tüm kullanıcılar)
+  await persistImalatCatalogToCloud();
 }
 // Gerçek zamanlı senkron: Realtime Database'de veri değiştiğinde (bu cihazdan ya da
 // BAŞKA bir cihazdan) Firebase auth module script'i bu fonksiyonu çağırır. Kendi
@@ -2502,13 +2665,21 @@ async function persistStateRaw(){
 // güncelleyip arayüzü yeniden çizeriz.
 window.dnzApplyRemoteState = function(jsonString){
   if(jsonString === lastCloudJsonSent) return;
-  if(jsonString === JSON.stringify(state)) return;
+  if(jsonString === stateJsonWithoutImalatCatalog(state)) return;
   try{
     const parsed = JSON.parse(jsonString);
+    // Firma senkronu imalat kataloğunu ezmesin — ortak katalog ayrı kanalda gelir
+    const keepCatalog = getImalatCatalogPayload(state);
     state = Object.assign(defaultState(), parsed);
     if(!state.projects) state.projects = {};
-    try{ localStorage.setItem(currentLsCacheKey(), jsonString); }catch(e){ /* yoksay */ }
-    lastCloudJsonSent = jsonString;
+    if(imalatCatalogHasData(keepCatalog)){
+      applyImalatCatalogToState(keepCatalog, { render:false });
+    } else if(imalatCatalogHasData(parsed)){
+      // Eski firma yedeğinde katalog varsa geçici tut; global yüklenince üzerine yazılır
+      applyImalatCatalogToState(getImalatCatalogPayload(parsed), { render:false });
+    }
+    try{ localStorage.setItem(currentLsCacheKey(), JSON.stringify(state)); }catch(e){ /* yoksay */ }
+    lastCloudJsonSent = stateJsonWithoutImalatCatalog(state);
     renderAll();
     updateBackupBanner();
     showToast('Veriler başka bir cihazdan güncellendi.');
@@ -2616,12 +2787,14 @@ async function loadState(){
 }
 // state'i (mevcut değişikliğe dokunmadan, sadece "gönder") Realtime Database'e yazar.
 async function syncStateToCloud(){
-  if(typeof window.dnzDbSaveState !== 'function') return;
-  try{
-    await window.dnzDbSaveState(JSON.stringify(state));
-  }catch(e){
-    console.error('Bulut ilk senkron hatası', e);
+  if(typeof window.dnzDbSaveState === 'function'){
+    try{
+      await window.dnzDbSaveState(stateJsonWithoutImalatCatalog(state));
+    }catch(e){
+      console.error('Bulut ilk senkron hatası', e);
+    }
   }
+  await persistImalatCatalogToCloud();
 }
 function hasAnyData(){
   return Object.values(state.projects||{}).some(p=> (p.metrajRows&&p.metrajRows.length) || projeTumTeklifKalemleri(p).length);
@@ -3308,12 +3481,8 @@ async function fetchDashboardHava(){
   refreshDashboardHavaWidget();
   try{
     const {lat, lon} = state.dashboardHavaKonum;
-    const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&timezone=auto`);
-    if(!res.ok) throw new Error('İstek başarısız');
-    const json = await res.json();
-    const cw = json.current_weather;
-    if(!cw) throw new Error('Veri alınamadı');
-    dashboardHavaState = {status:'ok', data:{temp:cw.temperature, wind:cw.windspeed, code:cw.weathercode, fetchedAt:Date.now()}, error:''};
+    const data = await fetchOpenMeteoCurrent(lat, lon);
+    dashboardHavaState = {status:'ok', data, error:''};
   }catch(e){
     console.error(e);
     dashboardHavaState = {status:'error', error:'Hava durumu alınamadı. İnternet bağlantınızı kontrol edip tekrar deneyin.'};
@@ -3338,13 +3507,7 @@ async function dashboardSehirAra(query){
   dashboardHavaState = {status:'loading', error:''};
   refreshDashboardHavaWidget();
   try{
-    const res = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(query.trim())}&count=1&language=tr&format=json`);
-    if(!res.ok) throw new Error('İstek başarısız');
-    const json = await res.json();
-    const first = json.results && json.results[0];
-    if(!first) throw new Error('Şehir bulunamadı');
-    const label = [first.name, first.admin1, first.country].filter(Boolean).join(', ');
-    state.dashboardHavaKonum = {name:label, lat:first.latitude, lon:first.longitude};
+    state.dashboardHavaKonum = await geocodeOpenMeteoCity(query);
     saveState();
     await fetchDashboardHava();
   }catch(e){
@@ -5171,6 +5334,7 @@ function bindImalatFiyatListesiEvents(){
         const x = (state.imalatCinsiFiyatListesi||[]).find(r=>r.id===id);
         if(x){ imalatFiyatForm = {id:x.id, ad:x.ad, fiyat:x.fiyat}; renderMain(); window.scrollTo({top:0, behavior:'smooth'}); }
       } else if(act==='delete'){
+        if(!assertCanEditImalatCatalog()) return;
         confirmModal('Bu imalat cinsini fiyat listesinden silmek istediğinize emin misiniz? (Bu liste tüm projelerde ortaktır.)', ()=>{
           state.imalatCinsiFiyatListesi = (state.imalatCinsiFiyatListesi||[]).filter(r=>r.id!==id);
           saveState(); renderMain();
@@ -5182,6 +5346,7 @@ function bindImalatFiyatListesiEvents(){
 }
 
 function saveImalatFiyat(){
+  if(!assertCanEditImalatCatalog()) return;
   const ad = (imalatFiyatForm.ad||'').trim();
   const fiyat = parseFloat(String(imalatFiyatForm.fiyat).replace(',','.'));
   if(!ad){ showToast('Lütfen imalat cinsi adı girin.'); return; }
@@ -5382,7 +5547,7 @@ function renderImalatTab(main){
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg>
         İmalat Sistemleri
       </h2>
-      <p class="hint">Önce bir imalat sistemi tanımlayıp içine malzeme listesi ekleyin. Sonra <b>Hesaplama Paneli</b>nden ölçü girerek miktarları hesaplayın; aynı ekranda imalat şeması da çizilir.</p>
+      <p class="hint">Önce bir imalat sistemi tanımlayıp içine malzeme listesi ekleyin. Sonra <b>Hesaplama Paneli</b>nden ölçü girerek miktarları hesaplayın. Tanımlı sistemler ve fiyatlar tüm kullanıcılarda ortaktır; düzenleme yalnızca <b>${esc(window.DNZ_IMALAT_CATALOG_OWNER_EMAIL||'katalog sahibi')}</b> hesabına açıktır.${canEditImalatCatalog()?'':' <span style="color:var(--coral,#E8776B);">Bu hesap salt okunur.</span>'}</p>
       <div class="report-subnav" id="imalatSubnav">
         <button class="report-subtab-btn ripple-el-host ${ui.imalatSubTab==='tanim'?'active':''}" data-isub="tanim">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
@@ -5543,6 +5708,7 @@ function renderImalatTanimSection(sub){
     const id = item && item.dataset.id;
     const s = state.imalatSistemleri.find(x=>x.id===id);
     if(!s) return;
+    if(!assertCanEditImalatCatalog()) return;
     s.uygulamaTipi = normalizeUygulamaTipi(sel.value);
     saveState();
     showToast(`"${s.ad}" → ${IMALAT_UYGULAMA_TIPI_LABEL[s.uygulamaTipi]}`);
@@ -5560,11 +5726,13 @@ function renderImalatTanimSection(sub){
       imalatMalzemeForm = emptyImalatMalzemeForm();
       renderImalatTab(document.getElementById('mainContent'));
     } else if(act==='edit'){
+      if(!assertCanEditImalatCatalog()) return;
       const s = state.imalatSistemleri.find(x=>x.id===id);
       imalatSistemForm = {id:s.id, ad:s.ad, uygulamaTipi:getSistemUygulamaTipi(s)};
       renderImalatTab(document.getElementById('mainContent'));
       window.scrollTo({top:0, behavior:'smooth'});
     } else if(act==='delete'){
+      if(!assertCanEditImalatCatalog()) return;
       const s = state.imalatSistemleri.find(x=>x.id===id);
       confirmModal(`"${s.ad}" imalat sistemini ve malzeme listesini silmek istediğinize emin misiniz? Bu işlem geri alınamaz.`, ()=>{
         state.imalatSistemleri = state.imalatSistemleri.filter(x=>x.id!==id);
@@ -5641,6 +5809,7 @@ function bindUrunFiyatEvents(){
           });
         }
       } else if(act==='delete'){
+        if(!assertCanEditImalatCatalog()) return;
         confirmModal('Bu ürünü fiyat listesinden silmek istediğinize emin misiniz?', ()=>{
           state.urunler = (state.urunler||[]).filter(x=>x.id!==id);
           saveState(); renderImalatTab(document.getElementById('mainContent'));
@@ -5652,6 +5821,7 @@ function bindUrunFiyatEvents(){
 }
 
 function saveUrun(){
+  if(!assertCanEditImalatCatalog()) return;
   const ad = (urunForm.ad||'').trim();
   const birim = urunForm.birim || '';
   const alisFiyat = parseFloat(String(urunForm.alisFiyat).replace(',','.')) || 0;
@@ -5982,12 +6152,14 @@ function bindImalatMalzemeSectionEvents(sistem){
           if(adEl) adEl.focus({ preventScroll:true });
         });
       } else if(act==='delete'){
+        if(!assertCanEditImalatCatalog()) return;
         confirmModal('Bu malzemeyi silmek istediğinize emin misiniz?', ()=>{
           sistem.malzemeler = sistem.malzemeler.filter(x=>x.id!==id);
           saveState(); renderImalatTab(document.getElementById('mainContent'));
           showToast('Malzeme silindi.');
         });
       } else if(act==='moveup' || act==='movedown'){
+        if(!assertCanEditImalatCatalog()) return;
         const idx = sistem.malzemeler.findIndex(x=>x.id===id);
         const swapWith = act==='moveup' ? idx-1 : idx+1;
         if(idx<0 || swapWith<0 || swapWith>=sistem.malzemeler.length) return;
@@ -6002,6 +6174,7 @@ function bindImalatMalzemeSectionEvents(sistem){
 }
 
 function saveImalatSistem(){
+  if(!assertCanEditImalatCatalog()) return;
   const ad = (imalatSistemForm.ad||'').trim();
   const uygulamaTipi = normalizeUygulamaTipi(imalatSistemForm.uygulamaTipi);
   if(!ad){ showToast('Lütfen imalat sistemi adı girin.'); return; }
@@ -6020,6 +6193,7 @@ function saveImalatSistem(){
 }
 
 function saveImalatMalzeme(sistem){
+  if(!assertCanEditImalatCatalog()) return;
   const ad = (imalatMalzemeForm.ad||'').trim();
   if(!ad){ showToast('Lütfen malzeme adı girin.'); return; }
   const tips = normalizeUrunTipleri(imalatMalzemeForm.urunTipi);
@@ -6482,10 +6656,8 @@ function computeBirlestiriciAdetFromRoom(sistem, malzeme, room, polyPts){
   const carriers = buildRoomCarriersList(sistem, room, polyPts || room.polyPts || null);
   let taban = 0;
   if(tabanTip==='kesisim'){
-    // Şema her kesişimde 1 işaret çizer → sonuç = işaret sayısı.
-    // Çarpan burada ekstra çarpılmaz (2 yazınca 20→40 şişmesini önler); nokta başına adet için çarpanı diğer tabanlarda kullanın.
+    // Şema her kesişimde 1 işaret çizer; çarpan = nokta başına birleştirici adedi (örn. 2 → çift bağlantı).
     taban = countBirlestiriciKesisim(carriers);
-    return Math.ceil(taban - 1e-12);
   } else if(tabanTip==='anaHat'){
     const ana = carriers.find(c=>c.tip==='ana');
     taban = ana ? ana.positions.length : 0;
@@ -6582,6 +6754,8 @@ function getImalatPolyPts(){
 }
 // Plaka: kolon kolon döşenir; kesilen kalan boy sonraki kolona aktarılır (şaşırtmalı derz).
 // Örn: yükseklik 2.7, plaka boyu 2.5 → 0.2 m kalan sonraki şeride eklenir.
+// NOT: Bu fonksiyon yalnızca şema çizimi içindir. Sipariş adedi alan÷(en×boy) ile hesaplanır
+// (dar son şerit yüzünden siparişin şişmesini önlemek için).
 function countPlakaAdetWithCarry(roomW, roomH, pw, ph){
   const W = parseFloat(roomW)||0, H = parseFloat(roomH)||0;
   const en = parseFloat(pw)||0, boy = parseFloat(ph)||0;
@@ -6612,8 +6786,9 @@ function roomAlanFromDeger(room, deger){
   return 0;
 }
 // Sistemdeki plaka/panel adedi.
-// Plaka + oda ölçüsü: kalan parça sonraki şeride aktarılır.
-// Panel / yalnız alan: alan ÷ (en × boy).
+// Sipariş miktarı her zaman alan ÷ (en × boy) ile hesaplanır (şema çizimindeki
+// şerit/carry yalnızca görseldir). Aksi halde örn. 4×7=28 m² odada 1.2×2.5 plaka
+// şerit hesabı 12 adet (36 m²) üretir; doğru sipariş ceil(28/3)=10 adettir.
 function getSistemPlakaAdedi(sistem, alanM2, room){
   const area = parseFloat(alanM2)||0;
   if(!(area>0) || !sistem) return 0;
@@ -6622,15 +6797,12 @@ function getSistemPlakaAdedi(sistem, alanM2, room){
     const tips = normalizeUrunTipleri(m.urunTipi);
     const tipAy = normalizeTipAyarlari(Object.assign({}, m, {urunTipi:tips}));
     if(tips.includes('plaka') && tipAy.plaka){
-      const e = parseEbatMetreCift(tipAy.plaka.en, tipAy.plaka.boy, 0, 0);
-      if(e.en>0 && e.boy>0){
+      const eb = plakaStokVeKesimEbat(tipAy.plaka);
+      if(eb.layout.en>0 && eb.layout.boy>0){
         let n;
-        const eb = plakaStokVeKesimEbat(tipAy.plaka);
         if(room && room.kind==='length' && room.W>0){
           const mtPer = plakaMtPerAdet(eb);
           n = mtPer>0 ? tamAdetYuvarla(room.W / mtPer) : 0;
-        } else if(roomIsExactRect(room)){
-          n = countPlakaAdetWithCarry(room.W, room.L, eb.layout.en, eb.layout.boy);
         } else {
           n = tamAdetYuvarla(area / (eb.layout.en*eb.layout.boy));
         }
@@ -6667,11 +6839,6 @@ function computePanelPlakaAdet(malzeme, deger, room){
       if(mtPer>0) return room.W / mtPer;
     }
     en = eb.layout.en; boy = eb.layout.boy;
-    // Yalnız gerçek dikdörtgen odada carry; poligon/bbox hesabında alan (deger) kullanılır
-    if(roomIsExactRect(room)){
-      const n = countPlakaAdetWithCarry(room.W, room.L, en, boy);
-      if(n>0) return n; // ham tamsayı; çarpan sonra uygulanır
-    }
   } else {
     const e = parseEbatMetreCift(a.en, a.boy, 1.2, 2.5);
     en = e.en; boy = e.boy;
@@ -6679,6 +6846,7 @@ function computePanelPlakaAdet(malzeme, deger, room){
   const alan = roomAlanFromDeger(room, deger);
   if(!(alan>0) || !(en>0) || !(boy>0)) return null;
   // Ham adet (yuvarlamadan); çift kat / paket tamamlama computeMalzemeSonuc'ta çarpımdan SONRA uygulanır
+  // Not: dikdörtgen odada şerit/carry adedi şema içindir; sipariş her zaman alan/(en×boy).
   return alan / (en*boy);
 }
 function computeYalitimSonuc(malzeme, deger, room){
@@ -6708,7 +6876,14 @@ function computeKenarAdet(malzeme, deger, room){
   let cevre = 0;
   if(room){
     if(room.kind==='length') cevre = room.W;
-    else if(room.W>0 && room.L>0) cevre = 2*(room.W+room.L);
+    else if(room.polyPts && room.polyPts.length>=2){
+      // Poligon: gerçek kenar uzunlukları toplamı
+      for(let i=0;i<room.polyPts.length;i++){
+        const p1 = room.polyPts[i];
+        const p2 = room.polyPts[(i+1)%room.polyPts.length];
+        cevre += Math.hypot(p2.x-p1.x, p2.y-p1.y);
+      }
+    } else if(room.W>0 && room.L>0) cevre = 2*(room.W+room.L);
   }
   if(!(cevre>0) && deger>0) cevre = 4 * Math.sqrt(deger);
   if(!(cevre>0) || !(stock>0)) return null;
@@ -10040,18 +10215,42 @@ function weatherIconSvg(cat){
   return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${icons[cat]||icons.cloudy}</svg>`;
 }
 
+// Anasayfa + Şantiye Günlüğü ortak Open-Meteo istemcisi (URL/koordinat doğrulaması tek yerde)
+async function fetchOpenMeteoCurrent(lat, lon){
+  const la = Number(lat), lo = Number(lon);
+  if(!Number.isFinite(la) || !Number.isFinite(lo) || Math.abs(la)>90 || Math.abs(lo)>180){
+    throw new Error('Geçersiz konum');
+  }
+  const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${la}&longitude=${lo}&current_weather=true&timezone=auto`);
+  if(!res.ok) throw new Error('İstek başarısız');
+  const json = await res.json();
+  const cw = json.current_weather;
+  if(!cw) throw new Error('Veri alınamadı');
+  return {temp:cw.temperature, wind:cw.windspeed, code:cw.weathercode, fetchedAt:Date.now()};
+}
+async function geocodeOpenMeteoCity(query){
+  const q = String(query||'').trim();
+  if(!q) throw new Error('Şehir adı boş');
+  const res = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=1&language=tr&format=json`);
+  if(!res.ok) throw new Error('İstek başarısız');
+  const json = await res.json();
+  const first = json.results && json.results[0];
+  if(!first) throw new Error('Şehir bulunamadı');
+  return {
+    name: [first.name, first.admin1, first.country].filter(Boolean).join(', '),
+    lat: first.latitude,
+    lon: first.longitude
+  };
+}
+
 async function fetchHavaDurumuIcin(proj){
   if(!proj.havaKonum) return;
   gunlukHavaState[proj.id] = {status:'loading', error:''};
   refreshHavaWidget(proj);
   try{
     const {lat, lon} = proj.havaKonum;
-    const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&timezone=auto`);
-    if(!res.ok) throw new Error('İstek başarısız');
-    const json = await res.json();
-    const cw = json.current_weather;
-    if(!cw) throw new Error('Veri alınamadı');
-    gunlukHavaState[proj.id] = {status:'ok', data:{temp:cw.temperature, wind:cw.windspeed, code:cw.weathercode, fetchedAt:Date.now()}, error:''};
+    const data = await fetchOpenMeteoCurrent(lat, lon);
+    gunlukHavaState[proj.id] = {status:'ok', data, error:''};
   }catch(e){
     console.error(e);
     gunlukHavaState[proj.id] = {status:'error', error:'Hava durumu alınamadı. İnternet bağlantınızı kontrol edip tekrar deneyin.'};
@@ -10076,13 +10275,7 @@ async function gunlukSehirAra(proj, query){
   gunlukHavaState[proj.id] = {status:'loading', error:''};
   refreshHavaWidget(proj);
   try{
-    const res = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(query.trim())}&count=1&language=tr&format=json`);
-    if(!res.ok) throw new Error('İstek başarısız');
-    const json = await res.json();
-    const first = json.results && json.results[0];
-    if(!first) throw new Error('Şehir bulunamadı');
-    const label = [first.name, first.admin1, first.country].filter(Boolean).join(', ');
-    proj.havaKonum = {name:label, lat:first.latitude, lon:first.longitude};
+    proj.havaKonum = await geocodeOpenMeteoCity(query);
     saveState();
     await fetchHavaDurumuIcin(proj);
   }catch(e){
@@ -12226,7 +12419,7 @@ function renderAyarlarTab(main){
         <div class="field">
           <label>Logo</label>
           <div style="display:flex;align-items:center;gap:10px;">
-            ${state.company.logo? `<img class="logo-preview" src="${state.company.logo}">` : `<div class="logo-preview" style="display:flex;align-items:center;justify-content:center;font-size:0.6rem;color:var(--ink-soft);">Logo yok</div>`}
+            ${(state.company.logo && /^data:image\/[a-zA-Z0-9.+-]+;base64,/.test(state.company.logo)) ? `<img class="logo-preview" alt="Logo" src="${state.company.logo}">` : `<div class="logo-preview" style="display:flex;align-items:center;justify-content:center;font-size:0.6rem;color:var(--ink-soft);">Logo yok</div>`}
             <input type="file" id="s-logoFile" accept="image/*" style="font-size:0.75rem;max-width:140px;">
           </div>
         </div>
@@ -12348,7 +12541,7 @@ function renderAyarlarTab(main){
         Ekip Üyeleri
       </h2>
       ${window.dnzUserRole === 'admin' ? `
-        <p class="hint">Firmanıza yeni bir çalışan eklemek için bir davet kodu üretin ve onunla paylaşın. Kişi "Firmaya Katıl" ekranında bu kodu girerek ekibinize dahil olur.</p>
+        <p class="hint">Firmanıza yeni bir çalışan eklemek için bir davet kodu üretin ve onunla paylaşın. Kod <b>tek kullanımlıktır</b> ve <b>7 gün</b> geçerlidir.</p>
         <div class="btn-row">
           <button class="btn btn-primary" id="btnGenInvitePersonel">Personel Davet Kodu Üret</button>
           <button class="btn btn-ghost" id="btnGenInviteAdmin">Yönetici Davet Kodu Üret</button>
@@ -12477,7 +12670,7 @@ function renderAyarlarTab(main){
         <p class="hint" style="font-weight:700;">
           ${role==='admin' ? 'Yönetici' : 'Personel'} davet kodu: <span style="font-family:var(--font-mono);font-size:1rem;letter-spacing:1px;">${esc(res.code)}</span>
         </p>
-        <p class="hint">Bu kodu ilgili çalışanla paylaşın; "Firmaya Katıl" ekranından bu kodu girerek ekibinize dahil olacaktır.</p>
+        <p class="hint">Bu kod tek kullanımlıktır ve 7 gün geçerlidir. "Firmaya Katıl" ekranından girilerek ekibe dahil olunur; kullanıldıktan sonra geçersiz olur.</p>
       `;
     }
     document.getElementById('btnGenInvitePersonel').onclick = ()=> handleGenInvite('personel');
@@ -13584,11 +13777,29 @@ if('serviceWorker' in navigator){
 // giriş yaptıktan SONRA (bkz. yukarıdaki Firebase auth module script'i) çalıştırılır.
 window.__dnzInitApp = async function init(){
   await loadState();
+  // Ortak imalat kataloğunu buluttan çek (firma state'inden bağımsız)
+  try{
+    if(typeof window.dnzLoadImalatCatalog === 'function'){
+      const cat = await window.dnzLoadImalatCatalog();
+      if(cat && imalatCatalogHasData(cat)){
+        applyImalatCatalogToState(getImalatCatalogPayload(cat), { render:false });
+        lastImalatCatalogJsonSent = JSON.stringify(getImalatCatalogPayload(cat));
+      } else if(imalatCatalogHasData(getImalatCatalogPayload(state))){
+        // Bulut boş, yerelde var → yalnız katalog sahibi ilk yüklemeyi yapar
+        if(canEditImalatCatalog()) await persistImalatCatalogToCloud();
+      }
+    }
+  }catch(e){ console.error('Ortak imalat kataloğu ilk yükleme', e); }
+  if(typeof window.dnzStartImalatCatalogSync === 'function'){
+    window.dnzStartImalatCatalogSync();
+  }
   await refreshAutoBackupInfo();
   // Eski kayıtlarda (bu modüller eklenmeden önce oluşturulmuş projelerde) eksik
   // alanları tamamla, böylece kod hiçbir yerde undefined'a takılmasın.
   if(!state.imalatCinsiFiyatListesi) state.imalatCinsiFiyatListesi = [];
   if(!state.malzemeAnalizKayitlari) state.malzemeAnalizKayitlari = [];
+  if(!state.urunler) state.urunler = [];
+  if(!state.imalatSistemleri) state.imalatSistemleri = [];
   if(!state.company) state.company = { name:'', logo:'' };
   if(state.company.vergiDairesi===undefined || state.company.vergiDairesi===null) state.company.vergiDairesi = '';
   if(state.company.vergiNo===undefined || state.company.vergiNo===null) state.company.vergiNo = '';
