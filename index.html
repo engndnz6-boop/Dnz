@@ -241,15 +241,20 @@
     if(!mesaj) return {ok:false, error:'Lütfen mesajınızı yazın.'};
     try{
       const msgRef = push(ref(db, 'supportMessages'));
+      const msgId = msgRef.key;
+      const att = payload.attachment && payload.attachment.dataUrl ? {
+        name: payload.attachment.name||'ek',
+        type: payload.attachment.type||'',
+        size: payload.attachment.size||0,
+        dataUrl: payload.attachment.dataUrl
+      } : null;
       const record = {
         konu: String(payload.konu||'').trim(),
         mesaj,
-        attachment: payload.attachment && payload.attachment.dataUrl ? {
-          name: payload.attachment.name||'ek',
-          type: payload.attachment.type||'',
-          size: payload.attachment.size||0,
-          dataUrl: payload.attachment.dataUrl
-        } : null,
+        hasAttachment: !!att,
+        attachmentName: att ? att.name : null,
+        attachmentType: att ? att.type : null,
+        attachmentSize: att ? att.size : null,
         userId: user.uid,
         userEmail: user.email||'',
         companyId: window.dnzCompanyId||'',
@@ -262,11 +267,31 @@
         status: 'new'
       };
       await set(msgRef, record);
-      return {ok:true, id: msgRef.key};
+      const verify = await get(msgRef);
+      if(!verify.exists()){
+        return {ok:false, error:'Mesaj kaydedilemedi. Firebase bağlantısını kontrol edin.'};
+      }
+      if(att){
+        try{
+          await set(ref(db, 'supportAttachments/'+msgId), att);
+        }catch(attErr){
+          console.error('Destek eki kaydedilemedi', attErr);
+          return {ok:true, id: msgId, warn:'Mesajınız iletildi fakat dosya eki kaydedilemedi. Metni tekrar gönderebilir veya eki küçültüp deneyebilirsiniz.'};
+        }
+      }
+      return {ok:true, id: msgId};
     }catch(e){
       console.error('Destek mesajı gönderilemedi', e);
+      const code = e && e.code ? String(e.code) : '';
+      if(code.includes('PERMISSION_DENIED')){
+        return {ok:false, error:'Mesaj kaydedilemedi (izin hatası). Firebase kurallarında supportMessages yazma iznini kontrol edin.'};
+      }
       return {ok:false, error:'Mesaj gönderilemedi. İnternet bağlantınızı kontrol edip tekrar deneyin.'};
     }
+  };
+  window.dnzGetAuthEmail = function(){
+    const user = auth.currentUser;
+    return user && user.email ? String(user.email) : '';
   };
   window.dnzCanViewSupportInbox = function(){
     const user = auth.currentUser;
@@ -274,16 +299,40 @@
     return String(user.email).trim().toLowerCase() === IMALAT_CATALOG_OWNER_EMAIL.toLowerCase();
   };
   window.dnzLoadSupportMessages = async function(){
-    if(!window.dnzCanViewSupportInbox()) return {ok:false, error:'Bu panel yalnızca uygulama geliştiricisine açıktır.', items:[]};
+    if(!window.dnzCanViewSupportInbox()) return {ok:false, error:'Bu panel yalnızca dnz.engindeniz@gmail.com hesabıyla görülebilir.', items:[]};
     try{
       const snap = await get(ref(db, 'supportMessages'));
       if(!snap.exists()) return {ok:true, items:[]};
-      const items = Object.entries(snap.val()).map(([id,m])=>Object.assign({id}, m||{}))
-        .sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+      const items = Object.entries(snap.val()).map(([id,m])=>{
+        if(!m || typeof m !== 'object') return null;
+        const row = Object.assign({id}, m);
+        if(row.attachment && typeof row.attachment === 'object' && row.attachment.dataUrl){
+          row.hasAttachment = true;
+          row.attachmentName = row.attachment.name || row.attachmentName;
+        }
+        delete row.attachment;
+        return row;
+      }).filter(Boolean).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
       return {ok:true, items};
     }catch(e){
       console.error('Destek mesajları okunamadı', e);
-      return {ok:false, error:'Mesajlar yüklenemedi.', items:[]};
+      const code = e && e.code ? String(e.code) : '';
+      if(code.includes('PERMISSION_DENIED')){
+        return {ok:false, error:'Mesajlar okunamadı (izin hatası). Firebase Rules\'ta supportMessages bölümünü publish ettiğinizden ve dnz.engindeniz@gmail.com ile giriş yaptığınızdan emin olun.', items:[]};
+      }
+      return {ok:false, error:'Mesajlar yüklenemedi. Firebase Console → Realtime Database → supportMessages yolunu kontrol edin.', items:[]};
+    }
+  };
+  window.dnzLoadSupportAttachment = async function(msgId){
+    if(!window.dnzCanViewSupportInbox() || !msgId) return null;
+    try{
+      let snap = await get(ref(db, 'supportAttachments/'+msgId));
+      if(snap.exists()) return snap.val();
+      snap = await get(ref(db, 'supportMessages/'+msgId+'/attachment'));
+      return snap.exists() ? snap.val() : null;
+    }catch(e){
+      console.error('Destek eki okunamadı', e);
+      return null;
     }
   };
   window.dnzUpdateSupportMessage = async function(id, patch){
@@ -296,6 +345,44 @@
       console.error('Destek mesajı güncellenemedi', e);
       return {ok:false, error:'Güncellenemedi.'};
     }
+  };
+  let supportInboxUnsub = null;
+  window.dnzSubscribeSupportInbox = function(onChange){
+    if(supportInboxUnsub){ supportInboxUnsub(); supportInboxUnsub = null; }
+    if(!window.dnzCanViewSupportInbox()) return false;
+    supportInboxUnsub = onValue(ref(db, 'supportMessages'), (snapshot)=>{
+      const items = [];
+      if(snapshot.exists()){
+        Object.entries(snapshot.val()).forEach(([id,m])=>{
+          if(!m || typeof m !== 'object') return;
+          const row = Object.assign({id}, m);
+          if(row.attachment && typeof row.attachment === 'object' && row.attachment.dataUrl){
+            row.hasAttachment = true;
+            row.attachmentName = row.attachment.name || row.attachmentName;
+          }
+          delete row.attachment;
+          items.push(row);
+        });
+        items.sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+      }
+      if(typeof onChange === 'function') onChange({ok:true, items});
+    }, (err)=>{
+      console.error('Destek mesajları dinleme hatası', err);
+      if(typeof onChange === 'function'){
+        const code = err && err.code ? String(err.code) : '';
+        onChange({
+          ok:false,
+          items:[],
+          error: code.includes('PERMISSION_DENIED')
+            ? 'Mesajlar okunamadı (izin hatası). Firebase Rules publish edildi mi?'
+            : 'Mesajlar yüklenemedi.'
+        });
+      }
+    });
+    return true;
+  };
+  window.dnzStopSupportInbox = function(){
+    if(supportInboxUnsub){ supportInboxUnsub(); supportInboxUnsub = null; }
   };
   window.dnzStartImalatCatalogSync = function(){
     if(imalatCatalogUnsub){ imalatCatalogUnsub(); imalatCatalogUnsub = null; }
@@ -13609,6 +13696,8 @@ function supportInboxItemHtml(m){
   const preview = konu || String(m.mesaj||'').trim().slice(0,80) || '(Mesaj yok)';
   const tarih = m.createdAt ? new Date(m.createdAt).toLocaleString('tr-TR') : '—';
   const att = m.attachment;
+  const hasAtt = !!(att && att.dataUrl) || !!m.hasAttachment;
+  const attName = (att && att.name) || m.attachmentName || 'ek';
   return `
     <details class="support-inbox-item" data-support-id="${esc(m.id)}">
       <summary>
@@ -13624,9 +13713,9 @@ function supportInboxItemHtml(m){
           ${m.activeProjectName ? `<span><b>Proje:</b> ${esc(m.activeProjectName)}</span><br>` : ''}
           ${m.userRole ? `<span><b>Rol:</b> ${m.userRole==='admin' ? 'Yönetici' : 'Personel'}</span><br>` : ''}
         </p>
-        ${att && att.dataUrl ? `
+        ${hasAtt ? `
           <button type="button" class="btn btn-ghost btn-sm" data-support-att="${esc(m.id)}">
-            ${attachmentIconSvg(att)} Dosyayı Aç (${esc(att.name||'ek')})
+            ${attachmentIconSvg(att || {type:m.attachmentType||''})} Dosyayı Aç (${esc(attName)})
           </button>
         ` : ''}
         <div class="btn-row" style="margin-top:10px;">
@@ -13638,11 +13727,18 @@ function supportInboxItemHtml(m){
     </details>
   `;
 }
-async function loadAndRenderSupportInbox(){
+async function loadAndRenderSupportInbox(cachedRes){
   const el = document.getElementById('supportInboxList');
   if(!el) return;
-  el.innerHTML = '<p class="hint">Yükleniyor…</p>';
-  const res = await window.dnzLoadSupportMessages();
+  if(!cachedRes){
+    el.innerHTML = '<p class="hint">Yükleniyor…</p>';
+  }
+  const res = cachedRes || await window.dnzLoadSupportMessages();
+  renderSupportInboxList(res);
+}
+function renderSupportInboxList(res){
+  const el = document.getElementById('supportInboxList');
+  if(!el) return;
   if(!res.ok){
     el.innerHTML = `<p class="hint" style="color:#c77700;">${esc(res.error||'Yüklenemedi')}</p>`;
     return;
@@ -13669,12 +13765,18 @@ async function loadAndRenderSupportInbox(){
     return;
   }
   const attMap = {};
-  items.forEach(m=>{ if(m.attachment) attMap[m.id]=m.attachment; });
+  items.forEach(m=>{
+    if(m.attachment && m.attachment.dataUrl) attMap[m.id]=m.attachment;
+  });
   el.innerHTML = items.map(supportInboxItemHtml).join('');
   el.querySelectorAll('[data-support-att]').forEach(btn=>{
-    btn.onclick = ()=>{
-      const att = attMap[btn.dataset.supportAtt];
-      if(att) openAttachment(att);
+    btn.onclick = async ()=>{
+      let att = attMap[btn.dataset.supportAtt];
+      if(!att || !att.dataUrl){
+        att = await window.dnzLoadSupportAttachment(btn.dataset.supportAtt);
+      }
+      if(att && att.dataUrl) openAttachment(att);
+      else showToast('Dosya eki yüklenemedi.');
     };
   });
   el.querySelectorAll('[data-support-status]').forEach(btn=>{
@@ -13706,6 +13808,7 @@ async function loadAndRenderSupportInbox(){
 }
 function wireSupportInboxPanel(){
   if(!canViewSupportInbox()) return;
+  if(typeof window.dnzStopSupportInbox === 'function') window.dnzStopSupportInbox();
   document.querySelectorAll('[data-support-filter]').forEach(btn=>{
     btn.onclick = ()=>{
       supportInboxFilter = btn.dataset.supportFilter;
@@ -13714,7 +13817,11 @@ function wireSupportInboxPanel(){
   });
   const refreshBtn = document.getElementById('btnRefreshSupportInbox');
   if(refreshBtn) refreshBtn.onclick = ()=> loadAndRenderSupportInbox();
-  loadAndRenderSupportInbox();
+  if(typeof window.dnzSubscribeSupportInbox === 'function'){
+    window.dnzSubscribeSupportInbox((res)=> renderSupportInboxList(res));
+  } else {
+    loadAndRenderSupportInbox();
+  }
 }
 
 function renderAyarlarTab(main){
@@ -13885,6 +13992,7 @@ function renderAyarlarTab(main){
         Gelen Destek Mesajları
       </h2>
       <p class="hint">Kullanıcıların gönderdiği destek mesajları burada listelenir. Mesajı açtığınızda otomatik olarak okundu işaretlenir.</p>
+      <p class="hint" style="font-size:0.72rem;">Giriş: <b>${esc(typeof window.dnzGetAuthEmail==='function' ? window.dnzGetAuthEmail() : '')}</b> · Firebase yolu: <code>supportMessages</code></p>
       <div class="support-inbox-filters">
         <button type="button" class="btn btn-ghost btn-sm" data-support-filter="all">Tümü</button>
         <button type="button" class="btn btn-ghost btn-sm" data-support-filter="new">Yeni</button>
@@ -14043,23 +14151,26 @@ function renderAyarlarTab(main){
       }
       btnSendSupport.disabled = true;
       btnSendSupport.textContent = 'Gönderiliyor…';
-      const activeProj = (state.projects||[]).find(p=>p.id===state.activeProjectId);
-      const res = await window.dnzSendSupportMessage({
-        konu,
-        mesaj,
-        attachment: supportMessageForm.dosya,
-        companyName: state.company?.name||'',
-        activeProjectId: state.activeProjectId||'',
-        activeProjectName: activeProj?.ad||''
-      });
-      btnSendSupport.disabled = false;
-      btnSendSupport.innerHTML = btnSendSupportHtml;
-      if(res.ok){
-        supportMessageForm = { konu:'', mesaj:'', dosya:null };
-        showToast('Mesajınız gönderildi. En kısa sürede size dönüş yapılacaktır.');
-        renderAyarlarTab(main);
-      } else {
-        showToast(res.error||'Mesaj gönderilemedi.');
+      try{
+        const activeProj = state.activeProjectId && state.projects ? state.projects[state.activeProjectId] : null;
+        const res = await window.dnzSendSupportMessage({
+          konu,
+          mesaj,
+          attachment: supportMessageForm.dosya,
+          companyName: state.company?.name||'',
+          activeProjectId: state.activeProjectId||'',
+          activeProjectName: activeProj?.name||''
+        });
+        if(res.ok){
+          supportMessageForm = { konu:'', mesaj:'', dosya:null };
+          showToast(res.warn || 'Mesajınız iletildi. Teşekkürler.');
+          renderAyarlarTab(main);
+        } else {
+          showToast(res.error||'Mesaj gönderilemedi.');
+        }
+      } finally {
+        btnSendSupport.disabled = false;
+        btnSendSupport.innerHTML = btnSendSupportHtml;
       }
     };
   }

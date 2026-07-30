@@ -1,0 +1,53 @@
+{
+  "rules": {
+    "userCompany": {
+      "$uid": {
+        ".read": "auth != null && $uid === auth.uid",
+        ".write": "auth != null && $uid === auth.uid && !data.exists()"
+      }
+    },
+    "inviteCodes": {
+      "$code": {
+        ".read": "auth != null",
+        ".write": "auth != null && ( (newData.exists() && newData.child('companyId').isString() && newData.child('createdBy').val() === auth.uid && root.child('companies').child(newData.child('companyId').val()).child('members').child(auth.uid).child('role').val() === 'admin') || (!newData.exists() && data.exists() && ( root.child('companies').child(data.child('companyId').val()).child('members').child(auth.uid).child('role').val() === 'admin' || root.child('companies').child(data.child('companyId').val()).child('members').child(auth.uid).child('viaCode').val() === $code )) )"
+      }
+    },
+    "companies": {
+      "$companyId": {
+        "meta": {
+          ".read": "auth != null && root.child('companies').child($companyId).child('members').child(auth.uid).exists()",
+          ".write": "auth != null && ( (!data.exists() && newData.child('createdBy').val() === auth.uid) || root.child('companies').child($companyId).child('members').child(auth.uid).child('role').val() === 'admin' )"
+        },
+        "active": {
+          ".read": "auth != null && root.child('companies').child($companyId).child('members').child(auth.uid).exists()",
+          ".write": false
+        },
+        "members": {
+          ".read": "auth != null && root.child('companies').child($companyId).child('members').child(auth.uid).exists()",
+          "$uid": {
+            ".write": "auth != null && ( ($uid === auth.uid && !data.exists() && !data.parent().hasChildren() && newData.child('role').val() === 'admin') || ($uid === auth.uid && !data.exists() && data.parent().hasChildren() && newData.child('role').val() === root.child('inviteCodes').child(newData.child('viaCode').val()).child('role').val() && root.child('inviteCodes').child(newData.child('viaCode').val()).child('companyId').val() === $companyId) || ($uid !== auth.uid && root.child('companies').child($companyId).child('members').child(auth.uid).child('role').val() === 'admin') )"
+          }
+        },
+        "stateJson": {
+          ".read": "auth != null && root.child('companies').child($companyId).child('members').child(auth.uid).exists() && root.child('companies').child($companyId).child('active').val() === true",
+          ".write": "auth != null && root.child('companies').child($companyId).child('members').child(auth.uid).exists() && root.child('companies').child($companyId).child('active').val() === true"
+        }
+      }
+    },
+    "globalCatalog": {
+      "imalat": {
+        ".read": "auth != null",
+        ".write": "auth != null && auth.token.email == 'dnz.engindeniz@gmail.com'"
+      }
+    },
+    "supportMessages": {
+      ".read": "auth != null && auth.token.email != null && auth.token.email.matches(/^dnz\\.engindeniz@gmail\\.com$/i)",
+      ".write": "auth != null",
+      ".indexOn": ["createdAt", "status"]
+    },
+    "supportAttachments": {
+      ".read": "auth != null && auth.token.email != null && auth.token.email.matches(/^dnz\\.engindeniz@gmail\\.com$/i)",
+      ".write": "auth != null"
+    }
+  }
+}
