@@ -267,10 +267,13 @@
         status: 'new'
       };
       await set(msgRef, record);
-      const verify = await get(msgRef);
-      if(!verify.exists()){
-        return {ok:false, error:'Mesaj kaydedilemedi. Firebase bağlantısını kontrol edin.'};
-      }
+      await set(ref(db, 'supportUserInbox/'+user.uid+'/'+msgId), {
+        konu: record.konu,
+        mesaj: record.mesaj,
+        createdAt: record.createdAt,
+        status: 'new',
+        hasAttachment: record.hasAttachment
+      });
       if(att){
         try{
           await set(ref(db, 'supportAttachments/'+msgId), att);
@@ -282,11 +285,11 @@
       return {ok:true, id: msgId};
     }catch(e){
       console.error('Destek mesajı gönderilemedi', e);
-      const code = e && e.code ? String(e.code) : '';
-      if(code.includes('PERMISSION_DENIED')){
-        return {ok:false, error:'Mesaj kaydedilemedi (izin hatası). Firebase kurallarında supportMessages yazma iznini kontrol edin.'};
+      const code = (e && e.code ? String(e.code) : '').toLowerCase();
+      if(code.includes('permission') || code.includes('denied')){
+        return {ok:false, error:'Mesaj kaydedilemedi (izin hatası). Firebase Rules\'ta supportMessages yazma iznini publish edin.'};
       }
-      return {ok:false, error:'Mesaj gönderilemedi. İnternet bağlantınızı kontrol edip tekrar deneyin.'};
+      return {ok:false, error:'Mesaj gönderilemedi: '+(e && e.message ? e.message : 'Bilinmeyen hata')};
     }
   };
   window.dnzGetAuthEmail = function(){
@@ -340,11 +343,93 @@
     if(!id || !patch || typeof patch !== 'object') return {ok:false, error:'Geçersiz istek.'};
     try{
       await update(ref(db, 'supportMessages/'+id), Object.assign({}, patch, {updatedAt: Date.now()}));
+      if(patch.status){
+        const msgSnap = await get(ref(db, 'supportMessages/'+id));
+        if(msgSnap.exists()){
+          const uid = msgSnap.val().userId;
+          if(uid) await update(ref(db, 'supportUserInbox/'+uid+'/'+id), {status: patch.status});
+        }
+      }
       return {ok:true};
     }catch(e){
       console.error('Destek mesajı güncellenemedi', e);
       return {ok:false, error:'Güncellenemedi.'};
     }
+  };
+  window.dnzSendSupportReply = async function(msgId, replyText){
+    if(!window.dnzCanViewSupportInbox()) return {ok:false, error:'Yanıt göndermek için geliştirici hesabı gerekir.'};
+    const text = String(replyText||'').trim();
+    if(!text) return {ok:false, error:'Yanıt metnini yazın.'};
+    const user = auth.currentUser;
+    try{
+      const msgSnap = await get(ref(db, 'supportMessages/'+msgId));
+      if(!msgSnap.exists()) return {ok:false, error:'Mesaj bulunamadı.'};
+      const msg = msgSnap.val()||{};
+      const reply = {text, at: Date.now(), byEmail: user.email||'', byUid: user.uid};
+      const patch = {reply, repliedAt: Date.now(), status: 'replied', updatedAt: Date.now()};
+      await update(ref(db, 'supportMessages/'+msgId), patch);
+      if(msg.userId){
+        const inboxRef = ref(db, 'supportUserInbox/'+msg.userId+'/'+msgId);
+        const inboxPatch = {reply, repliedAt: patch.repliedAt, status: 'replied'};
+        const inboxSnap = await get(inboxRef);
+        if(!inboxSnap.exists()){
+          await set(inboxRef, {
+            konu: msg.konu||'',
+            mesaj: msg.mesaj||'',
+            createdAt: msg.createdAt||Date.now(),
+            hasAttachment: !!msg.hasAttachment,
+            ...inboxPatch
+          });
+        } else {
+          await update(inboxRef, inboxPatch);
+        }
+      }
+      return {ok:true};
+    }catch(e){
+      console.error('Destek yanıtı gönderilemedi', e);
+      const code = (e && e.code ? String(e.code) : '').toLowerCase();
+      if(code.includes('permission') || code.includes('denied')){
+        return {ok:false, error:'Yanıt gönderilemedi (izin hatası). Firebase Rules güncel mi?'};
+      }
+      return {ok:false, error:'Yanıt gönderilemedi: '+(e.message||'Bilinmeyen hata')};
+    }
+  };
+  let mySupportUnsub = null;
+  window.dnzLoadMySupportMessages = async function(){
+    const user = auth.currentUser;
+    if(!user) return {ok:false, items:[], error:'Giriş yapmanız gerekiyor.'};
+    try{
+      const snap = await get(ref(db, 'supportUserInbox/'+user.uid));
+      if(!snap.exists()) return {ok:true, items:[]};
+      const items = Object.entries(snap.val()).map(([id,m])=>Object.assign({id}, m||{}))
+        .sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+      return {ok:true, items};
+    }catch(e){
+      console.error('Mesajlarım okunamadı', e);
+      return {ok:false, items:[], error:'Mesajlarınız yüklenemedi.'};
+    }
+  };
+  window.dnzSubscribeMySupport = function(onChange){
+    if(mySupportUnsub){ mySupportUnsub(); mySupportUnsub = null; }
+    const user = auth.currentUser;
+    if(!user) return false;
+    mySupportUnsub = onValue(ref(db, 'supportUserInbox/'+user.uid), (snapshot)=>{
+      const items = [];
+      if(snapshot.exists()){
+        Object.entries(snapshot.val()).forEach(([id,m])=>{
+          if(m && typeof m === 'object') items.push(Object.assign({id}, m));
+        });
+        items.sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+      }
+      if(typeof onChange === 'function') onChange({ok:true, items});
+    }, (err)=>{
+      console.error('Mesajlarım dinleme hatası', err);
+      if(typeof onChange === 'function') onChange({ok:false, items:[], error:'Mesajlar yüklenemedi.'});
+    });
+    return true;
+  };
+  window.dnzStopMySupport = function(){
+    if(mySupportUnsub){ mySupportUnsub(); mySupportUnsub = null; }
   };
   let supportInboxUnsub = null;
   window.dnzSubscribeSupportInbox = function(onChange){
@@ -1278,6 +1363,18 @@ html[data-theme="dark"] .urun-kart{background:rgba(255,255,255,0.05);border-colo
 .support-inbox-filters{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;}
 .support-inbox-filters .btn-sm{padding:5px 10px;font-size:0.72rem;}
 .support-inbox-filters .btn-sm.active{background:var(--aqua-dim);color:#fff;border-color:var(--aqua-dim);}
+.support-reply-box{
+  margin-top:10px;padding:10px 12px;border-radius:10px;
+  background:rgba(47,211,199,0.12);border:1px solid rgba(47,211,199,0.35);
+  font-size:0.82rem;line-height:1.45;white-space:pre-wrap;word-break:break-word;
+}
+.support-reply-admin{margin-top:12px;padding-top:10px;border-top:1px dashed rgba(11,36,54,0.15);}
+.support-reply-admin textarea{min-height:72px;}
+.support-my-item{
+  border:1px solid var(--glass-border);border-radius:12px;padding:12px 14px;margin-bottom:8px;
+  background:rgba(255,255,255,0.35);
+}
+.support-my-item .my-msg{color:var(--ink-soft);font-size:0.82rem;margin:6px 0;white-space:pre-wrap;word-break:break-word;}
 .quick-action-btn:hover{background:rgba(255,255,255,0.85);border-color:var(--aqua-dim);transform:translateY(-1px);}
 .quick-action-btn:active{transform:translateY(0);}
 html[data-theme="dark"] .quick-action-btn{background:rgba(255,255,255,0.06);}
@@ -13682,13 +13779,24 @@ function canViewSupportInbox(){
 }
 function supportStatusLabel(st){
   if(st==='resolved') return 'Çözüldü';
+  if(st==='replied') return 'Yanıtlandı';
   if(st==='read') return 'Okundu';
   return 'Yeni';
 }
 function supportStatusStyle(st){
   if(st==='resolved') return 'background:rgba(0,168,150,0.15);color:var(--aqua-dim);';
+  if(st==='replied') return 'background:rgba(47,211,199,0.2);color:var(--aqua-dim);';
   if(st==='read') return 'background:rgba(11,36,54,0.08);color:var(--ink-soft);';
   return 'background:rgba(199,119,0,0.15);color:#c77700;';
+}
+function supportReplyHtml(reply){
+  if(!reply || !reply.text) return '';
+  const tarih = reply.at ? new Date(reply.at).toLocaleString('tr-TR') : '';
+  return `
+    <div class="support-reply-box">
+      <div style="font-size:0.68rem;font-weight:700;color:var(--aqua-dim);margin-bottom:4px;">Geliştirici Yanıtı${tarih ? ' · '+esc(tarih) : ''}</div>
+      ${esc(reply.text)}
+    </div>`;
 }
 function supportInboxItemHtml(m){
   const st = m.status||'new';
@@ -13718,6 +13826,14 @@ function supportInboxItemHtml(m){
             ${attachmentIconSvg(att || {type:m.attachmentType||''})} Dosyayı Aç (${esc(attName)})
           </button>
         ` : ''}
+        ${supportReplyHtml(m.reply)}
+        <div class="support-reply-admin">
+          <label style="font-size:0.72rem;font-weight:700;color:var(--ink-soft);">Karşı Yanıt Yaz</label>
+          <textarea class="support-reply-input" data-support-reply-input="${esc(m.id)}" rows="3" placeholder="Kullanıcıya yanıtınızı yazın…">${esc(m.reply && m.reply.text ? '' : '')}</textarea>
+          <div class="btn-row" style="margin-top:8px;">
+            <button type="button" class="btn btn-primary btn-sm" data-support-send-reply="${esc(m.id)}">Yanıt Gönder</button>
+          </div>
+        </div>
         <div class="btn-row" style="margin-top:10px;">
           ${st!=='read' ? `<button type="button" class="btn btn-ghost btn-sm" data-support-status="read" data-support-id="${esc(m.id)}">Okundu</button>` : ''}
           ${st!=='resolved' ? `<button type="button" class="btn btn-primary btn-sm" data-support-status="resolved" data-support-id="${esc(m.id)}">Çözüldü</button>` : ''}
@@ -13748,13 +13864,14 @@ function renderSupportInboxList(res){
     all: allItems.length,
     new: allItems.filter(m=>(m.status||'new')==='new').length,
     read: allItems.filter(m=>m.status==='read').length,
+    replied: allItems.filter(m=>m.status==='replied').length,
     resolved: allItems.filter(m=>m.status==='resolved').length
   };
   document.querySelectorAll('[data-support-filter]').forEach(btn=>{
     const f = btn.dataset.supportFilter;
     btn.classList.toggle('active', f===supportInboxFilter);
-    const cnt = counts[f];
-    btn.textContent = f==='all' ? `Tümü (${cnt})` : f==='new' ? `Yeni (${cnt})` : f==='read' ? `Okundu (${cnt})` : `Çözüldü (${cnt})`;
+    const cnt = counts[f]||0;
+    btn.textContent = f==='all' ? `Tümü (${cnt})` : f==='new' ? `Yeni (${cnt})` : f==='read' ? `Okundu (${cnt})` : f==='replied' ? `Yanıtlandı (${cnt})` : `Çözüldü (${cnt})`;
   });
   let items = allItems;
   if(supportInboxFilter !== 'all'){
@@ -13777,6 +13894,23 @@ function renderSupportInboxList(res){
       }
       if(att && att.dataUrl) openAttachment(att);
       else showToast('Dosya eki yüklenemedi.');
+    };
+  });
+  el.querySelectorAll('[data-support-send-reply]').forEach(btn=>{
+    btn.onclick = async ()=>{
+      const id = btn.dataset.supportSendReply;
+      const ta = el.querySelector('[data-support-reply-input="'+id+'"]');
+      const text = ta ? ta.value.trim() : '';
+      if(!text){ showToast('Yanıt metnini yazın.'); return; }
+      btn.disabled = true;
+      const res = await window.dnzSendSupportReply(id, text);
+      btn.disabled = false;
+      if(res.ok){
+        showToast('Yanıt gönderildi.');
+        if(ta) ta.value = '';
+      } else {
+        showToast(res.error||'Yanıt gönderilemedi.');
+      }
     };
   });
   el.querySelectorAll('[data-support-status]').forEach(btn=>{
@@ -13805,6 +13939,45 @@ function renderSupportInboxList(res){
       }
     });
   });
+}
+function renderMySupportList(res){
+  const el = document.getElementById('mySupportList');
+  if(!el) return;
+  if(!res.ok){
+    el.innerHTML = `<p class="hint" style="color:#c77700;">${esc(res.error||'Yüklenemedi')}</p>`;
+    return;
+  }
+  const items = res.items||[];
+  if(!items.length){
+    el.innerHTML = '<p class="hint">Henüz destek mesajı göndermediniz.</p>';
+    return;
+  }
+  el.innerHTML = items.map(m=>{
+    const konu = (m.konu||'').trim();
+    const tarih = m.createdAt ? new Date(m.createdAt).toLocaleString('tr-TR') : '—';
+    const st = m.status||'new';
+    return `
+      <div class="support-my-item">
+        <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+          <span class="support-status-badge" style="${supportStatusStyle(st)}">${esc(supportStatusLabel(st))}</span>
+          <strong style="flex:1;min-width:0;word-break:break-word;">${esc(konu || 'Destek mesajı')}</strong>
+          <span class="support-inbox-meta">${esc(tarih)}</span>
+        </div>
+        <p class="my-msg">${esc(m.mesaj||'')}</p>
+        ${supportReplyHtml(m.reply)}
+        ${!m.reply ? '<p class="hint" style="margin:6px 0 0;font-size:0.72rem;">Yanıt bekleniyor…</p>' : ''}
+      </div>`;
+  }).join('');
+}
+function wireMySupportPanel(){
+  const el = document.getElementById('mySupportList');
+  if(!el) return;
+  if(typeof window.dnzStopMySupport === 'function') window.dnzStopMySupport();
+  if(typeof window.dnzSubscribeMySupport === 'function'){
+    window.dnzSubscribeMySupport((res)=> renderMySupportList(res));
+  } else if(typeof window.dnzLoadMySupportMessages === 'function'){
+    window.dnzLoadMySupportMessages().then(renderMySupportList);
+  }
 }
 function wireSupportInboxPanel(){
   if(!canViewSupportInbox()) return;
@@ -13985,18 +14158,30 @@ function renderAyarlarTab(main){
       </div>
     </div>
 
+    ${!canViewSupportInbox() ? `
+    <div class="card glass" id="mySupportCard">
+      <h2>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+        Mesajlarım & Yanıtlar
+      </h2>
+      <p class="hint">Gönderdiğiniz destek mesajları ve geliştiriciden gelen yanıtlar burada görünür.</p>
+      <div id="mySupportList"><p class="hint">Yükleniyor…</p></div>
+    </div>
+    ` : ''}
+
     ${canViewSupportInbox() ? `
     <div class="card glass" id="supportInboxCard">
       <h2>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-6l-2 3H4V6h16v6z"/><path d="M18 12V6H4v12h10"/><path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
         Gelen Destek Mesajları
       </h2>
-      <p class="hint">Kullanıcıların gönderdiği destek mesajları burada listelenir. Mesajı açtığınızda otomatik olarak okundu işaretlenir.</p>
+      <p class="hint">Kullanıcıların gönderdiği destek mesajları burada listelenir. Mesajı açıp <b>Karşı Yanıt Yaz</b> alanından kullanıcıya cevap verebilirsiniz.</p>
       <p class="hint" style="font-size:0.72rem;">Giriş: <b>${esc(typeof window.dnzGetAuthEmail==='function' ? window.dnzGetAuthEmail() : '')}</b> · Firebase yolu: <code>supportMessages</code></p>
       <div class="support-inbox-filters">
         <button type="button" class="btn btn-ghost btn-sm" data-support-filter="all">Tümü</button>
         <button type="button" class="btn btn-ghost btn-sm" data-support-filter="new">Yeni</button>
         <button type="button" class="btn btn-ghost btn-sm" data-support-filter="read">Okundu</button>
+        <button type="button" class="btn btn-ghost btn-sm" data-support-filter="replied">Yanıtlandı</button>
         <button type="button" class="btn btn-ghost btn-sm" data-support-filter="resolved">Çözüldü</button>
         <button type="button" class="btn btn-ghost btn-sm" id="btnRefreshSupportInbox" title="Yenile">↻ Yenile</button>
       </div>
@@ -14176,6 +14361,8 @@ function renderAyarlarTab(main){
   }
 
   wireSupportInboxPanel();
+
+  if(!canViewSupportInbox()) wireMySupportPanel();
 
   if(window.dnzUserRole === 'admin'){
     const inviteResultEl = document.getElementById('inviteCodeResult');

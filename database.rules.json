@@ -43,11 +43,19 @@
     "supportMessages": {
       ".read": "auth != null && auth.token.email != null && auth.token.email.matches(/^dnz\\.engindeniz@gmail\\.com$/i)",
       ".write": "auth != null",
-      ".indexOn": ["createdAt", "status"]
+      ".indexOn": ["createdAt", "status", "userId"]
     },
     "supportAttachments": {
       ".read": "auth != null && auth.token.email != null && auth.token.email.matches(/^dnz\\.engindeniz@gmail\\.com$/i)",
       ".write": "auth != null"
+    },
+    "supportUserInbox": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        "$msgId": {
+          ".write": "auth != null && ((!data.exists() && auth.uid === $uid) || (auth.token.email != null && auth.token.email.matches(/^dnz\\.engindeniz@gmail\\.com$/i)))"
+        }
+      }
     }
   }
 }
