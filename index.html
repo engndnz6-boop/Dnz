@@ -1449,7 +1449,22 @@ footer.appfoot{text-align:center;padding:14px;color:rgba(11,36,54,0.45);font-siz
 .checkline{display:flex;align-items:center;gap:6px;font-size:0.8rem;color:var(--ink-soft);}
 
 /* PDF hidden render area */
-#pdf-render-root{position:fixed;left:-99999px;top:0;width:794px;background:#ffffff;}
+#pdf-render-root{
+  position:fixed;left:-10000px;top:0;width:794px;max-width:100vw;
+  z-index:-1;opacity:0;pointer-events:none;overflow:visible;
+  background:#ffffff;visibility:hidden;
+}
+#pdf-render-root.pdf-capturing{
+  left:0 !important;visibility:visible !important;opacity:1 !important;z-index:2147483646 !important;
+}
+body.dnz-pdf-capturing #app{
+  visibility:hidden !important;
+}
+#pdfPreviewNode table{min-width:0;table-layout:fixed;}
+#pdfPreviewNode table th,
+#pdfPreviewNode table td{
+  white-space:normal;overflow-wrap:break-word;word-break:break-word;vertical-align:top;
+}
 /* PDF çıktılarındaki tablolar: genel tablo stilinden gelen white-space:nowrap ve
    min-width:760px kuralları, table-layout:fixed ile birleşince başlık ve hücre
    metinlerinin (örn. İmalat Cinsi, Birim) komşu hücrelerin üzerine taşmasına yol
@@ -5899,6 +5914,10 @@ function renderTeklifTab(main){
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3h18v18H3z"/></svg>
           Metrajdan Ekle
         </button>
+        <button class="btn btn-ghost" id="btnFromAnaliz" title="Kayıtlı teklif analizlerinden kalem ekle">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+          Analizden Ekle
+        </button>
       </div>
     </div>
 
@@ -5959,6 +5978,7 @@ function renderTeklifTab(main){
     if(!bagliProje){ showToast('Metrajdan eklemek için önce bir projeye bağlayın.'); return; }
     openMetrajPickModal(bagliProje);
   };
+  document.getElementById('btnFromAnaliz').onclick = ()=> openAnalizKayitPickModal();
   document.getElementById('btnTeklifPdf').onclick = ()=>openTeklifTemplateModal();
   document.getElementById('btnMergeTeklif').onclick = ()=>{
     const before = aktif.teklifRows.length;
@@ -9679,6 +9699,10 @@ function renderImalatHesapSection(sub){
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg>
           Analiz Sonucunu Müşteri Adına Kaydet
         </button>
+        <button class="btn btn-ghost" id="btnAnalizTeklifeEkle">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+          Teklife Ekle
+        </button>
       </div>
     </div>
     <div class="card glass">
@@ -9892,6 +9916,12 @@ function renderImalatHesapSection(sub){
   }
   document.getElementById('btnHesapCiktiPdf').onclick = ()=> exportHesapAnalizPdf();
   document.getElementById('btnAnalizKaydet').onclick = ()=> saveAnalizKaydi(sub);
+  const btnAnalizTeklif = document.getElementById('btnAnalizTeklifeEkle');
+  if(btnAnalizTeklif) btnAnalizTeklif.onclick = ()=>{
+    const kaynak = buildLiveAnalizTeklifKaynak();
+    if(!kaynak) return;
+    openAnalizTeklifPickModal(kaynak);
+  };
   const btnSemaA4 = document.getElementById('btnSemaA4Pdf');
   if(btnSemaA4) btnSemaA4.onclick = ()=> exportSemaPdf();
   bindSemaZoomControls();
@@ -9925,8 +9955,14 @@ function renderAnalizKayitlariHtml(){
                 ${(k.semalar||[]).length ? `<button class="icon-btn" data-act="sema" title="Şema Gör">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
                 </button>` : ''}
+                <button class="icon-btn" data-act="teklif" title="Teklife Ekle">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+                </button>
                 <button class="icon-btn" data-act="pdf" title="PDF Al">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M9 15h6M9 11h2"/></svg>
+                </button>
+                <button class="icon-btn" data-act="edit" title="Düzenle">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
                 </button>
                 <button class="icon-btn danger" data-act="delete" title="Sil">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0l-1 14a2 2 0 01-2 2H7a2 2 0 01-2-2L4 6h16z"/></svg>
@@ -9952,8 +9988,12 @@ function bindAnalizKayitlariEvents(sub){
       if(!kayit) return;
       if(act==='pdf'){
         exportAnalizKaydiPdf(kayit);
+      } else if(act==='teklif'){
+        openAnalizTeklifPickModal(buildKayitAnalizTeklifKaynak(kayit));
       } else if(act==='sema'){
         showAnalizSemaModal(kayit);
+      } else if(act==='edit'){
+        openAnalizKayitEditModal(kayit, sub);
       } else if(act==='delete'){
         confirmModal(`"${kayit.musteriAd}" adına kayıtlı bu analiz sonucunu silmek istediğinize emin misiniz?`, ()=>{
           state.malzemeAnalizKayitlari = (state.malzemeAnalizKayitlari||[]).filter(x=>x.id!==id);
@@ -10028,6 +10068,153 @@ function showAnalizSemaModal(kayit){
     </div>`;
   document.getElementById('semaModalClose').onclick = closeModal;
   document.getElementById('modalBackdrop').addEventListener('click',(e)=>{ if(e.target.id==='modalBackdrop') closeModal(); });
+}
+
+function recomputeAnalizKayitToplamlar(kayit){
+  const byCurrency = {};
+  (kayit.kalemler||[]).forEach(k=>{
+    const miktar = Math.round((parseFloat(k.miktar)||0)*100)/100;
+    const birimFiyat = Math.round((parseFloat(k.birimFiyat)||0)*100)/100;
+    k.miktar = miktar;
+    k.birimFiyat = birimFiyat;
+    k.tutar = Math.round(miktar * birimFiyat * 100)/100;
+    k.miktarText = [fmtNum(k.miktar), k.birim].filter(Boolean).join(' ');
+    const cur = k.paraBirimi || 'TRY';
+    if(!byCurrency[cur]) byCurrency[cur] = { toplamTutar:0, toplamBrut:0, iskontoTutar:0, toplamMaliyet:0, kar:0 };
+    byCurrency[cur].toplamTutar += k.tutar;
+    const listFiyat = parseFloat(k.listFiyat);
+    const brutLine = !isNaN(listFiyat) ? Math.round(miktar * listFiyat * 100)/100 : k.tutar;
+    byCurrency[cur].toplamBrut += brutLine;
+  });
+  Object.keys(byCurrency).forEach(cur=>{
+    const t = byCurrency[cur];
+    const old = (kayit.toplamlar||{})[cur] || {};
+    t.toplamTutar = Math.round(t.toplamTutar*100)/100;
+    t.toplamBrut = Math.round(t.toplamBrut*100)/100;
+    t.iskontoTutar = Math.round((t.toplamBrut - t.toplamTutar)*100)/100;
+    const oldNet = parseFloat(old.toplamTutar)||0;
+    if(oldNet > 0 && old.toplamMaliyet != null){
+      const ratio = t.toplamTutar / oldNet;
+      t.toplamMaliyet = Math.round((parseFloat(old.toplamMaliyet)||0) * ratio * 100)/100;
+    } else {
+      t.toplamMaliyet = Math.round((parseFloat(old.toplamMaliyet)||0)*100)/100;
+    }
+    t.kar = Math.round((t.toplamTutar - t.toplamMaliyet)*100)/100;
+  });
+  kayit.toplamlar = byCurrency;
+}
+function renderAnalizKayitEditToplamPreview(kalemler, toplamlar){
+  const curs = Object.keys(toplamlar||{});
+  if(!curs.length){
+    const sum = (kalemler||[]).reduce((a,k)=>a+(parseFloat(k.tutar)||0),0);
+    return `<div class="hint" style="margin-top:8px;">Toplam: <b>${fmtMoney(sum)}</b></div>`;
+  }
+  return `<div class="totals-strip" style="margin-top:10px;">${
+    curs.map(cur=>{
+      const t = toplamlar[cur];
+      return `<div class="total-chip"><span class="lbl">Toplam Satış${curs.length>1?` (${esc(CURRENCY_INFO[cur]?.label||cur)})`:''}</span><span class="val">${fmtMoney(t.toplamTutar, cur)}</span></div>`;
+    }).join('')
+  }</div>`;
+}
+function openAnalizKayitEditModal(kayit, sub){
+  if(!kayit) return;
+  const draft = JSON.parse(JSON.stringify(kayit));
+  const modalRoot = document.getElementById('modalRoot');
+  const refreshPreview = ()=>{
+    recomputeAnalizKayitToplamlar(draft);
+    const el = document.getElementById('akeToplamPreview');
+    if(el) el.innerHTML = renderAnalizKayitEditToplamPreview(draft.kalemler, draft.toplamlar);
+    document.querySelectorAll('#akeKalemTable tbody tr').forEach((tr,i)=>{
+      const k = draft.kalemler[i];
+      if(!k) return;
+      const tutarEl = tr.querySelector('[data-tutar]');
+      if(tutarEl) tutarEl.textContent = fmtMoney(k.tutar, k.paraBirimi);
+    });
+  };
+  modalRoot.innerHTML = `
+    <div class="modal-backdrop" id="modalBackdrop">
+      <div class="modal glass-strong glass" style="max-width:860px;width:96%;max-height:92vh;overflow:auto;">
+        <h3>Analiz Kaydını Düzenle</h3>
+        <p class="hint">Sistem: <b>${esc(draft.sistemAd)}</b> · Kayıt: ${esc(new Date(draft.tarih).toLocaleString('tr-TR'))}</p>
+        <div class="field-grid" style="margin-top:10px;">
+          <div class="field"><label>Müşteri Adı Soyadı</label>
+            <input type="text" id="ake-musteriAd" value="${esc(draft.musteriAd||'')}">
+          </div>
+          <div class="field"><label>Telefon</label>
+            <input type="text" id="ake-musteriTel" value="${esc(draft.musteriTel||'')}">
+          </div>
+          <div class="field"><label>Ölçü (${esc(draft.birim||'')})</label>
+            <input class="mono" type="number" step="any" min="0" id="ake-deger" value="${esc(draft.deger??'')}">
+          </div>
+          <div class="field" style="grid-column:span 2;"><label>Not</label>
+            <textarea id="ake-not" rows="2" placeholder="İsteğe bağlı not">${esc(draft.not||'')}</textarea>
+          </div>
+        </div>
+        <p class="hint" style="margin:12px 0 6px;">Malzeme kalemleri — miktar ve birim fiyatı düzenleyebilirsiniz:</p>
+        <div class="table-scroll">
+          <table id="akeKalemTable">
+            <thead><tr><th>Malzeme</th><th class="num">Miktar</th><th>Birim</th><th class="num">Birim Fiyat</th><th class="num">Tutar</th></tr></thead>
+            <tbody>
+              ${(draft.kalemler||[]).map((k,i)=>`
+                <tr data-idx="${i}">
+                  <td>${esc(k.ad)}</td>
+                  <td class="num"><input class="mono ake-miktar" type="number" step="any" min="0" value="${esc(k.miktar??'')}" style="width:90px;text-align:right;"></td>
+                  <td>${esc(k.birim||'—')}</td>
+                  <td class="num"><input class="mono ake-birimFiyat" type="number" step="any" min="0" value="${esc(k.birimFiyat??'')}" style="width:110px;text-align:right;"></td>
+                  <td class="num" data-tutar style="font-weight:700;">${fmtMoney(k.tutar, k.paraBirimi)}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+        <div id="akeToplamPreview"></div>
+        <div class="btn-row" style="margin-top:12px;justify-content:flex-end;">
+          <button class="btn btn-ghost" id="akeCancel">Vazgeç</button>
+          <button class="btn btn-primary" id="akeSave">Kaydet</button>
+        </div>
+      </div>
+    </div>`;
+  const syncDraftFromInputs = ()=>{
+    draft.musteriAd = document.getElementById('ake-musteriAd').value.trim();
+    draft.musteriTel = document.getElementById('ake-musteriTel').value.trim();
+    draft.not = document.getElementById('ake-not').value.trim();
+    const degerRaw = document.getElementById('ake-deger').value;
+    draft.deger = degerRaw==='' ? null : Math.round((parseFloat(degerRaw)||0)*100)/100;
+    document.querySelectorAll('#akeKalemTable tbody tr').forEach(tr=>{
+      const idx = parseInt(tr.dataset.idx,10);
+      const k = draft.kalemler[idx];
+      if(!k) return;
+      k.miktar = tr.querySelector('.ake-miktar')?.value ?? k.miktar;
+      k.birimFiyat = tr.querySelector('.ake-birimFiyat')?.value ?? k.birimFiyat;
+    });
+  };
+  document.querySelectorAll('.ake-miktar, .ake-birimFiyat').forEach(inp=>{
+    inp.addEventListener('input', ()=>{
+      syncDraftFromInputs();
+      refreshPreview();
+    });
+  });
+  refreshPreview();
+  document.getElementById('akeCancel').onclick = closeModal;
+  document.getElementById('modalBackdrop').addEventListener('click',(e)=>{ if(e.target.id==='modalBackdrop') closeModal(); });
+  document.getElementById('akeSave').onclick = ()=>{
+    syncDraftFromInputs();
+    if(!draft.musteriAd){ showToast('Müşteri adı zorunludur.'); return; }
+    if(draft.deger==null || isNaN(draft.deger)){ showToast('Geçerli bir ölçü değeri girin.'); return; }
+    recomputeAnalizKayitToplamlar(draft);
+    const orig = (state.malzemeAnalizKayitlari||[]).find(x=>x.id===kayit.id);
+    if(!orig){ showToast('Kayıt bulunamadı.'); return; }
+    orig.musteriAd = draft.musteriAd;
+    orig.musteriTel = draft.musteriTel;
+    orig.not = draft.not;
+    orig.deger = draft.deger;
+    orig.kalemler = draft.kalemler;
+    orig.toplamlar = draft.toplamlar;
+    saveState();
+    closeModal();
+    renderImalatHesapSection(sub);
+    showToast('Analiz kaydı güncellendi.');
+  };
 }
 
 // Malzeme Sonuç Paneli'nde girilmiş olan mevcut hesaplamayı ve müşteri bilgilerini
@@ -10111,30 +10298,17 @@ function exportAnalizKaydiPdf(kayit){
         <div style="font-size:18px;font-weight:800;color:#0B2436;">${fmtMoney(t.toplamTutar, cur)}</div>
       </div>`;
   }).join('');
-  const musteriSatiri = [
-    kayit.musteriAd ? `Müşteri: ${esc(kayit.musteriAd)}` : '',
-    kayit.musteriTel ? `Tel: ${esc(kayit.musteriTel)}` : ''
-  ].filter(Boolean).join(' &nbsp;•&nbsp; ');
   const mahalOzet = (kayit.mahaller && kayit.mahaller.length>1)
     ? `<div style="text-align:center;font-size:9px;color:#345264;margin-bottom:8px;">${kayit.mahaller.map((m,i)=>`${esc(m.ad||((i+1)+'. Mahaller'))}: ${fmtNum(m.deger)} ${esc(kayit.birim)}`).join(' · ')}</div>`
     : '';
-  const semaHtml = (kayit.semalar||[]).length
-    ? `<div style="margin-bottom:16px;">${(kayit.semalar||[]).map(s=>`
-        <div style="margin-bottom:14px;page-break-inside:avoid;">
-          <div style="font-size:10px;font-weight:700;color:#1C6E8C;text-align:center;margin-bottom:6px;">${esc(s.ad)}</div>
-          <div style="text-align:center;">${s.html}</div>
-        </div>`).join('')}</div>`
-    : '';
   const html = `
-    ${pdfHeaderHtmlSimple('Teklif Analizi')}
+    ${pdfHeaderHtmlSimple('Teklif Analizi', { musteriAd: kayit.musteriAd, musteriTel: kayit.musteriTel })}
     <div style="font-family:'Outfit',sans-serif;font-weight:700;font-size:15px;letter-spacing:1px;margin-bottom:6px;color:#1C6E8C;text-align:center;">TEKLİF ANALİZİ</div>
     <div style="text-align:center;font-size:10px;color:#345264;margin-bottom:4px;">
       ${esc(kayit.sistemAd)} &nbsp;•&nbsp; Hesaplanan Ölçü: ${fmtNum(kayit.deger)} ${esc(kayit.birim)}
     </div>
-    ${musteriSatiri ? `<div style="text-align:center;font-size:10px;color:#0B2436;font-weight:700;margin-bottom:4px;">${musteriSatiri}</div>` : ''}
     ${mahalOzet}
     ${(kayit.fireOran>0 || kayit.iskontoPct>0) ? `<div style="text-align:center;font-size:10px;color:#345264;font-weight:700;margin-bottom:14px;">${[kayit.fireOran>0?`Fire: %${fmtNum(kayit.fireOran)}`:'', kayit.iskontoPct>0?`İskonto: %${fmtNum(kayit.iskontoPct)}`:''].filter(Boolean).join(' &nbsp;•&nbsp; ')}</div>` : '<div style="margin-bottom:14px;"></div>'}
-    ${semaHtml}
     <table style="width:100%;border-collapse:collapse;font-size:10px;table-layout:fixed;">
       <colgroup>
         <col style="width:40%"><col style="width:24%"><col style="width:18%"><col style="width:18%">
@@ -13716,6 +13890,185 @@ function groupMetrajForPicker(proj){
   return Array.from(map.values());
 }
 
+function mapMalzemeBirimToTeklif(birim){
+  const b = String(birim||'').toLowerCase().replace('m²','m2');
+  if(UNITS.includes(b)) return b;
+  if(b==='adet' || b==='paket' || b==='kutu' || b==='rulo' || b==='takım' || b==='takim' || b==='torba') return 'adet';
+  if(b==='kg') return 'kg';
+  if(b==='ton') return 'ton';
+  if(b==='m3') return 'm3';
+  if(b==='litre') return 'adet';
+  return 'adet';
+}
+function birimLabelToTeklifCode(label){
+  const raw = String(label||'').trim();
+  const hit = UNITS.find(u=>(UNIT_LABEL[u]||u)===raw || u===raw.toLowerCase());
+  if(hit) return hit;
+  return mapMalzemeBirimToTeklif(raw);
+}
+function buildLiveAnalizTeklifKaynak(){
+  const sistem = state.imalatSistemleri.find(s=>s.id===ui.imalatCalcSistemId) || null;
+  if(!sistem){ showToast('Lütfen önce bir imalat sistemi seçin.'); return null; }
+  if(!sistem.malzemeler.length){ showToast('Bu sistemde henüz malzeme tanımlı değil.'); return null; }
+  const parsed = getHesapDeger();
+  if(parsed.value==null){ showToast('Lütfen hesaplama için bir ölçü/alan girin.'); return null; }
+  const basisLabel = parsed.unit==='mt' ? 'mt' : 'm²';
+  const rows = collectHesapSonucRows(sistem, parsed.value).map(({m,r})=>({
+    aciklama: `${sistem.ad} — ${m.ad}`,
+    miktar: Math.round((parseFloat(r.miktar)||0)*100)/100,
+    birim: mapMalzemeBirimToTeklif(getMalzemeBirim(m)),
+    birimFiyat: Math.round((parseFloat(r.netFiyat)||0)*100)/100,
+    miktarLabel: formatHesapMiktarPlain(m, r),
+    tutarLabel: fmtMoney(r.tutar, r.paraBirimi)
+  }));
+  if(!rows.length){ showToast('Eklenecek malzeme kalemi yok.'); return null; }
+  return {
+    baslik: `${sistem.ad} · ${fmtNum(parsed.value)} ${basisLabel}`,
+    musteriAd: (ui.imalatCalcMusteriAd||'').trim(),
+    musteriTel: (ui.imalatCalcMusteriTel||'').trim(),
+    rows
+  };
+}
+function buildKayitAnalizTeklifKaynak(kayit){
+  if(!kayit) return null;
+  const rows = (kayit.kalemler||[]).map(k=>({
+    aciklama: `${kayit.sistemAd} — ${k.ad}`,
+    miktar: Math.round((parseFloat(k.miktar)||0)*100)/100,
+    birim: birimLabelToTeklifCode(k.birim),
+    birimFiyat: Math.round((parseFloat(k.birimFiyat)||0)*100)/100,
+    miktarLabel: k.miktarText || `${fmtNum(k.miktar)} ${k.birim||''}`,
+    tutarLabel: fmtMoney(k.tutar, k.paraBirimi||'TRY')
+  }));
+  if(!rows.length){ showToast('Bu analizde kalem yok.'); return null; }
+  return {
+    baslik: `${kayit.sistemAd} · ${fmtNum(kayit.deger)} ${kayit.birim}`,
+    musteriAd: kayit.musteriAd||'',
+    musteriTel: kayit.musteriTel||'',
+    rows
+  };
+}
+function teklifSeciciOptionsHtml(selectedId){
+  return tumTeklifKayitlari().map(t=>{
+    const p = t.projectId && state.projects[t.projectId] ? state.projects[t.projectId].name : 'Projeye bağlı değil';
+    const no = t.teklifNo || (normalizeTeklifNoPrefix(t.teklifNoPrefix)+'-…');
+    return `<option value="${t.id}" ${t.id===selectedId?'selected':''}>${esc(no)} — ${esc(p)} — ${fmtMoney(teklifKdvliToplam(t).brut)}</option>`;
+  }).join('');
+}
+function openAnalizTeklifPickModal(kaynak){
+  kaynak = kaynak || null;
+  if(!kaynak || !kaynak.rows || !kaynak.rows.length){
+    showToast('Eklenecek analiz kalemi yok.');
+    return;
+  }
+  const teklifler = tumTeklifKayitlari();
+  if(!teklifler.length){
+    yeniTeklifEkleGlobal();
+    saveState();
+  }
+  const list = tumTeklifKayitlari();
+  if(!list.length){ showToast('Teklif oluşturulamadı.'); return; }
+  let defaultTeklifId = ui.aktifTeklifKayitId || list[0].id;
+  const modalRoot = document.getElementById('modalRoot');
+  modalRoot.innerHTML = `
+    <div class="modal-backdrop" id="modalBackdrop">
+      <div class="modal glass-strong glass" style="max-width:720px;width:96%;">
+        <h3>Analizden Teklife Ekle</h3>
+        <p class="hint">${esc(kaynak.baslik)}${kaynak.musteriAd ? ` · Müşteri: <b>${esc(kaynak.musteriAd)}</b>` : ''}</p>
+        <div class="field" style="margin-top:8px;"><label>Hangi teklife eklensin?</label>
+          <select id="atp-teklif">${teklifSeciciOptionsHtml(defaultTeklifId)}</select>
+        </div>
+        <p class="hint" style="margin:10px 0 6px;">Eklenecek kalemleri seçin:</p>
+        <div class="pick-list" id="analizPickList">
+          ${kaynak.rows.map((row,i)=>`
+            <div class="pick-item">
+              <input type="checkbox" id="ap-${i}" data-idx="${i}" checked>
+              <label for="ap-${i}">${esc(row.aciklama)} — <b>${esc(row.miktarLabel)}</b> · ${esc(row.tutarLabel)}</label>
+            </div>
+          `).join('')}
+        </div>
+        <div class="btn-row" style="margin-top:10px;justify-content:flex-end;">
+          <button class="btn btn-ghost" id="atpCancel">Vazgeç</button>
+          <button class="btn btn-primary" id="atpAdd">Seçilenleri Teklife Ekle</button>
+        </div>
+      </div>
+    </div>
+  `;
+  document.getElementById('atpCancel').onclick = closeModal;
+  document.getElementById('modalBackdrop').addEventListener('click',(e)=>{ if(e.target.id==='modalBackdrop') closeModal(); });
+  document.getElementById('atpAdd').onclick = ()=>{
+    const teklifId = document.getElementById('atp-teklif').value;
+    const teklif = list.find(t=>t.id===teklifId);
+    if(!teklif){ showToast('Teklif bulunamadı.'); return; }
+    const checked = Array.from(document.querySelectorAll('#analizPickList input:checked'));
+    if(!checked.length){ showToast('Lütfen en az bir kalem seçin.'); return; }
+    checked.forEach(chk=>{
+      const row = kaynak.rows[parseInt(chk.dataset.idx,10)];
+      if(!row) return;
+      mergeOrAddTeklifRow(teklif, {
+        aciklama: row.aciklama,
+        miktar: row.miktar,
+        birim: row.birim,
+        birimFiyat: row.birimFiyat
+      });
+    });
+    if(kaynak.musteriAd && !String(teklif.musteriAdSoyad||'').trim()) teklif.musteriAdSoyad = kaynak.musteriAd;
+    if(kaynak.musteriTel && !String(teklif.musteriTelefon||'').trim()) teklif.musteriTelefon = kaynak.musteriTel;
+    ui.aktifTeklifKayitId = teklif.id;
+    saveState();
+    closeModal();
+    if(ui.tab==='teklif'){
+      teklifForm = emptyTeklifForm();
+      renderMain();
+    } else {
+      showToast(`${checked.length} kalem "${teklif.teklifNo||'teklif'}" formuna eklendi. Teklif sekmesinden görebilirsiniz.`);
+    }
+  };
+}
+function openAnalizKayitPickModal(){
+  const list = (state.malzemeAnalizKayitlari||[]).slice().sort((a,b)=>b.tarih-a.tarih);
+  if(!list.length){
+    showToast('Kayıtlı teklif analizi yok. Önce İmalat → Hesaplama Paneli\'nden analiz kaydedin veya oradan doğrudan Teklife Ekle kullanın.');
+    return;
+  }
+  const modalRoot = document.getElementById('modalRoot');
+  modalRoot.innerHTML = `
+    <div class="modal-backdrop" id="modalBackdrop">
+      <div class="modal glass-strong glass" style="max-width:720px;width:96%;">
+        <h3>Analizden Teklife Ekle</h3>
+        <p class="hint">Hangi kayıtlı analiz sonucu teklife aktarılsın?</p>
+        <div class="pick-list" id="analizKayitPickList">
+          ${list.map((k,i)=>{
+            const curs = Object.keys(k.toplamlar||{});
+            const toplamStr = curs.length ? curs.map(cur=>fmtMoney(k.toplamlar[cur].toplamTutar, cur)).join(' / ') : '—';
+            return `<div class="pick-item" style="cursor:pointer;" data-kayit-id="${esc(k.id)}">
+              <input type="radio" name="analizKayitPick" id="akp-${i}" value="${esc(k.id)}" ${i===0?'checked':''}>
+              <label for="akp-${i}" style="cursor:pointer;">
+                <b>${esc(k.musteriAd||'—')}</b> · ${esc(k.sistemAd)} · ${fmtNum(k.deger)} ${esc(k.birim)} · ${esc(toplamStr)}
+                <span style="color:var(--ink-soft);font-size:0.72rem;"> · ${esc(new Date(k.tarih).toLocaleDateString('tr-TR'))}</span>
+              </label>
+            </div>`;
+          }).join('')}
+        </div>
+        <div class="btn-row" style="margin-top:10px;justify-content:flex-end;">
+          <button class="btn btn-ghost" id="akpCancel">Vazgeç</button>
+          <button class="btn btn-primary" id="akpNext">Devam</button>
+        </div>
+      </div>
+    </div>
+  `;
+  document.getElementById('akpCancel').onclick = closeModal;
+  document.getElementById('modalBackdrop').addEventListener('click',(e)=>{ if(e.target.id==='modalBackdrop') closeModal(); });
+  document.getElementById('akpNext').onclick = ()=>{
+    const picked = document.querySelector('input[name="analizKayitPick"]:checked');
+    if(!picked){ showToast('Lütfen bir analiz seçin.'); return; }
+    const kayit = list.find(k=>k.id===picked.value);
+    if(!kayit){ showToast('Analiz bulunamadı.'); return; }
+    closeModal();
+    const kaynak = buildKayitAnalizTeklifKaynak(kayit);
+    if(kaynak) openAnalizTeklifPickModal(kaynak);
+  };
+}
+
 function openMetrajPickModal(proj){
   const groups = groupMetrajForPicker(proj);
   const modalRoot = document.getElementById('modalRoot');
@@ -14733,11 +15086,14 @@ function pdfHeaderHtml(proj, subtitle){
 }
 // Proje/işveren bilgisine ihtiyaç duymayan çıktılar (ör. Hesaplama Paneli'ndeki
 // "Teklif Analizi" çıktısı) için sadece firma bilgisi ve tarih gösteren sade başlık.
-function pdfHeaderHtmlSimple(subtitle){
+function pdfHeaderHtmlSimple(subtitle, opts){
+  opts = opts || {};
   const logo = state.company.logo ? `<img src="${state.company.logo}" style="max-height:56px;max-width:180px;object-fit:contain;">` : '';
   const nameLine = state.company.name ? `<div style="font-family:'Outfit',sans-serif;font-weight:800;font-size:18px;color:#0B2436;">${esc(state.company.name)}</div>` : '';
   const detailLines = companyDetailLinesHtml();
   const subLine = subtitle ? `<div style="font-size:11px;color:#345264;">${esc(subtitle)}</div>` : '';
+  const musteriAd = (opts.musteriAd||'').trim();
+  const musteriTel = (opts.musteriTel||'').trim();
   return `
   <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #1C6E8C;padding-bottom:14px;margin-bottom:16px;">
     <div style="display:flex;flex-direction:column;align-items:flex-start;gap:6px;">
@@ -14750,6 +15106,8 @@ function pdfHeaderHtmlSimple(subtitle){
     </div>
     <div style="text-align:right;font-size:11px;color:#345264;">
       <div><b>Tarih:</b> ${todayStr()}</div>
+      ${musteriAd ? `<div style="margin-top:4px;"><b>Müşteri:</b> ${esc(musteriAd)}</div>` : ''}
+      ${musteriTel ? `<div><b>Tel:</b> ${esc(musteriTel)}</div>` : ''}
     </div>
   </div>`;
 }
@@ -14772,11 +15130,41 @@ async function buildPdfDoc(html, orientation, opts){
   const paper = PAPER[paperSize] || PAPER.a4;
   const width = orientation === 'l' ? paper.wL : paper.wP;
   const root = document.getElementById('pdf-render-root');
+  if(!root) throw new Error('PDF render alanı bulunamadı.');
+  const savedRootCss = root.style.cssText;
   root.style.width = width+'px';
-  root.innerHTML = `<div id="pdf-inner" style="${pdfBaseStyles(width)}overflow:hidden;">${html}</div>`;
-  await new Promise(r=>setTimeout(r,60));
+  root.style.maxWidth = width+'px';
+  root.innerHTML = `<div id="pdf-inner" style="${pdfBaseStyles(width)}box-sizing:border-box;">${html}</div>`;
+  await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
+  if(document.fonts && document.fonts.ready) await document.fonts.ready;
   const node = document.getElementById('pdf-inner');
-  const canvas = await html2canvas(node, {scale:2, useCORS:true, backgroundColor:'#ffffff', windowWidth:width});
+  if(!node) throw new Error('PDF içeriği oluşturulamadı.');
+  const captureW = Math.max(node.scrollWidth, node.offsetWidth, width);
+  const captureH = Math.max(node.scrollHeight, node.offsetHeight, 1);
+  document.body.classList.add('dnz-pdf-capturing');
+  root.classList.add('pdf-capturing');
+  let canvas;
+  try{
+    canvas = await html2canvas(node, {
+      scale: Math.min(2, window.devicePixelRatio || 2),
+      useCORS: true,
+      backgroundColor: '#ffffff',
+      width: captureW,
+      height: captureH,
+      windowWidth: captureW,
+      windowHeight: captureH,
+      scrollX: 0,
+      scrollY: 0,
+      x: 0,
+      y: 0,
+      logging: false
+    });
+  }finally{
+    root.classList.remove('pdf-capturing');
+    document.body.classList.remove('dnz-pdf-capturing');
+    root.innerHTML = '';
+    root.style.cssText = savedRootCss;
+  }
   const imgData = canvas.toDataURL('image/png');
   const { jsPDF } = window.jspdf;
   const pdf = new jsPDF(orientation,'mm', paperSize);
@@ -14809,8 +15197,6 @@ async function buildPdfDoc(html, orientation, opts){
       heightLeft -= pageHeight;
     }
   }
-  root.innerHTML = '';
-  root.style.width = '';
   return pdf;
 }
 async function generateAndSavePdf(html, filename, orientation, opts){
@@ -15014,19 +15400,36 @@ function showPdfPreview(html, filename, orientation, opts){
   const scaleWrap = document.getElementById('pdfPreviewScaleWrap');
   const sharePanel = document.getElementById('pvSharePanel');
   const mainActions = document.getElementById('pvMainActions');
+  let previewResizeObs = null;
   // Dar ekranlarda (mobil) sabit genişlikli (794/1123px) belgeyi modal genişliğine
   // sığdırmak için ölçekliyoruz; böylece yatay kaydırmadan tüm sayfa görülebiliyor.
   const fitScale = ()=>{
-    const available = scaleWrap.parentElement.clientWidth - 4;
+    if(!scaleWrap || !previewNode) return;
+    const available = Math.max(280, (scaleWrap.parentElement?.clientWidth || 320) - 4);
     const scale = Math.min(1, available / width);
     previewNode.style.transform = `scale(${scale})`;
     previewNode.style.transformOrigin = 'top left';
-    scaleWrap.style.height = (previewNode.offsetHeight * scale) + 'px';
-    scaleWrap.style.width = (width * scale) + 'px';
+    const fullH = Math.max(previewNode.scrollHeight, previewNode.offsetHeight, 1);
+    scaleWrap.style.height = Math.ceil(fullH * scale) + 'px';
+    scaleWrap.style.width = Math.ceil(width * scale) + 'px';
   };
-  requestAnimationFrame(fitScale);
+  const scheduleFitScale = ()=>{
+    requestAnimationFrame(()=>requestAnimationFrame(fitScale));
+    setTimeout(fitScale, 100);
+    setTimeout(fitScale, 350);
+  };
+  scheduleFitScale();
+  if(document.fonts && document.fonts.ready) document.fonts.ready.then(scheduleFitScale);
   window.addEventListener('resize', fitScale);
-  const cleanupAndClose = ()=>{ window.removeEventListener('resize', fitScale); closeModal(); };
+  if(typeof ResizeObserver !== 'undefined' && scaleWrap?.parentElement){
+    previewResizeObs = new ResizeObserver(fitScale);
+    previewResizeObs.observe(scaleWrap.parentElement);
+  }
+  const cleanupAndClose = ()=>{
+    window.removeEventListener('resize', fitScale);
+    if(previewResizeObs){ previewResizeObs.disconnect(); previewResizeObs = null; }
+    closeModal();
+  };
 
   const hideSharePanel = ()=>{
     sharePanel.style.display = 'none';
@@ -15525,7 +15928,7 @@ async function exportHesapAnalizPdf(){
   }).join('');
 
   const html = `
-    ${pdfHeaderHtmlSimple('Teklif Analizi')}
+    ${pdfHeaderHtmlSimple('Teklif Analizi', { musteriAd: ui.imalatCalcMusteriAd, musteriTel: ui.imalatCalcMusteriTel })}
     <div style="font-family:'Outfit',sans-serif;font-weight:700;font-size:15px;letter-spacing:1px;margin-bottom:6px;color:#1C6E8C;text-align:center;">TEKLİF ANALİZİ</div>
     <div style="text-align:center;font-size:10px;color:#345264;margin-bottom:4px;">
       ${esc(sistem.ad)} &nbsp;•&nbsp; Hesaplanan Ölçü: ${fmtNum(deger)} ${basisLabel}${olcuAciklama? ' &nbsp;('+olcuAciklama+')' : ''}
