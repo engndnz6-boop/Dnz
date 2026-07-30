@@ -37,7 +37,10 @@
     get,
     update,
     onValue,
-    push
+    push,
+    query,
+    orderByChild,
+    equalTo
   } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
   const firebaseConfig = {
     apiKey: "AIzaSyDDf6nEFNiJb1jubQX5ZF8XxOAol8K6laE",
@@ -267,13 +270,17 @@
         status: 'new'
       };
       await set(msgRef, record);
-      await set(ref(db, 'supportUserInbox/'+user.uid+'/'+msgId), {
-        konu: record.konu,
-        mesaj: record.mesaj,
-        createdAt: record.createdAt,
-        status: 'new',
-        hasAttachment: record.hasAttachment
-      });
+      try{
+        await set(ref(db, 'supportUserInbox/'+user.uid+'/'+msgId), {
+          konu: record.konu,
+          mesaj: record.mesaj,
+          createdAt: record.createdAt,
+          status: 'new',
+          hasAttachment: record.hasAttachment
+        });
+      }catch(inboxErr){
+        console.warn('Kullanıcı kutusu yazılamadı (mesaj kaydedildi)', inboxErr);
+      }
       if(att){
         try{
           await set(ref(db, 'supportAttachments/'+msgId), att);
@@ -394,37 +401,60 @@
       return {ok:false, error:'Yanıt gönderilemedi: '+(e.message||'Bilinmeyen hata')};
     }
   };
+  function mySupportQueryRef(uid){
+    return query(ref(db, 'supportMessages'), orderByChild('userId'), equalTo(uid));
+  }
+  function mapMySupportItems(snapshot){
+    const items = [];
+    if(snapshot.exists()){
+      Object.entries(snapshot.val()).forEach(([id,m])=>{
+        if(!m || typeof m !== 'object') return;
+        const row = Object.assign({id}, m);
+        if(row.attachment && typeof row.attachment === 'object') delete row.attachment;
+        delete row.userAgent;
+        items.push(row);
+      });
+      items.sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+    }
+    return items;
+  }
   let mySupportUnsub = null;
   window.dnzLoadMySupportMessages = async function(){
     const user = auth.currentUser;
     if(!user) return {ok:false, items:[], error:'Giriş yapmanız gerekiyor.'};
     try{
-      const snap = await get(ref(db, 'supportUserInbox/'+user.uid));
-      if(!snap.exists()) return {ok:true, items:[]};
-      const items = Object.entries(snap.val()).map(([id,m])=>Object.assign({id}, m||{}))
-        .sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
-      return {ok:true, items};
+      const snap = await get(mySupportQueryRef(user.uid));
+      return {ok:true, items: mapMySupportItems(snap)};
     }catch(e){
       console.error('Mesajlarım okunamadı', e);
+      const code = (e && e.code ? String(e.code) : '').toUpperCase();
+      if(code.includes('PERMISSION_DENIED')){
+        return {ok:false, items:[], error:'Mesajlar okunamadı (izin hatası). Firebase Rules güncellenip publish edildi mi?'};
+      }
       return {ok:false, items:[], error:'Mesajlarınız yüklenemedi.'};
     }
   };
   window.dnzSubscribeMySupport = function(onChange){
     if(mySupportUnsub){ mySupportUnsub(); mySupportUnsub = null; }
     const user = auth.currentUser;
-    if(!user) return false;
-    mySupportUnsub = onValue(ref(db, 'supportUserInbox/'+user.uid), (snapshot)=>{
-      const items = [];
-      if(snapshot.exists()){
-        Object.entries(snapshot.val()).forEach(([id,m])=>{
-          if(m && typeof m === 'object') items.push(Object.assign({id}, m));
-        });
-        items.sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
-      }
-      if(typeof onChange === 'function') onChange({ok:true, items});
+    if(!user){
+      if(typeof onChange === 'function') onChange({ok:false, items:[], error:'Giriş yapmanız gerekiyor.'});
+      return false;
+    }
+    mySupportUnsub = onValue(mySupportQueryRef(user.uid), (snapshot)=>{
+      if(typeof onChange === 'function') onChange({ok:true, items: mapMySupportItems(snapshot)});
     }, (err)=>{
       console.error('Mesajlarım dinleme hatası', err);
-      if(typeof onChange === 'function') onChange({ok:false, items:[], error:'Mesajlar yüklenemedi.'});
+      if(typeof onChange === 'function'){
+        const code = err && err.code ? String(err.code) : '';
+        onChange({
+          ok:false,
+          items:[],
+          error: code.includes('PERMISSION_DENIED')
+            ? 'Mesajlar okunamadı (izin hatası). Firebase Rules güncellenip publish edildi mi?'
+            : 'Mesajlar yüklenemedi.'
+        });
+      }
     });
     return true;
   };

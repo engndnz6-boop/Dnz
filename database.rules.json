@@ -41,9 +41,12 @@
       }
     },
     "supportMessages": {
-      ".read": "auth != null && auth.token.email != null && auth.token.email.matches(/^dnz\\.engindeniz@gmail\\.com$/i)",
+      ".read": "auth != null && ((auth.token.email != null && auth.token.email.matches(/^dnz\\.engindeniz@gmail\\.com$/i)) || (query.orderByChild == 'userId' && query.equalTo == auth.uid))",
       ".write": "auth != null",
-      ".indexOn": ["createdAt", "status", "userId"]
+      ".indexOn": ["createdAt", "status", "userId"],
+      "$msgId": {
+        ".read": "auth != null && ((auth.token.email != null && auth.token.email.matches(/^dnz\\.engindeniz@gmail\\.com$/i)) || data.child('userId').val() === auth.uid)"
+      }
     },
     "supportAttachments": {
       ".read": "auth != null && auth.token.email != null && auth.token.email.matches(/^dnz\\.engindeniz@gmail\\.com$/i)",
