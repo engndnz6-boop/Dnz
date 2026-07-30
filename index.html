@@ -1017,6 +1017,31 @@ td.num,th.num{font-family:var(--font-mono);text-align:right;}
 .project-item .pinfo .pbadges{display:flex;flex-wrap:wrap;gap:5px;margin:3px 0;}
 .project-item .pinfo span{font-size:0.72rem;color:var(--ink-soft);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;}
 
+/* Kaydedilen ürün kart ızgarası */
+.urun-kart-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(220px,1fr));
+  gap:10px;
+}
+.urun-kart{
+  display:flex;flex-direction:column;gap:10px;
+  padding:12px 14px;border-radius:14px;
+  background:rgba(255,255,255,0.45);border:1px solid rgba(255,255,255,0.55);
+}
+.urun-kart-body{flex:1;min-width:0;}
+.urun-kart-ad{
+  display:block;font-family:var(--font-display);font-size:0.9rem;line-height:1.25;
+  margin:0 0 4px;
+}
+.urun-kart-meta{font-size:0.72rem;color:var(--ink-soft);}
+.urun-kart-fiyat{
+  display:flex;flex-wrap:wrap;gap:8px 12px;margin-top:8px;
+  font-size:0.72rem;color:var(--ink-soft);
+}
+.urun-kart-fiyat strong{color:var(--ink);font-weight:700;}
+.urun-kart .row-actions{display:flex;gap:4px;justify-content:flex-end;}
+html[data-theme="dark"] .urun-kart{background:rgba(255,255,255,0.05);border-color:rgba(255,255,255,0.09);}
+
 /* modal */
 .modal-backdrop{
   position:fixed;inset:0;background:rgba(4,16,22,0.55);backdrop-filter:blur(4px);
@@ -1149,20 +1174,6 @@ footer.appfoot{text-align:center;padding:14px;color:rgba(11,36,54,0.45);font-siz
 .att-legend b{font-family:var(--font-mono);padding:1px 7px;border-radius:5px;margin-right:3px;}
 .month-picker{padding:9px 10px;border-radius:10px;border:1px solid rgba(11,36,54,0.15);background:rgba(255,255,255,0.6);font-family:var(--font-body);font-size:0.85rem;color:var(--ink);}
 
-@media (max-width:640px){
-  header.topbar{gap:8px;padding:10px 12px;}
-  .brand-text span{display:none;}
-  .project-picker{flex:1 1 100%;max-width:none;order:3;}
-  table{font-size:0.72rem;}
-  .card{padding:14px;}
-  /* Teklifler sekmesindeki "Aktif Teklif" satırı (select + 3 buton) ve
-     "KDV Oranı" satırı (min 160px'lik 3 sütun) dar ekranda taşıyordu;
-     sadece bu iki satırı tek sütuna indiriyoruz, diğer field-grid'lere dokunmuyoruz. */
-  .field-grid.tk-aktif-row,
-  .field-grid.tk-kdv-row{grid-template-columns:1fr !important;}
-  .field-grid.tk-aktif-row > .btn{width:100%;}
-}
-
 /* personel arama sonuç kartı */
 .arama-sonuc-item{cursor:pointer;transition:background 120ms ease;}
 .arama-sonuc-item:hover{background:rgba(47,211,199,0.22);}
@@ -1183,51 +1194,209 @@ html[data-theme="dark"] body{
     radial-gradient(ellipse 80% 60% at 20% -10%, rgba(47,211,199,0.10), transparent 60%),
     radial-gradient(ellipse 70% 50% at 90% 10%, rgba(28,110,140,0.16), transparent 60%),
     linear-gradient(160deg, #0B1A20 0%, #0A171D 45%, #081217 100%);
+  color:var(--ink);
 }
 html[data-theme="dark"]{
-  --ink:#EAF6F5;
-  --ink-soft:#9FBAC1;
-  --glass-bg:rgba(16,38,46,0.66);
-  --glass-bg-strong:rgba(16,38,46,0.86);
-  --glass-border:rgba(255,255,255,0.10);
+  --ink:#F2FBFA;
+  --ink-soft:#B7D0D6;
+  --glass-bg:rgba(16,38,46,0.78);
+  --glass-bg-strong:rgba(18,42,52,0.92);
+  --glass-border:rgba(255,255,255,0.14);
   --shadow-color:rgba(0,0,0,0.45);
+  --card:#10262E;
 }
-html[data-theme="dark"] .glass{box-shadow:0 8px 32px var(--shadow-color), inset 0 1px 0 rgba(255,255,255,0.04);}
+html[data-theme="dark"] .glass{box-shadow:0 8px 32px var(--shadow-color), inset 0 1px 0 rgba(255,255,255,0.06);}
+html[data-theme="dark"] .card h2,
+html[data-theme="dark"] .brand-text b,
+html[data-theme="dark"] .nav-header b,
+html[data-theme="dark"] .total-chip span.val,
+html[data-theme="dark"] .project-item .pinfo b,
+html[data-theme="dark"] .urun-kart-ad,
+html[data-theme="dark"] .urun-kart-fiyat strong,
+html[data-theme="dark"] .uygulama-tip-btn b,
+html[data-theme="dark"] .imalat-sema-mat b{color:var(--ink);}
+html[data-theme="dark"] .card p.hint,
+html[data-theme="dark"] .field label,
+html[data-theme="dark"] .empty-state,
+html[data-theme="dark"] .project-item .pinfo span,
+html[data-theme="dark"] .urun-kart-meta,
+html[data-theme="dark"] .urun-kart-fiyat,
+html[data-theme="dark"] .uygulama-tip-btn small,
+html[data-theme="dark"] .total-chip span.lbl,
+html[data-theme="dark"] thead th{color:var(--ink-soft);}
 html[data-theme="dark"] .brand-mark{background:#0F2229;box-shadow:0 4px 14px rgba(0,0,0,0.4);}
 html[data-theme="dark"] select.proj-select{
-  background-color:rgba(255,255,255,0.06);
-  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23EAF6F5' stroke-width='2'><path d='M6 9l6 6 6-6'/></svg>");
+  background-color:rgba(255,255,255,0.08);
+  color:var(--ink);
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23F2FBFA' stroke-width='2'><path d='M6 9l6 6 6-6'/></svg>");
 }
 html[data-theme="dark"] .field input,
 html[data-theme="dark"] .field select,
 html[data-theme="dark"] .field textarea,
 html[data-theme="dark"] .filter-bar select,
-html[data-theme="dark"] .month-picker{
-  background:rgba(255,255,255,0.06);border-color:rgba(255,255,255,0.14);color:var(--ink);
+html[data-theme="dark"] .month-picker,
+html[data-theme="dark"] .sistem-tip-select,
+html[data-theme="dark"] input.mono,
+html[data-theme="dark"] select,
+html[data-theme="dark"] textarea{
+  background:rgba(255,255,255,0.08);border-color:rgba(255,255,255,0.18);color:var(--ink);
 }
-html[data-theme="dark"] .btn-ghost{background:rgba(255,255,255,0.07);border-color:rgba(255,255,255,0.16);}
-html[data-theme="dark"] .icon-btn{background:rgba(255,255,255,0.08);}
-html[data-theme="dark"] .icon-btn:hover{background:rgba(255,255,255,0.18);}
-html[data-theme="dark"] .report-subtab-btn{background:rgba(255,255,255,0.07);}
-html[data-theme="dark"] .report-subtab-btn:not(.active):hover{background:rgba(255,255,255,0.16);}
-html[data-theme="dark"] thead th{background:rgba(255,255,255,0.07);}
-html[data-theme="dark"] tbody td{border-top-color:rgba(255,255,255,0.09);}
+html[data-theme="dark"] .field input::placeholder,
+html[data-theme="dark"] .field textarea::placeholder,
+html[data-theme="dark"] input::placeholder{color:rgba(242,251,250,0.45);}
+html[data-theme="dark"] .field input:-webkit-autofill,
+html[data-theme="dark"] .field input:-webkit-autofill:hover,
+html[data-theme="dark"] .field input:-webkit-autofill:focus{
+  -webkit-text-fill-color:var(--ink);
+  caret-color:var(--ink);
+  box-shadow:0 0 0 1000px #143038 inset;
+  transition:background-color 99999s ease-out;
+}
+html[data-theme="dark"] .btn-ghost{background:rgba(255,255,255,0.08);border-color:rgba(255,255,255,0.18);color:var(--ink);}
+html[data-theme="dark"] .icon-btn{background:rgba(255,255,255,0.1);color:var(--ink);}
+html[data-theme="dark"] .icon-btn:hover{background:rgba(255,255,255,0.2);color:var(--ink);}
+html[data-theme="dark"] .tab-btn{color:var(--ink-soft);}
+html[data-theme="dark"] .tab-btn.active{color:var(--ink);}
+html[data-theme="dark"] .tab-btn:not(.active):hover{background:rgba(255,255,255,0.12);color:var(--ink);}
+html[data-theme="dark"] .report-subtab-btn{background:rgba(255,255,255,0.08);color:var(--ink-soft);}
+html[data-theme="dark"] .report-subtab-btn.active{color:var(--ink);}
+html[data-theme="dark"] .report-subtab-btn:not(.active):hover{background:rgba(255,255,255,0.16);color:var(--ink);}
+html[data-theme="dark"] thead th{background:rgba(255,255,255,0.08);}
+html[data-theme="dark"] tbody td{border-top-color:rgba(255,255,255,0.1);color:var(--ink);}
 html[data-theme="dark"] tbody tr:hover{background:rgba(255,255,255,0.05);}
-html[data-theme="dark"] .project-item{background:rgba(255,255,255,0.05);border-color:rgba(255,255,255,0.09);}
-html[data-theme="dark"] .project-item.active{background:rgba(47,211,199,0.18);}
-html[data-theme="dark"] .total-chip{background:rgba(255,255,255,0.06);border-color:rgba(255,255,255,0.1);}
-html[data-theme="dark"] .pick-item{background:rgba(255,255,255,0.05);}
+html[data-theme="dark"] .project-item{background:rgba(255,255,255,0.06);border-color:rgba(255,255,255,0.12);}
+html[data-theme="dark"] .project-item.active{background:rgba(47,211,199,0.2);}
+html[data-theme="dark"] .total-chip{background:rgba(255,255,255,0.07);border-color:rgba(255,255,255,0.12);}
+html[data-theme="dark"] .pick-item{background:rgba(255,255,255,0.06);color:var(--ink);}
 html[data-theme="dark"] .arama-sonuc-item:hover{background:rgba(47,211,199,0.22);}
-html[data-theme="dark"] .sg-list{background:#10232a;}
-html[data-theme="dark"] .att-table th,html[data-theme="dark"] .att-table td{border-color:rgba(255,255,255,0.09);}
-html[data-theme="dark"] .att-table td.name-cell,html[data-theme="dark"] .att-table th.name-cell{background:rgba(16,38,46,0.95);}
+html[data-theme="dark"] .sg-list{background:var(--card);border-color:rgba(255,255,255,0.14);}
+html[data-theme="dark"] .sg-item{color:var(--ink);border-bottom-color:rgba(255,255,255,0.08);}
+html[data-theme="dark"] .att-table th,html[data-theme="dark"] .att-table td{border-color:rgba(255,255,255,0.1);}
+html[data-theme="dark"] .att-table td.name-cell,html[data-theme="dark"] .att-table th.name-cell{background:rgba(16,38,46,0.95);color:var(--ink);}
 html[data-theme="dark"] .att-table thead th{background:rgba(255,255,255,0.09);}
-html[data-theme="dark"] .file-attach-chip{background:rgba(47,211,199,0.16);color:var(--ink);}
-html[data-theme="dark"] footer.appfoot{color:rgba(234,246,245,0.35);}
+html[data-theme="dark"] .att-cell{color:var(--ink-soft);}
+html[data-theme="dark"] .mesai-input{color:var(--ink);}
+html[data-theme="dark"] .file-attach-chip{background:rgba(47,211,199,0.18);color:var(--ink);}
+html[data-theme="dark"] footer.appfoot{color:rgba(242,251,250,0.4);}
 html[data-theme="dark"] .logo-preview{background:rgba(255,255,255,0.08);border-color:rgba(255,255,255,0.14);}
 html[data-theme="dark"] .backup-banner{color:#ffd8a3;}
 html[data-theme="dark"] #dnzThemeBtn svg,
-html[data-theme="dark"] #dnzLogoutBtn svg{stroke:currentColor;}
+html[data-theme="dark"] #dnzLogoutBtn svg,
+html[data-theme="dark"] .icon-btn svg{stroke:currentColor;}
+html[data-theme="dark"] .uygulama-tip-btn{
+  background:rgba(255,255,255,0.07);border-color:rgba(255,255,255,0.16);color:var(--ink-soft);
+}
+html[data-theme="dark"] .uygulama-tip-btn:hover{background:rgba(255,255,255,0.14);color:var(--ink);}
+html[data-theme="dark"] .uygulama-tip-btn.active{background:rgba(47,211,199,0.22);color:var(--ink);}
+html[data-theme="dark"] .dir-btn{background:rgba(255,255,255,0.07);color:var(--ink-soft);border-color:rgba(255,255,255,0.14);}
+html[data-theme="dark"] .dir-btn:hover,html[data-theme="dark"] .dir-btn.active{background:rgba(255,255,255,0.14);color:var(--ink);}
+html[data-theme="dark"] .urun-tip-multi label{background:rgba(255,255,255,0.06);color:var(--ink-soft);border-color:rgba(255,255,255,0.12);}
+html[data-theme="dark"] .urun-tip-multi label:hover{background:rgba(255,255,255,0.12);color:var(--ink);}
+html[data-theme="dark"] .urun-tip-multi label:has(input:checked),
+html[data-theme="dark"] .urun-tip-multi label.active{
+  background:rgba(47,211,199,0.22);color:var(--ink);border-color:rgba(47,211,199,0.45);
+}
+html[data-theme="dark"] .badge{background:rgba(47,211,199,0.25);color:#9AF0E8;}
+html[data-theme="dark"] .badge.durum-devam{background:rgba(230,168,0,0.25);color:#FFD666;}
+html[data-theme="dark"] .badge.durum-tamamlandi{background:rgba(46,166,98,0.25);color:#7BE0A8;}
+html[data-theme="dark"] .modal{color:var(--ink);}
+html[data-theme="dark"] .toast{color:var(--ink);}
+html[data-theme="dark"] .tasiyici-fields,
+html[data-theme="dark"] [data-tip-form],
+html[data-theme="dark"] .imalat-sema-canvas,
+html[data-theme="dark"] .imalat-sema-zoom-bar,
+html[data-theme="dark"] .hesap-mahal-poligon-block{
+  background:rgba(255,255,255,0.06)!important;border-color:rgba(255,255,255,0.12)!important;color:var(--ink);
+}
+html[data-theme="dark"] .tasiyici-fields > .tasiyici-title{color:var(--ink);}
+html[data-theme="dark"] .imalat-sema-mat,
+html[data-theme="dark"] .imalat-sema-overlay{
+  background:rgba(255,255,255,0.08)!important;border-color:rgba(255,255,255,0.12)!important;color:var(--ink);
+}
+html[data-theme="dark"] .quick-action-btn{color:var(--ink);background:rgba(255,255,255,0.06);}
+html[data-theme="dark"] .quick-action-btn span{color:var(--ink-soft);}
+html[data-theme="dark"] b,html[data-theme="dark"] strong{color:inherit;}
+html[data-theme="dark"] .card h2 b,html[data-theme="dark"] .hint b{color:var(--ink);}
+/* Inline koyu renkli metinleri gece modunda aç */ 
+html[data-theme="dark"] [style*="color:#0B2436"],
+html[data-theme="dark"] [style*="color: #0B2436"],
+html[data-theme="dark"] [style*="color:#345264"],
+html[data-theme="dark"] [style*="color: #345264"]{color:var(--ink-soft)!important;}
+html[data-theme="dark"] [style*="background:rgba(255,255,255,0.6)"],
+html[data-theme="dark"] [style*="background:rgba(255,255,255,0.7)"],
+html[data-theme="dark"] [style*="background:rgba(255,255,255,0.35)"]{
+  background:rgba(255,255,255,0.08)!important;color:var(--ink)!important;border-color:rgba(255,255,255,0.16)!important;
+}
+
+/* ======================= MOBİL / iOS ======================= */
+#app{
+  width:100%;
+  max-width:100%;
+  overflow-x:hidden;
+  padding-left:env(safe-area-inset-left,0);
+  padding-right:env(safe-area-inset-right,0);
+  padding-bottom:env(safe-area-inset-bottom,0);
+  box-sizing:border-box;
+}
+header.topbar{
+  padding-top:max(10px, env(safe-area-inset-top,0px));
+}
+main{
+  overflow-x:hidden;
+  max-width:min(1180px, 100%);
+}
+.card,.glass{max-width:100%;}
+.btn-row{max-width:100%;}
+.report-subnav{display:flex;flex-wrap:wrap;gap:6px;max-width:100%;}
+.report-subtab-btn{max-width:100%;}
+
+@media (max-width:640px){
+  header.topbar{gap:8px;padding:10px 12px;padding-top:max(10px, env(safe-area-inset-top,0px));}
+  .brand-text span{display:none;}
+  .project-picker{flex:1 1 100%;max-width:none;order:3;}
+  table{font-size:0.72rem;min-width:520px;}
+  .card{padding:14px;gap:12px;}
+  .field-grid,
+  .field-grid.tk-aktif-row,
+  .field-grid.tk-kdv-row{grid-template-columns:1fr !important;}
+  .field-grid.tk-aktif-row > .btn{width:100%;}
+  .filter-bar{grid-template-columns:1fr 1fr;}
+  .uygulama-tip-grid{grid-template-columns:1fr !important;}
+  .urun-tip-multi{grid-template-columns:1fr 1fr;}
+  .urun-kart-grid{grid-template-columns:1fr;}
+  .quick-action-grid{grid-template-columns:repeat(2,minmax(0,1fr));}
+  .project-item{
+    flex-wrap:wrap;
+    align-items:center;
+    gap:8px;
+    padding:10px 12px;
+  }
+  .project-item .pinfo{flex:1 1 calc(100% - 120px);min-width:0;}
+  .sistem-tip-select{
+    flex:1 1 100%;
+    width:100%;
+    max-width:none;
+    min-width:0;
+    order:10;
+  }
+  .project-item .icon-btn{width:36px;height:36px;flex:0 0 auto;}
+  .btn{width:auto;max-width:100%;}
+  .btn-row > .btn{flex:1 1 auto;min-width:0;}
+  .total-chip{min-width:0;flex:1 1 40%;}
+  .imalat-sema-totals .total-chip{min-width:0;}
+  .backup-banner{flex-direction:column;align-items:stretch;gap:8px;}
+  .backup-banner span{min-width:0;}
+  /* iOS input zoom önleme (≥16px) */
+  .field input,.field select,.field textarea,
+  .filter-bar select,.month-picker,.sistem-tip-select,
+  .proj-select{font-size:16px;}
+}
+
+@media (max-width:400px){
+  .filter-bar{grid-template-columns:1fr;}
+  .urun-tip-multi{grid-template-columns:1fr;}
+  .quick-action-grid{grid-template-columns:1fr;}
+}
 </style>
 </head>
 <body>
@@ -1791,22 +1960,27 @@ function parseMetreSayi(v, fallback){
   return (!isNaN(n) && n>0) ? n : fallback;
 }
 // Panel / plaka / yalıtım ebatı metre cinsinden.
-// ≥100 → mm (/1000), ≥10 → cm (/100), aksi halde metre.
-// Örn: 1.2×2.5 | 120×250 | 1200×2500 → hepsi 1.2×2.5 m.
-// Aksi halde şemada tek parça (odanın tamamı) görünür.
+// Birim tahmini (en ve boy birlikte bakılır):
+//   max ≥ 1000        → mm  (1200×2500)
+//   max ≥ 10          → cm  (60×120, 120×250)
+//   aksi              → m   (0.6×1.2, 1.2×2.5)
+// Eski hata: 120 tek başına ≥100 diye mm sayılıyordu (60×120 → 0.6×0.12).
 function parseEbatMetreCift(en, boy, fbEn, fbBoy){
-  function toM(v, fb){
-    let n = parseMetreSayi(v, NaN);
-    if(!(n>0)) n = fb;
-    if(!(n>0)) return fb;
-    if(n >= 100) n = n / 1000;
-    else if(n >= 10) n = n / 100;
-    return Math.round(n * 10000) / 10000;
+  function raw(v, fb){
+    const n = parseMetreSayi(v, NaN);
+    return (n>0) ? n : (fb>0 ? fb : NaN);
   }
-  let w = toM(en, fbEn);
-  let h = toM(boy, fbBoy);
+  let w = raw(en, fbEn);
+  let h = raw(boy, fbBoy);
   if(!(w>0)) w = fbEn;
   if(!(h>0)) h = fbBoy;
+  if(!(w>0) || !(h>0)) return { w: fbEn||0, h: fbBoy||0, en: fbEn||0, boy: fbBoy||0 };
+  const max = Math.max(w, h);
+  let scale = 1;
+  if(max >= 1000) scale = 1000;      // mm
+  else if(max >= 10) scale = 100;    // cm (60×120 yalıtım, 120×250 plaka)
+  w = Math.round((w / scale) * 10000) / 10000;
+  h = Math.round((h / scale) * 10000) / 10000;
   return { w, h, en:w, boy:h };
 }
 function emptyVidaAyar(){ return { hesapTabani:'plaka', adet:'33' }; }
@@ -2033,7 +2207,8 @@ function renderDigerTipFormsHtml(tips, ayarlar, uygulamaTipi){
             <input class="mono" type="number" step="1" min="1" data-tip-field="${tip}" data-field="paketAdet" value="${esc(a.paketAdet??'10')}" placeholder="Örn: 10">
           </div>
         </div>
-        ${isDuvar?`<p class="hint" style="margin:0;font-size:0.68rem;">Duvar hesabında “Yalıtım var mı?” → Yok seçilirse bu satır yazılmaz.</p>`:''}`);
+        ${isDuvar?`<p class="hint" style="margin:0;font-size:0.68rem;">Duvar hesabında “Yalıtım var mı?” → Yok seçilirse bu satır yazılmaz.</p>`:''}
+        <p class="hint" style="margin:0;font-size:0.68rem;">Ebat örn: <b>0.6×1.2</b> (metre) veya <b>60×120</b> (cm). Adet = alan ÷ (en×boy), yukarı tamamlanır. Sipariş m² = adet × (en×boy).</p>`);
     }
     if(tip==='vida'){
       const taban = (a.hesapTabani==='m2' || a.hesapTabani==='mt') ? a.hesapTabani : 'plaka';
@@ -2456,6 +2631,7 @@ let ui = {
   masraflarTab:'avanszimmet',
   imalatSubTab:'tanim',
   imalatSelectedId:null,
+  imalatUrunListOpen:false,
   imalatTanimFilterTip:'all', // 'all' | 'tavan' | 'duvar' | 'zemin'
   imalatCalcSistemId:null,
   imalatCalcInput:'',
@@ -2483,6 +2659,9 @@ let ui = {
   imalatCalcHedefToplam:null,
   imalatCalcDuvarKaplama:'1-2-1',
   imalatCalcYalitimVar:true,
+  /** Duvar: yükseklik < profil boyu iken hat sayımı — null=sorulmadı, true/false=cevap */
+  imalatCalcHatSayimi:null,
+  imalatCalcHatSayimiKey:'',
   globalAramaQuery:'',
   personelHighlightId:null,
   pendingHighlightId:null
@@ -5705,7 +5884,22 @@ function renderImalatTanimSection(sub){
         <button class="btn btn-primary ripple-el-host" id="btnSaveUrun">${urunForm.id? 'Ürünü Güncelle':'Ürünü Kaydet'}</button>
         ${urunForm.id? `<button class="btn btn-ghost" id="btnClearUrun">Vazgeç</button>` : ''}
       </div>
-      <div class="table-scroll" id="urunTableWrap" style="margin-top:10px;">${renderUrunTableHtml()}</div>
+    </div>
+    <div class="card glass" id="urunListCard">
+      <h2>Kaydedilen Ürünler <span class="badge">${(state.urunler||[]).length}</span></h2>
+      <p class="hint" style="margin-top:0;">Ürün kartına tıklayınca tüm kayıtlı ürünler açılır; düzenle / sil buradan yapılır.</p>
+      <div class="project-list" id="urunListToggle">
+        <div class="project-item ${ui.imalatUrunListOpen?'active':''}" data-act="toggle-urun-list" role="button" tabindex="0">
+          <div class="pinfo">
+            <b>Ürün</b>
+            <span>${(state.urunler||[]).length} ürün kaydı · ${ui.imalatUrunListOpen?'liste açık — kapatmak için tıklayın':'listeyi açmak için tıklayın'}</span>
+          </div>
+          <button type="button" class="icon-btn" data-act="toggle-urun-list" title="${ui.imalatUrunListOpen?'Listeyi Kapat':'Listeyi Aç'}" aria-label="Ürün listesini aç/kapat">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="transition:transform .2s;${ui.imalatUrunListOpen?'transform:rotate(90deg)':''}"><path d="M9 18l6-6-6-6"/></svg>
+          </button>
+        </div>
+      </div>
+      ${ui.imalatUrunListOpen ? `<div id="urunTableWrap" style="margin-top:12px;">${renderUrunTableHtml()}</div>` : `<div id="urunTableWrap" hidden></div>`}
     </div>
     <div class="card glass">
       <h2>Tanımlı İmalat Sistemleri <span class="badge">${allSistemler.length}</span></h2>
@@ -5834,34 +6028,33 @@ function renderImalatTanimSection(sub){
   if(selected) bindImalatMalzemeSectionEvents(selected);
 }
 
-// Ürün Fiyat Listesi kartındaki tabloyu HTML olarak üretir.
+// Kaydedilen ürünleri kart ızgarası olarak üretir (Ürün kartı açılınca görünür).
 function renderUrunTableHtml(){
   const list = (state.urunler||[]).slice().sort((a,b)=>a.ad.localeCompare(b.ad,'tr'));
   if(list.length===0) return `<div class="empty-state">Henüz ürün eklenmedi.</div>`;
   return `
-    <table>
-      <thead><tr><th>Ürün</th><th>Birim</th><th class="num">Alış Fiyatı</th><th class="num">Satış Fiyatı</th><th></th></tr></thead>
-      <tbody>
-        ${list.map(u=>`
-          <tr data-id="${u.id}">
-            <td>${esc(u.ad)}</td>
-            <td>${esc(UNIT_LABEL[u.birim]||u.birim||'—')}</td>
-            <td class="num">${fmtMoney(u.alisFiyat)}</td>
-            <td class="num">${fmtMoney(u.satisFiyat)}</td>
-            <td>
-              <div class="row-actions">
-                <button class="icon-btn" data-act="edit" title="Düzenle">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
-                </button>
-                <button class="icon-btn danger" data-act="delete" title="Sil">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0l-1 14a2 2 0 01-2 2H7a2 2 0 01-2-2L4 6h16z"/></svg>
-                </button>
-              </div>
-            </td>
-          </tr>
-        `).join('')}
-      </tbody>
-    </table>
+    <div class="urun-kart-grid">
+      ${list.map(u=>`
+        <div class="urun-kart" data-id="${u.id}">
+          <div class="urun-kart-body">
+            <b class="urun-kart-ad">${esc(u.ad)}</b>
+            <span class="urun-kart-meta">${esc(UNIT_LABEL[u.birim]||u.birim||'Birim yok')}</span>
+            <div class="urun-kart-fiyat">
+              <span>Alış <strong>${fmtMoney(u.alisFiyat)}</strong></span>
+              <span>Satış <strong>${fmtMoney(u.satisFiyat)}</strong></span>
+            </div>
+          </div>
+          <div class="row-actions">
+            <button class="icon-btn" data-act="edit" title="Düzenle">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+            </button>
+            <button class="icon-btn danger" data-act="delete" title="Sil">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0l-1 14a2 2 0 01-2 2H7a2 2 0 01-2-2L4 6h16z"/></svg>
+            </button>
+          </div>
+        </div>
+      `).join('')}
+    </div>
   `;
 }
 
@@ -5878,16 +6071,43 @@ function bindUrunFiyatEvents(){
   if(saveBtn) saveBtn.onclick = ()=>saveUrun();
   const clearBtn = document.getElementById('btnClearUrun');
   if(clearBtn) clearBtn.onclick = ()=>{ urunForm = emptyUrunForm(); renderImalatTab(document.getElementById('mainContent')); };
+  const toggle = document.getElementById('urunListToggle');
+  if(toggle){
+    const toggleList = ()=>{
+      ui.imalatUrunListOpen = !ui.imalatUrunListOpen;
+      renderImalatTab(document.getElementById('mainContent'));
+      if(ui.imalatUrunListOpen){
+        requestAnimationFrame(()=>{
+          const wrap = document.getElementById('urunTableWrap');
+          if(wrap) wrap.scrollIntoView({ behavior:'smooth', block:'nearest' });
+        });
+      }
+    };
+    toggle.addEventListener('click', e=>{
+      if(e.target.closest('[data-act="toggle-urun-list"]') || e.target.closest('.project-item')){
+        e.preventDefault();
+        toggleList();
+      }
+    });
+    toggle.addEventListener('keydown', e=>{
+      if(e.key==='Enter' || e.key===' '){
+        e.preventDefault();
+        toggleList();
+      }
+    });
+  }
   const wrap = document.getElementById('urunTableWrap');
-  if(wrap) wrap.querySelectorAll('tr[data-id]').forEach(tr=>{
+  if(wrap) wrap.querySelectorAll('.urun-kart[data-id], tr[data-id]').forEach(tr=>{
     tr.addEventListener('click',(e)=>{
       const act = e.target.closest('[data-act]')?.dataset.act;
       if(!act) return;
+      e.stopPropagation();
       const id = tr.dataset.id;
       if(act==='edit'){
         const u = (state.urunler||[]).find(x=>x.id===id);
         if(u){
           urunForm = {id:u.id, ad:u.ad, birim:u.birim||'', alisFiyat:u.alisFiyat, satisFiyat:u.satisFiyat};
+          ui.imalatUrunListOpen = true;
           renderImalatTab(document.getElementById('mainContent'));
           requestAnimationFrame(()=>{
             const card = document.getElementById('urunFiyatFormCard');
@@ -5931,20 +6151,21 @@ function saveUrun(){
   const savedUrunAd = ad;
   saveState();
   urunForm = emptyUrunForm();
+  ui.imalatUrunListOpen = true;
   renderImalatTab(document.getElementById('mainContent'));
   showToast('Ürün fiyat listesi kaydedildi.');
   requestAnimationFrame(()=>{
-    let tr = savedUrunId ? document.querySelector(`#urunTableWrap tr[data-id="${savedUrunId}"]`) : null;
-    if(!tr && savedUrunAd){
+    let card = savedUrunId ? document.querySelector(`#urunTableWrap .urun-kart[data-id="${savedUrunId}"]`) : null;
+    if(!card && savedUrunAd){
       const key = normKey(savedUrunAd);
       const found = (state.urunler||[]).find(x=>normKey(x.ad)===key);
-      if(found) tr = document.querySelector(`#urunTableWrap tr[data-id="${found.id}"]`);
+      if(found) card = document.querySelector(`#urunTableWrap .urun-kart[data-id="${found.id}"]`);
     }
-    if(tr){
-      tr.scrollIntoView({ behavior:'smooth', block:'center' });
-      tr.style.transition = 'background .4s';
-      tr.style.background = 'rgba(47,211,199,0.28)';
-      setTimeout(()=>{ tr.style.background = ''; }, 1200);
+    if(card){
+      card.scrollIntoView({ behavior:'smooth', block:'center' });
+      card.style.transition = 'background .4s';
+      card.style.background = 'rgba(47,211,199,0.28)';
+      setTimeout(()=>{ card.style.background = ''; }, 1200);
     }
   });
 }
@@ -6391,7 +6612,7 @@ function renderSemaTipLegendHtml(sistem){
   // Inline stiller: PDF çıktısında da renk çubuğu görünsün (yazının altında)
   return IMALAT_URUN_TIPLERI.filter(t=>used.has(t.id)).map(t=>
     `<span style="display:inline-flex;flex-direction:column;align-items:center;gap:3px;min-width:56px;">
-      <span style="font-size:9px;font-weight:700;color:#0B2436;line-height:1.2;text-align:center;">${esc(t.label)}</span>
+      <span style="font-size:9px;font-weight:700;color:var(--ink);line-height:1.2;text-align:center;">${esc(t.label)}</span>
       <span style="display:block;width:36px;height:7px;border-radius:4px;background:${t.color};border:1px solid rgba(11,36,54,0.12);" title="${esc(t.color)}"></span>
     </span>`
   ).join('');
@@ -6468,6 +6689,35 @@ function tamAdetYuvarla(deger){
   const d = parseFloat(deger)||0;
   if(!(d>0)) return 0;
   return Math.ceil(d - 1e-9);
+}
+// Paket tamamla: adet'i paket katına çıkarır; m²/mt/kg miktarını aynı oranda büyütür.
+function applyPaketTamamlaAdet(adetNote, miktar, kgNote, birimLower, paketAdet){
+  const pa = parseFloat(paketAdet)||0;
+  const oldAdet = parseFloat(adetNote);
+  if(!(pa>0) || !(oldAdet>0) || isNaN(oldAdet)){
+    return { adetNote, miktar, kgNote, paketNote:null };
+  }
+  const parca = Math.ceil((oldAdet - 1e-9)/pa)*pa;
+  const paketNote = parca/pa;
+  if(Math.abs(parca - oldAdet) < 1e-9){
+    return { adetNote: oldAdet, miktar, kgNote, paketNote };
+  }
+  const bl = String(birimLower||'').toLowerCase();
+  let newMiktar = miktar;
+  let newKg = kgNote;
+  const ratio = parca / oldAdet;
+  if(bl==='adet' || bl==='torba'){
+    newMiktar = parca;
+  } else if(bl==='kg'){
+    if(kgNote!=null) newKg = Math.round(kgNote * ratio * 100)/100;
+    newMiktar = newKg!=null ? newKg : Math.round((parseFloat(miktar)||0) * ratio * 100)/100;
+  } else {
+    newMiktar = Math.round((parseFloat(miktar)||0) * ratio * 100)/100;
+  }
+  if(kgNote!=null && bl!=='kg'){
+    newKg = Math.round(kgNote * ratio * 100)/100;
+  }
+  return { adetNote: parca, miktar: newMiktar, kgNote: newKg, paketNote };
 }
 
 // Hatlar sırayla kesilir; stok profilinden kalan kullanılabilir parça sonraki hatta devam eder.
@@ -6678,6 +6928,65 @@ function primaryProfilBoyu(malzeme){
   const v = parseFloat(a.profilBoyu);
   return (!isNaN(v) && v>0) ? v : 3;
 }
+
+/** Duvar odasında L = yükseklik */
+function getDuvarYukseklik(room){
+  if(!room || room.kind==='length') return 0;
+  return parseFloat(room.L)||0;
+}
+function getDuvarHatSayimiKey(sistem, room){
+  if(!sistem || !room) return '';
+  return String(sistem.id)+'|'+String(room.W||0)+'x'+String(room.L||0);
+}
+/** Duvar sisteminde yükseklik, herhangi bir taşıyıcı profil boyundan kısa mı? */
+function sistemNeedsDuvarHatSayimi(sistem, room){
+  if(!isDuvarSistem(sistem) || !room) return false;
+  if(room.kind==='length') return false;
+  const yuk = getDuvarYukseklik(room);
+  if(!(yuk>0)) return false;
+  return (sistem.malzemeler||[]).some(m=>{
+    const tips = seciliTasiyiciTipleri(m.urunTipi);
+    if(!tips.length) return false;
+    const ayarlar = normalizeTasiyiciAyarlari(m);
+    return tips.some(tip=>{
+      const stock = parseFloat((ayarlar[tip]||emptyTasiyiciAyar()).profilBoyu)||3;
+      return yuk < stock - 1e-9;
+    });
+  });
+}
+function isDuvarHatSayimiActive(room, uygTip){
+  if(ui.imalatCalcHatSayimi !== true) return false;
+  if(normalizeUygulamaTipi(uygTip|| (room && room.uygulamaTipi))!=='duvar') return false;
+  if(!room) return false;
+  const sistem = state.imalatSistemleri.find(s=>s.id===ui.imalatCalcSistemId) || null;
+  if(!sistem) return false;
+  if(getDuvarHatSayimiKey(sistem, room) !== ui.imalatCalcHatSayimiKey) return false;
+  return true;
+}
+/**
+ * Yükseklik < taşıyıcı boyu ise kullanıcıya sorar.
+ * Tamam → hat sayımı (her hat 1 adet). İptal → normal hesap.
+ */
+function promptDuvarHatSayimiIfNeeded(sistem){
+  const room = getImalatRoomSize();
+  if(!sistemNeedsDuvarHatSayimi(sistem, room)){
+    ui.imalatCalcHatSayimi = null;
+    ui.imalatCalcHatSayimiKey = '';
+    return;
+  }
+  const key = getDuvarHatSayimiKey(sistem, room);
+  if(ui.imalatCalcHatSayimiKey === key && ui.imalatCalcHatSayimi != null) return;
+  const yuk = getDuvarYukseklik(room);
+  const ok = window.confirm(
+    'Yükseklik düşük ('+fmtNum(yuk)+' m) — taşıyıcı profil boyundan kısa.\n\n'+
+    'Hat sayımı yapılsın mı?\n\n'+
+    '• Tamam → Kaç hat taşıyıcı varsa o kadar adet sayılır\n'+
+    '• İptal → Normal hesaplamaya devam edilir'
+  );
+  ui.imalatCalcHatSayimi = !!ok;
+  ui.imalatCalcHatSayimiKey = key;
+}
+
 // Sistemdeki taşıyıcı hatlarından (şema ile aynı ölçü/aralık) net hat + ebat katına tamamlanmış metraj/adet.
 // Örn. net 5,4 mt, profil 3 m → adet 2, metraj 6 mt (3'ün katı).
 function computeTasiyiciProfilFromRoom(malzeme, room, ekstraM, polyPts){
@@ -6685,27 +6994,39 @@ function computeTasiyiciProfilFromRoom(malzeme, room, ekstraM, polyPts){
   if(!tTips.length || !room) return null;
   if(!(room.kind==='length' ? room.W>0 : (room.W>0 && room.L>0))) return null;
   const pts = polyPts || room.polyPts || null;
-  const ayarlar = normalizeTasiyiciAyarlari(malzeme);
   const uygTip = room.uygulamaTipi || null;
+  const hatSayimi = isDuvarHatSayimiActive(room, uygTip);
+  const yuk = getDuvarYukseklik(room);
   let totalAdet = 0, totalMetraj = 0, totalMetrajNet = 0, totalSplices = 0, totalHat = 0;
   const perTip = [];
   tTips.forEach(tip=>{
-    const a = ayarlar[tip] || emptyTasiyiciAyar();
+    const a = ayarlarSafe(malzeme, tip);
     const stock = parseFloat(a.profilBoyu)||3;
     let hats = getTasiyiciHatLengthsForAyar(a, room.W, room.L, room.kind, pts, uygTip);
     if(!hats.length) return;
     if(ekstraM>0) hats = hats.concat([ekstraM]);
-    const r = countProfilParcasiFromHats(hats, stock);
     const hatSayisi = hats.length;
     const hatMetraj = hats.reduce((s,h)=>s+(parseFloat(h)||0), 0);
-    const parcaAdet = stock>0 ? tamAdetYuvarla(hatMetraj / stock) : hatSayisi;
-    const metrajTam = stock>0 ? Math.round(parcaAdet * stock * 100) / 100 : hatMetraj;
+    let parcaAdet, metrajTam, rem, splices;
+    // Duvar + onaylı hat sayımı + yükseklik < profil boyu → her hat 1 adet
+    if(hatSayimi && yuk>0 && yuk < stock - 1e-9){
+      parcaAdet = hatSayisi;
+      metrajTam = stock>0 ? Math.round(parcaAdet * stock * 100) / 100 : hatMetraj;
+      rem = 0;
+      splices = [];
+    } else {
+      const r = countProfilParcasiFromHats(hats, stock);
+      parcaAdet = stock>0 ? tamAdetYuvarla(hatMetraj / stock) : hatSayisi;
+      metrajTam = stock>0 ? Math.round(parcaAdet * stock * 100) / 100 : hatMetraj;
+      rem = r.rem;
+      splices = r.splices;
+    }
     totalAdet += parcaAdet;
     totalMetraj += metrajTam;
     totalMetrajNet += hatMetraj;
-    totalSplices += r.splices.length;
+    totalSplices += (splices||[]).length;
     totalHat += hatSayisi;
-    perTip.push({ tip, stock, hats, adet:parcaAdet, rem:r.rem, splices:r.splices, run:hats[0]||0, hatMetraj, metrajTam, hatSayisi });
+    perTip.push({ tip, stock, hats, adet:parcaAdet, rem, splices, run:hats[0]||0, hatMetraj, metrajTam, hatSayisi, hatSayimi: !!(hatSayimi && yuk>0 && yuk < stock - 1e-9) });
   });
   return {
     adet:totalAdet,
@@ -6713,8 +7034,13 @@ function computeTasiyiciProfilFromRoom(malzeme, room, ekstraM, polyPts){
     metrajNet:Math.round(totalMetrajNet*100)/100,
     hatSayisi:totalHat,
     splices:totalSplices,
-    perTip
+    perTip,
+    hatSayimi
   };
+}
+function ayarlarSafe(malzeme, tip){
+  const ayarlar = normalizeTasiyiciAyarlari(malzeme);
+  return ayarlar[tip] || emptyTasiyiciAyar();
 }
 function sistemHasCarriersForEkleme(sistem, malzeme, room){
   if(!sistem || !room) return false;
@@ -8178,11 +8504,7 @@ function computeMalzemeSonuc(malzeme, deger, opts){
       totalAdet = roomProfil.adet;
       totalMetraj = roomProfil.metraj;
     }
-    if(opts.paketTamamla && paketAdet>0 && totalAdet>0){
-      totalAdet = Math.ceil((totalAdet - 1e-9)/paketAdet)*paketAdet;
-      paketNote = totalAdet/paketAdet;
-      totalMetraj = Math.round(totalAdet * stock0 * 100) / 100;
-    }
+    // Paket tamamlama fire/ekstra sonrası tek seferde uygulanır
     adetNote = totalAdet;
     if(birimLower==='adet') miktar = totalAdet;
     else miktar = Math.round(totalMetraj*100)/100;
@@ -8203,10 +8525,6 @@ function computeMalzemeSonuc(malzeme, deger, opts){
     if(ek!=null){
       let parca = ek * karkasMul * (ciftMul > 1 ? ciftMul : 1);
       parca = tamAdetYuvarla(parca);
-      if(opts.paketTamamla && paketAdet>0){
-        parca = Math.ceil((parca - 1e-9)/paketAdet)*paketAdet;
-        paketNote = parca/paketAdet;
-      }
       adetNote = parca;
       miktar = parca;
     }
@@ -8216,10 +8534,6 @@ function computeMalzemeSonuc(malzeme, deger, opts){
     const bi = computeBirlestiriciAdetFromRoom(opts.sistem, malzeme, room, polyPts);
     if(bi!=null){
       let parca = bi;
-      if(opts.paketTamamla && paketAdet>0){
-        parca = Math.ceil((parca - 1e-9)/paketAdet)*paketAdet;
-        paketNote = parca/paketAdet;
-      }
       adetNote = parca;
       miktar = parca;
     }
@@ -8228,12 +8542,7 @@ function computeMalzemeSonuc(malzeme, deger, opts){
   if(tipsAll.includes('vida')){
     const vi = computeVidaAdet(malzeme, deger, room, opts.sistem);
     if(vi!=null){
-      // Çarpan önce, tamamlama sonra
       let parca = tamAdetYuvarla(vi * vidaMul * (ciftMul > 1 ? ciftMul : 1));
-      if(opts.paketTamamla && paketAdet>0){
-        parca = Math.ceil((parca - 1e-9)/paketAdet)*paketAdet;
-        paketNote = parca/paketAdet;
-      }
       adetNote = parca;
       miktar = parca;
     }
@@ -8254,12 +8563,8 @@ function computeMalzemeSonuc(malzeme, deger, opts){
         const e = parseEbatMetreCift(a.en, a.boy, 1.2, 2.5);
         ebatAlan = e.en * e.boy;
       }
-      // Önce tek kat × (taraf×kat), sonra ebat/paket tamamla
+      // Önce tek kat × (taraf×kat); paket tamamla fire/ekstra sonrası
       let parca = tamAdetYuvarla(pp * plakaMul * (ciftMul > 1 ? ciftMul : 1));
-      if(opts.paketTamamla && paketAdet>0){
-        parca = Math.ceil((parca - 1e-9)/paketAdet)*paketAdet;
-        paketNote = parca/paketAdet;
-      }
       adetNote = parca;
       if(birimLower==='adet'){
         miktar = parca;
@@ -8275,14 +8580,11 @@ function computeMalzemeSonuc(malzeme, deger, opts){
     }
     const ya = computeYalitimSonuc(malzeme, deger, room);
     if(ya){
+      // Çift hesap × sonra (paket fire/ekstra sonrası)
       let parca = (birimLower==='paket') ? ya.paketAdet : ya.levha;
-      if(opts.paketTamamla && paketAdet>0 && birimLower!=='paket'){
-        parca = Math.ceil((parca - 1e-9)/paketAdet)*paketAdet;
-        paketNote = parca/paketAdet;
-      }
-      adetNote = (birimLower==='paket') ? ya.paketAdet : ya.levha;
-      if(birimLower==='paket') miktar = ya.paketAdet;
-      else if(birimLower==='adet') miktar = ya.levha;
+      if(birimLower!=='paket' && ciftMul > 1) parca = tamAdetYuvarla(parca * ciftMul);
+      adetNote = parca;
+      if(birimLower==='paket' || birimLower==='adet') miktar = parca;
       else {
         const ebatAlan = (ya.en||0.6) * (ya.boy||1.2);
         miktar = Math.round(parca * ebatAlan * 100) / 100;
@@ -8293,11 +8595,7 @@ function computeMalzemeSonuc(malzeme, deger, opts){
   if(tipsAll.includes('aski') && room){
     const nAski = computeAskiAdetFromRoom(opts.sistem, malzeme, room, polyPts);
     if(nAski!=null){
-      let parca = nAski;
-      if(opts.paketTamamla && paketAdet>0){
-        parca = Math.ceil((parca - 1e-9)/paketAdet)*paketAdet;
-        paketNote = parca/paketAdet;
-      }
+      let parca = tamAdetYuvarla(nAski * (ciftMul > 1 ? ciftMul : 1));
       adetNote = parca;
       miktar = parca;
     }
@@ -8306,13 +8604,8 @@ function computeMalzemeSonuc(malzeme, deger, opts){
   if(tipsAll.includes('kenar')){
     const kn = computeKenarAdet(malzeme, deger, room);
     if(kn){
-      let parca = kn.adet;
-      let metrajTam = kn.metraj;
-      if(opts.paketTamamla && paketAdet>0 && parca>0){
-        parca = Math.ceil((parca - 1e-9)/paketAdet)*paketAdet;
-        paketNote = parca/paketAdet;
-        metrajTam = Math.round(parca * kn.stock * 100) / 100;
-      }
+      let parca = tamAdetYuvarla(kn.adet * (ciftMul > 1 ? ciftMul : 1));
+      let metrajTam = Math.round(parca * kn.stock * 100) / 100;
       adetNote = parca;
       if(birimLower==='adet') miktar = parca;
       else miktar = metrajTam;
@@ -8322,30 +8615,37 @@ function computeMalzemeSonuc(malzeme, deger, opts){
   if(tipsAll.includes('torba')){
     const tb = computeTorbaSonuc(malzeme, deger, room);
     if(tb){
-      let parca = tb.torba;
-      let kgTam = tb.kg;
-      if(opts.paketTamamla && paketAdet>0 && parca>0){
-        parca = Math.ceil((parca - 1e-9)/paketAdet)*paketAdet;
-        paketNote = parca/paketAdet;
-        kgTam = Math.round(parca * tb.paketKg * 100) / 100;
-      }
+      let parca = tamAdetYuvarla(tb.torba * (ciftMul > 1 ? ciftMul : 1));
+      let kgTam = Math.round(parca * tb.paketKg * 100) / 100;
       adetNote = parca;
       kgNote = kgTam;
       if(birimLower==='kg') miktar = kgTam;
       else miktar = parca;
     }
   }
-  // Çift hesapla taşıyıcı/plaka/vida yollarında çarpımdan önce uygulandı; diğer tiplerde
-  // (henüz çarpılmamışsa) burada uygulanır — paket tamamlamadan SONRA değil.
-  if(ciftMul > 1 && !(tTips.length && roomProfil) && !tipsAll.includes('ekleme') && !tipsAll.includes('vida') && !tipsAll.includes('plaka') && !tipsAll.includes('panel')){
+  // Çift hesapla taşıyıcı/plaka/vida/yalıtım/kenar/torba/askı yollarında çarpımdan önce uygulandı.
+  // Kalan tiplerde (henüz çarpılmamışsa) burada uygulanır — paket tamamlamadan ÖNCE olmalı;
+  // bu blokta paket zaten uygulandıysa tekrar çarpılmaz (yukarıda erken uygulananlar hariç tutulur).
+  if(ciftMul > 1 && !(tTips.length && roomProfil)
+    && !tipsAll.includes('ekleme') && !tipsAll.includes('vida')
+    && !tipsAll.includes('plaka') && !tipsAll.includes('panel')
+    && !tipsAll.includes('yalitim') && !tipsAll.includes('aski')
+    && !tipsAll.includes('kenar') && !tipsAll.includes('torba')){
     miktar = Math.round(miktar * ciftMul * 100) / 100;
     if(adetNote != null) adetNote = adetNote * ciftMul;
     if(kgNote != null) kgNote = Math.round(kgNote * ciftMul * 100) / 100;
   }
   // Ekstra Ekle = adet (çift çarpanından sonra; elle eklenen miktar ikiye katlanmaz)
-  const baseMiktar = miktar;
-  const baseAdetNote = adetNote;
-  const baseKgNote = kgNote;
+  // Taban: ekstra/fire öncesi; paket tamamla işaretliyse paket katına yuvarlanmış hali
+  let baseMiktar = miktar;
+  let baseAdetNote = adetNote;
+  let baseKgNote = kgNote;
+  if(opts.paketTamamla && paketAdet>0 && adetNote!=null && birimLower!=='paket'){
+    const b = applyPaketTamamlaAdet(adetNote, miktar, kgNote, birimLower, paketAdet);
+    baseMiktar = b.miktar;
+    baseAdetNote = b.adetNote;
+    if(b.kgNote!=null) baseKgNote = b.kgNote;
+  }
   if(ekstra>0){
     const applied = applyEkstraAdet(malzeme, miktar, adetNote, ekstra);
     miktar = applied.miktar;
@@ -8376,6 +8676,14 @@ function computeMalzemeSonuc(malzeme, deger, opts){
       miktar = Math.round(miktar * mul * 100)/100;
     }
     if(kgNote!=null) kgNote = Math.round(kgNote * mul * 100)/100;
+  }
+  // Ekstra/fire ham adet üzerinde; paket tamamla en sonda (çift şişirme yok)
+  if(opts.paketTamamla && paketAdet>0 && adetNote!=null && birimLower!=='paket'){
+    const fin = applyPaketTamamlaAdet(adetNote, miktar, kgNote, birimLower, paketAdet);
+    adetNote = fin.adetNote;
+    miktar = fin.miktar;
+    if(fin.kgNote!=null) kgNote = fin.kgNote;
+    if(fin.paketNote!=null) paketNote = fin.paketNote;
   }
   const listFiyat = parseFloat(malzeme.satisFiyat)||0;
   const iskontoPct = Math.min(100, Math.max(0, parseFloat(opts.iskontoPct)||0));
@@ -8863,6 +9171,13 @@ function renderImalatHesapSection(sub){
       if(ui.imalatCalcMahaller[0]) ui.imalatCalcMahaller[0].input = e.target.value;
       updateHesapPanel();
     });
+    alanEl.addEventListener('change', e=>{
+      ui.imalatCalcInput = e.target.value;
+      if(ui.imalatCalcMahaller[0]) ui.imalatCalcMahaller[0].input = e.target.value;
+      const s = state.imalatSistemleri.find(x=>x.id===ui.imalatCalcSistemId) || null;
+      promptDuvarHatSayimiIfNeeded(s);
+      updateHesapPanel();
+    });
   }
   sub.querySelectorAll('[data-mahal-input]').forEach(inp=>{
     inp.addEventListener('input', e=>{
@@ -8873,6 +9188,17 @@ function renderImalatHesapSection(sub){
         if(ui.imalatCalcMahaller[0] && ui.imalatCalcMahaller[0].id===id) ui.imalatCalcInput = m.input;
         updateHesapPanel();
       }
+    });
+    inp.addEventListener('change', e=>{
+      const id = e.target.dataset.mahalInput;
+      const m = ui.imalatCalcMahaller.find(x=>x.id===id);
+      if(m){
+        m.input = e.target.value;
+        if(ui.imalatCalcMahaller[0] && ui.imalatCalcMahaller[0].id===id) ui.imalatCalcInput = m.input;
+      }
+      const s = state.imalatSistemleri.find(x=>x.id===ui.imalatCalcSistemId) || null;
+      promptDuvarHatSayimiIfNeeded(s);
+      updateHesapPanel();
     });
   });
   sub.querySelectorAll('[data-mahal-del]').forEach(btn=>{
@@ -9026,6 +9352,7 @@ function renderImalatHesapSection(sub){
   bindSemaZoomControls();
   bindAnalizKayitlariEvents(sub);
   bindDuvarHesapSecenekleri(()=>updateHesapPanel());
+  promptDuvarHatSayimiIfNeeded(aktifSistem);
   updateHesapPanel();
 }
 
@@ -9439,19 +9766,28 @@ function mergeMalzemeSonuc(a, b){
 }
 function finalizeMergedMalzemeSonuc(m, merged, opts){
   let r = Object.assign({}, merged);
+  const paketAdet = parseFloat(m.paketAdet)||0;
+  const birimLower = String(getMalzemeBirim(m)||'').toLowerCase();
+  // Taban sütunu: birleşik ham adet + paket tamamla (ekstra yok)
+  if(opts.paketTamamla && paketAdet>0 && r.baseAdetNote!=null && birimLower!=='paket'){
+    const b = applyPaketTamamlaAdet(r.baseAdetNote, r.baseMiktar, r.baseKgNote, birimLower, paketAdet);
+    r.baseMiktar = b.miktar;
+    r.baseAdetNote = b.adetNote;
+    if(b.kgNote!=null) r.baseKgNote = b.kgNote;
+  }
   const ekstra = parseFloat(opts.ekstra)||0;
   if(ekstra>0){
     const applied = applyEkstraAdet(m, r.miktar, r.adetNote, ekstra);
     r.miktar = applied.miktar;
     r.adetNote = applied.adetNote;
+    if(applied.kgNote!=null) r.kgNote = applied.kgNote;
   }
-  const paketAdet = parseFloat(m.paketAdet)||0;
-  const birimLower = String(getMalzemeBirim(m)||'').toLowerCase();
-  if(opts.paketTamamla && paketAdet>0 && r.adetNote!=null){
-    const parca = Math.ceil((parseFloat(r.adetNote) - 1e-9)/paketAdet)*paketAdet;
-    r.adetNote = parca;
-    if(birimLower==='adet' || birimLower==='torba') r.miktar = parca;
-    r.paketNote = parca/paketAdet;
+  if(opts.paketTamamla && paketAdet>0 && r.adetNote!=null && birimLower!=='paket'){
+    const fin = applyPaketTamamlaAdet(r.adetNote, r.miktar, r.kgNote, birimLower, paketAdet);
+    r.adetNote = fin.adetNote;
+    r.miktar = fin.miktar;
+    if(fin.kgNote!=null) r.kgNote = fin.kgNote;
+    if(fin.paketNote!=null) r.paketNote = fin.paketNote;
   }
   const listFiyat = parseFloat(m.satisFiyat)||0;
   const iskontoPct = Math.min(100, Math.max(0, parseFloat(opts.iskontoPct)||0));
@@ -9514,6 +9850,14 @@ function updateHesapPanel(opts){
         msg += ` · Kaplama: ${kap.label} · Yalıtım: ${isYalitimHesabaDahil(sistem)?'var':'yok'}`;
         if(sistemHasGrup2(sistem)){
           msg += kap.kat===2 ? ' · 2. Grup dahil' : ' · 2. Grup hariç (tek kat)';
+        }
+        const roomHat = getImalatRoomSize();
+        if(ui.imalatCalcHatSayimi === true && isDuvarHatSayimiActive(roomHat, tipId)){
+          msg += ' · Hat sayımı: açık (her hat 1 adet)';
+        } else if(sistemNeedsDuvarHatSayimi(sistem, roomHat) && ui.imalatCalcHatSayimi === false){
+          msg += ' · Hat sayımı: kapalı (normal hesap)';
+        } else if(sistemNeedsDuvarHatSayimi(sistem, roomHat) && ui.imalatCalcHatSayimi == null){
+          msg += ' · Ölçü alanından çıkınca hat sayımı sorulacak';
         }
       }
       noteEl.textContent = msg;
@@ -9603,20 +9947,31 @@ function getHesapBrutBirincil(sistem, deger){
 }
 function computeHesapToplamlarWithIskonto(sistem, deger, iskontoPctOverride){
   const byCurrency = {};
-  const malzemeler = sistemMalzemeleriHesap(sistem);
   const isk = iskontoPctOverride!=null ? iskontoPctOverride : getHesapIskontoPct();
-  if(!sistem || deger==null || !malzemeler.length) return { byCurrency };
-  malzemeler.forEach(m=>{
-    const opts = Object.assign({}, getPaketOpts(m.id), { iskontoPct: isk });
-    const r = computeMalzemeSonuc(m, deger, opts);
-    if(!byCurrency[r.paraBirimi]) byCurrency[r.paraBirimi] = { toplamTutar:0, toplamBrut:0, iskontoTutar:0, toplamMaliyet:0 };
-    byCurrency[r.paraBirimi].toplamTutar += r.tutar;
-    byCurrency[r.paraBirimi].toplamBrut += (r.brutTutar!=null ? r.brutTutar : r.tutar);
-    byCurrency[r.paraBirimi].toplamMaliyet += r.maliyet;
+  if(!sistem || deger==null) return { byCurrency };
+  // Çoklu mahal dahil doğru miktar için satırları topla; tutarı istenen iskontoyla yeniden hesapla
+  const rows = collectHesapSonucRows(sistem, deger);
+  if(!rows.length) return { byCurrency };
+  rows.forEach(({m, r})=>{
+    const cur = r.paraBirimi || 'TRY';
+    if(!byCurrency[cur]) byCurrency[cur] = { toplamTutar:0, toplamBrut:0, iskontoTutar:0, toplamMaliyet:0 };
+    const listFiyat = parseFloat(m.satisFiyat)||0;
+    const carpan = Math.max(0, 1 - isk/100);
+    const netFiyat = Math.round(listFiyat * carpan * 10000)/10000;
+    const miktar = parseFloat(r.miktar)||0;
+    const tutar = (iskontoPctOverride==null) ? (parseFloat(r.tutar)||0) : Math.round(miktar * netFiyat * 100)/100;
+    const brutTutar = Math.round(miktar * listFiyat * 100)/100;
+    const maliyet = Math.round(miktar * (parseFloat(m.alisFiyat)||0) * 100)/100;
+    byCurrency[cur].toplamTutar += tutar;
+    byCurrency[cur].toplamBrut += brutTutar;
+    byCurrency[cur].toplamMaliyet += maliyet;
   });
   Object.values(byCurrency).forEach(t=>{
+    t.toplamTutar = Math.round(t.toplamTutar*100)/100;
+    t.toplamBrut = Math.round(t.toplamBrut*100)/100;
+    t.toplamMaliyet = Math.round(t.toplamMaliyet*100)/100;
     t.iskontoTutar = Math.round((t.toplamBrut - t.toplamTutar)*100)/100;
-    t.kar = t.toplamTutar - t.toplamMaliyet;
+    t.kar = Math.round((t.toplamTutar - t.toplamMaliyet)*100)/100;
   });
   return { byCurrency };
 }
@@ -9760,7 +10115,8 @@ function bindHesapSonucEvents(sistem, deger, unit){
       const carpan = Math.max(0, 1 - getHesapIskontoPct()/100);
       // Input iskontolu (net) fiyat gösterir; liste fiyatı geri hesaplanır
       m.satisFiyat = carpan > 1e-9 ? Math.round((entered/carpan)*10000)/10000 : entered;
-      const r = computeMalzemeSonuc(m, deger, getPaketOpts(id));
+      const row = collectHesapSonucRows(sistem, deger).find(x=>x.m.id===id);
+      const r = row ? row.r : computeMalzemeSonuc(m, deger, getPaketOpts(id));
       const tutarCell = wrap.querySelector(`[data-tutar-id="${id}"]`);
       if(tutarCell) tutarCell.textContent = fmtMoney(r.tutar, r.paraBirimi);
       const hint = e.target.parentElement && e.target.parentElement.querySelector('div');
@@ -9778,7 +10134,8 @@ function bindHesapSonucEvents(sistem, deger, unit){
       if(!m) return;
       if(!ui.imalatCalcEkstra) ui.imalatCalcEkstra = {};
       ui.imalatCalcEkstra[id] = parseFloat(String(e.target.value).replace(',','.'))||0;
-      const r = computeMalzemeSonuc(m, deger, getPaketOpts(id));
+      const row = collectHesapSonucRows(sistem, deger).find(x=>x.m.id===id);
+      const r = row ? row.r : computeMalzemeSonuc(m, deger, getPaketOpts(id));
       const baseCell = wrap.querySelector(`[data-basecell-id="${id}"]`);
       if(baseCell) baseCell.innerHTML = formatHesapMiktarHtml(m, { miktar:r.baseMiktar, adetNote:r.baseAdetNote, kgNote:r.baseKgNote });
       const miktarCell = wrap.querySelector(`[data-miktarcell-id="${id}"]`);
@@ -9925,10 +10282,13 @@ function applyEkstraAdet(malzeme, miktar, adetNote, ekstra){
     const tipAy = normalizeTipAyarlari(Object.assign({}, malzeme, {urunTipi:tips}));
     let per = 3;
     if(tips.includes('plaka') && tipAy.plaka){
-      const e = parseEbatMetreCift(tipAy.plaka.en, tipAy.plaka.boy, 1.2, 2.5);
-      per = e.en * e.boy;
+      const st = plakaStokVeKesimEbat(tipAy.plaka).stok;
+      per = st.en * st.boy;
     } else if(tips.includes('panel') && tipAy.panel){
       const e = parseEbatMetreCift(tipAy.panel.en, tipAy.panel.boy, 1.2, 2.5);
+      per = e.en * e.boy;
+    } else if(tips.includes('yalitim') && tipAy.yalitim){
+      const e = parseEbatMetreCift(tipAy.yalitim.en, tipAy.yalitim.boy, 0.6, 1.2);
       per = e.en * e.boy;
     }
     return { miktar: Math.round(((parseFloat(miktar)||0) + e * per)*100)/100, adetNote: newAdet };
