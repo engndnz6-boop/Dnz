@@ -37,10 +37,7 @@
     get,
     update,
     onValue,
-    push,
-    query,
-    orderByChild,
-    equalTo
+    push
   } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
   const firebaseConfig = {
     apiKey: "AIzaSyDDf6nEFNiJb1jubQX5ZF8XxOAol8K6laE",
@@ -270,17 +267,13 @@
         status: 'new'
       };
       await set(msgRef, record);
-      try{
-        await set(ref(db, 'supportUserInbox/'+user.uid+'/'+msgId), {
-          konu: record.konu,
-          mesaj: record.mesaj,
-          createdAt: record.createdAt,
-          status: 'new',
-          hasAttachment: record.hasAttachment
-        });
-      }catch(inboxErr){
-        console.warn('Kullanıcı kutusu yazılamadı (mesaj kaydedildi)', inboxErr);
-      }
+      await set(ref(db, 'supportUserInbox/'+user.uid+'/'+msgId), {
+        konu: record.konu,
+        mesaj: record.mesaj,
+        createdAt: record.createdAt,
+        status: 'new',
+        hasAttachment: record.hasAttachment
+      });
       if(att){
         try{
           await set(ref(db, 'supportAttachments/'+msgId), att);
@@ -401,37 +394,53 @@
       return {ok:false, error:'Yanıt gönderilemedi: '+(e.message||'Bilinmeyen hata')};
     }
   };
-  function mySupportQueryRef(uid){
-    return query(ref(db, 'supportMessages'), orderByChild('userId'), equalTo(uid));
-  }
-  function mapMySupportItems(snapshot){
-    const items = [];
-    if(snapshot.exists()){
-      Object.entries(snapshot.val()).forEach(([id,m])=>{
-        if(!m || typeof m !== 'object') return;
-        const row = Object.assign({id}, m);
-        if(row.attachment && typeof row.attachment === 'object') delete row.attachment;
-        delete row.userAgent;
-        items.push(row);
+  window.dnzBackfillSupportUserInbox = async function(){
+    if(!window.dnzCanViewSupportInbox()) return {ok:false, synced:0};
+    try{
+      const snap = await get(ref(db, 'supportMessages'));
+      if(!snap.exists()) return {ok:true, synced:0};
+      let synced = 0;
+      const tasks = [];
+      Object.entries(snap.val()).forEach(([id,m])=>{
+        if(!m || !m.userId) return;
+        synced++;
+        tasks.push(set(ref(db, 'supportUserInbox/'+m.userId+'/'+id), {
+          konu: m.konu||'',
+          mesaj: m.mesaj||'',
+          createdAt: m.createdAt||Date.now(),
+          status: m.status||'new',
+          hasAttachment: !!m.hasAttachment,
+          reply: m.reply||null,
+          repliedAt: m.repliedAt||null
+        }));
       });
-      items.sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+      await Promise.allSettled(tasks);
+      return {ok:true, synced};
+    }catch(e){
+      console.warn('Destek kutusu senkronu atlandı', e);
+      return {ok:false, synced:0};
     }
-    return items;
-  }
+  };
   let mySupportUnsub = null;
   window.dnzLoadMySupportMessages = async function(){
     const user = auth.currentUser;
     if(!user) return {ok:false, items:[], error:'Giriş yapmanız gerekiyor.'};
     try{
-      const snap = await get(mySupportQueryRef(user.uid));
-      return {ok:true, items: mapMySupportItems(snap)};
+      const snap = await get(ref(db, 'supportUserInbox/'+user.uid));
+      if(!snap.exists()) return {ok:true, items:[]};
+      const items = Object.entries(snap.val()).map(([id,m])=>Object.assign({id}, m||{}))
+        .sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+      return {ok:true, items};
     }catch(e){
       console.error('Mesajlarım okunamadı', e);
-      const code = (e && e.code ? String(e.code) : '').toUpperCase();
-      if(code.includes('PERMISSION_DENIED')){
-        return {ok:false, items:[], error:'Mesajlar okunamadı (izin hatası). Firebase Rules güncellenip publish edildi mi?'};
-      }
-      return {ok:false, items:[], error:'Mesajlarınız yüklenemedi.'};
+      const denied = String(e && e.code ? e.code : '').includes('PERMISSION_DENIED');
+      return {
+        ok:false,
+        items:[],
+        error: denied
+          ? 'Mesaj kutusu okunamadı. Firebase Console → Realtime Database → Rules bölümünde supportUserInbox kurallarını publish edin, sonra Ctrl+F5 ile yenileyin.'
+          : 'Mesajlar yüklenemedi.'
+      };
     }
   };
   window.dnzSubscribeMySupport = function(onChange){
@@ -441,17 +450,24 @@
       if(typeof onChange === 'function') onChange({ok:false, items:[], error:'Giriş yapmanız gerekiyor.'});
       return false;
     }
-    mySupportUnsub = onValue(mySupportQueryRef(user.uid), (snapshot)=>{
-      if(typeof onChange === 'function') onChange({ok:true, items: mapMySupportItems(snapshot)});
+    mySupportUnsub = onValue(ref(db, 'supportUserInbox/'+user.uid), (snapshot)=>{
+      const items = [];
+      if(snapshot.exists()){
+        Object.entries(snapshot.val()).forEach(([id,m])=>{
+          if(m && typeof m === 'object') items.push(Object.assign({id}, m));
+        });
+        items.sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+      }
+      if(typeof onChange === 'function') onChange({ok:true, items});
     }, (err)=>{
       console.error('Mesajlarım dinleme hatası', err);
       if(typeof onChange === 'function'){
-        const code = err && err.code ? String(err.code) : '';
+        const denied = String(err && err.code ? err.code : '').includes('PERMISSION_DENIED');
         onChange({
           ok:false,
           items:[],
-          error: code.includes('PERMISSION_DENIED')
-            ? 'Mesajlar okunamadı (izin hatası). Firebase Rules güncellenip publish edildi mi?'
+          error: denied
+            ? 'Mesaj kutusu okunamadı. Firebase Console → Realtime Database → Rules bölümünde supportUserInbox kurallarını publish edin, sonra Ctrl+F5 ile yenileyin.'
             : 'Mesajlar yüklenemedi.'
         });
       }
@@ -13979,7 +13995,7 @@ function renderMySupportList(res){
   }
   const items = res.items||[];
   if(!items.length){
-    el.innerHTML = '<p class="hint">Henüz destek mesajı göndermediniz.</p>';
+    el.innerHTML = '<p class="hint">Henüz destek mesajı göndermediniz. Daha önce gönderdiyseniz geliştirici Ayarlar sayfasını açtıktan sonra ↻ Yenile\'ye basın.</p>';
     return;
   }
   el.innerHTML = items.map(m=>{
@@ -14003,15 +14019,25 @@ function wireMySupportPanel(){
   const el = document.getElementById('mySupportList');
   if(!el) return;
   if(typeof window.dnzStopMySupport === 'function') window.dnzStopMySupport();
-  if(typeof window.dnzSubscribeMySupport === 'function'){
-    window.dnzSubscribeMySupport((res)=> renderMySupportList(res));
-  } else if(typeof window.dnzLoadMySupportMessages === 'function'){
-    window.dnzLoadMySupportMessages().then(renderMySupportList);
-  }
+  const refresh = ()=>{
+    if(typeof window.dnzSubscribeMySupport === 'function'){
+      window.dnzSubscribeMySupport((res)=> renderMySupportList(res));
+    } else if(typeof window.dnzLoadMySupportMessages === 'function'){
+      window.dnzLoadMySupportMessages().then(renderMySupportList);
+    }
+  };
+  const btn = document.getElementById('btnRefreshMySupport');
+  if(btn) btn.onclick = refresh;
+  refresh();
 }
 function wireSupportInboxPanel(){
   if(!canViewSupportInbox()) return;
   if(typeof window.dnzStopSupportInbox === 'function') window.dnzStopSupportInbox();
+  if(typeof window.dnzBackfillSupportUserInbox === 'function'){
+    window.dnzBackfillSupportUserInbox().then((res)=>{
+      if(res && res.synced > 0) console.info('[Destek] '+res.synced+' mesaj kullanıcı kutusuna senkron edildi.');
+    });
+  }
   document.querySelectorAll('[data-support-filter]').forEach(btn=>{
     btn.onclick = ()=>{
       supportInboxFilter = btn.dataset.supportFilter;
@@ -14195,6 +14221,9 @@ function renderAyarlarTab(main){
         Mesajlarım & Yanıtlar
       </h2>
       <p class="hint">Gönderdiğiniz destek mesajları ve geliştiriciden gelen yanıtlar burada görünür.</p>
+      <div class="btn-row" style="margin-bottom:8px;">
+        <button type="button" class="btn btn-ghost btn-sm" id="btnRefreshMySupport">↻ Yenile</button>
+      </div>
       <div id="mySupportList"><p class="hint">Yükleniyor…</p></div>
     </div>
     ` : ''}
