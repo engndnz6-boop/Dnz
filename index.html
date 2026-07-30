@@ -36,7 +36,8 @@
     set,
     get,
     update,
-    onValue
+    onValue,
+    push
   } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
   const firebaseConfig = {
     apiKey: "AIzaSyDDf6nEFNiJb1jubQX5ZF8XxOAol8K6laE",
@@ -229,6 +230,71 @@
     }catch(e){
       console.error('Ortak imalat kataloğu okuma hatası', e);
       return null;
+    }
+  };
+  // Destek mesajları: giriş yapmış kullanıcılar sorun bildirimi gönderir (geliştirici panelinden okunur).
+  window.dnzSendSupportMessage = async function(payload){
+    const user = auth.currentUser;
+    if(!user) return {ok:false, error:'Giriş yapmanız gerekiyor.'};
+    if(!payload || typeof payload !== 'object') return {ok:false, error:'Geçersiz mesaj.'};
+    const mesaj = String(payload.mesaj||'').trim();
+    if(!mesaj) return {ok:false, error:'Lütfen mesajınızı yazın.'};
+    try{
+      const msgRef = push(ref(db, 'supportMessages'));
+      const record = {
+        konu: String(payload.konu||'').trim(),
+        mesaj,
+        attachment: payload.attachment && payload.attachment.dataUrl ? {
+          name: payload.attachment.name||'ek',
+          type: payload.attachment.type||'',
+          size: payload.attachment.size||0,
+          dataUrl: payload.attachment.dataUrl
+        } : null,
+        userId: user.uid,
+        userEmail: user.email||'',
+        companyId: window.dnzCompanyId||'',
+        companyName: String(payload.companyName||'').trim(),
+        userRole: window.dnzUserRole||'',
+        activeProjectId: payload.activeProjectId||'',
+        activeProjectName: String(payload.activeProjectName||'').trim(),
+        userAgent: navigator.userAgent||'',
+        createdAt: Date.now(),
+        status: 'new'
+      };
+      await set(msgRef, record);
+      return {ok:true, id: msgRef.key};
+    }catch(e){
+      console.error('Destek mesajı gönderilemedi', e);
+      return {ok:false, error:'Mesaj gönderilemedi. İnternet bağlantınızı kontrol edip tekrar deneyin.'};
+    }
+  };
+  window.dnzCanViewSupportInbox = function(){
+    const user = auth.currentUser;
+    if(!user || !user.email) return false;
+    return String(user.email).trim().toLowerCase() === IMALAT_CATALOG_OWNER_EMAIL.toLowerCase();
+  };
+  window.dnzLoadSupportMessages = async function(){
+    if(!window.dnzCanViewSupportInbox()) return {ok:false, error:'Bu panel yalnızca uygulama geliştiricisine açıktır.', items:[]};
+    try{
+      const snap = await get(ref(db, 'supportMessages'));
+      if(!snap.exists()) return {ok:true, items:[]};
+      const items = Object.entries(snap.val()).map(([id,m])=>Object.assign({id}, m||{}))
+        .sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+      return {ok:true, items};
+    }catch(e){
+      console.error('Destek mesajları okunamadı', e);
+      return {ok:false, error:'Mesajlar yüklenemedi.', items:[]};
+    }
+  };
+  window.dnzUpdateSupportMessage = async function(id, patch){
+    if(!window.dnzCanViewSupportInbox()) return {ok:false, error:'Yetkisiz.'};
+    if(!id || !patch || typeof patch !== 'object') return {ok:false, error:'Geçersiz istek.'};
+    try{
+      await update(ref(db, 'supportMessages/'+id), Object.assign({}, patch, {updatedAt: Date.now()}));
+      return {ok:true};
+    }catch(e){
+      console.error('Destek mesajı güncellenemedi', e);
+      return {ok:false, error:'Güncellenemedi.'};
     }
   };
   window.dnzStartImalatCatalogSync = function(){
@@ -781,6 +847,10 @@ main{flex:1;min-width:0;width:100%;padding:0 10px 40px 10px;display:flex;flex-di
   display:grid;gap:10px;
   grid-template-columns:repeat(auto-fill,minmax(130px,1fr));
 }
+.field-grid-single{
+  grid-template-columns:1fr !important;
+}
+.field-grid .field[style*="grid-column:span 2"]{grid-column:1 / -1;}
 .field{display:flex;flex-direction:column;gap:4px;min-width:0;}
 .sg-list{position:absolute;top:100%;left:0;right:0;z-index:60;background:var(--card,#fff);border:1px solid rgba(11,36,54,0.15);border-radius:10px;margin-top:4px;max-height:190px;overflow-y:auto;box-shadow:0 10px 24px rgba(8,32,46,0.22);}
 .sg-item{padding:10px 12px;font-size:0.88rem;color:var(--ink,#0B2436);cursor:pointer;border-bottom:1px solid rgba(11,36,54,0.07);}
@@ -827,12 +897,12 @@ main{flex:1;min-width:0;width:100%;padding:0 10px 40px 10px;display:flex;flex-di
 .table-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:12px;max-width:100%;}
 .report-subnav{display:flex;flex-wrap:wrap;gap:8px;}
 .report-subtab-btn{
-  display:flex;align-items:center;gap:7px;
+  display:flex;align-items:center;justify-content:center;gap:7px;
   padding:9px 14px;border-radius:12px;border:1px solid var(--glass-border);cursor:pointer;
   font-family:var(--font-display);font-weight:600;font-size:0.8rem;
   background:rgba(255,255,255,0.5);color:var(--ink-soft);
   transition:background 160ms ease, color 160ms ease;
-  white-space:nowrap;
+  min-width:0;text-align:center;word-break:break-word;hyphens:auto;line-height:1.2;
 }
 .report-subtab-btn svg{width:15px;height:15px;flex-shrink:0;}
 .report-subtab-btn.active{
@@ -973,6 +1043,7 @@ td.num,th.num{font-family:var(--font-mono);text-align:right;}
   border:1px solid rgba(11,36,54,0.14);background:rgba(255,255,255,0.55);
   border-radius:10px;padding:10px 8px;cursor:pointer;font-family:var(--font-body);
   font-size:0.78rem;font-weight:600;color:var(--ink-soft);text-align:center;
+  min-width:0;word-break:break-word;hyphens:auto;line-height:1.25;
 }
 .dir-btn.active{
   border-color:var(--aqua-dim);color:var(--ink);
@@ -986,6 +1057,7 @@ td.num,th.num{font-family:var(--font-mono);text-align:right;}
   border:1px solid rgba(11,36,54,0.15);border-radius:12px;padding:10px 8px;cursor:pointer;
   background:rgba(255,255,255,0.55);text-align:center;min-width:0;
   font-family:var(--font-body);color:var(--ink-soft);transition:background .12s,border-color .12s,color .12s;
+  word-break:break-word;hyphens:auto;
 }
 .uygulama-tip-btn b{display:block;font-size:0.88rem;font-weight:700;color:var(--ink);line-height:1.2;}
 .uygulama-tip-btn small{display:block;margin-top:4px;font-size:0.68rem;font-weight:600;line-height:1.25;opacity:0.85;white-space:normal;}
@@ -1000,7 +1072,7 @@ td.num,th.num{font-family:var(--font-mono);text-align:right;}
   background:rgba(255,255,255,0.75);font-size:0.75rem;font-weight:600;color:var(--ink);
 }
 @media(max-width:560px){
-  .uygulama-tip-grid{grid-template-columns:1fr;}
+  .uygulama-tip-grid{grid-template-columns:repeat(2,minmax(0,1fr));}
 }
 .imalat-sema-totals{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;}
 .imalat-sema-totals .total-chip{min-width:110px;}
@@ -1080,8 +1152,23 @@ html[data-theme="dark"] .urun-kart{background:rgba(255,255,255,0.05);border-colo
   background:rgba(255,255,255,0.5);color:var(--ink);
   font-family:var(--font-display);font-weight:600;font-size:0.72rem;text-align:center;
   transition:background 160ms ease, transform 120ms ease, border-color 160ms ease;
+  min-width:0;width:100%;max-width:100%;overflow:hidden;box-sizing:border-box;
+}
+.quick-action-btn span{
+  display:block;width:100%;max-width:100%;line-height:1.25;
+  overflow:hidden;text-overflow:ellipsis;word-break:break-word;hyphens:auto;
 }
 .quick-action-btn svg{width:22px;height:22px;color:var(--aqua-dim);flex-shrink:0;}
+.support-inbox-item{border:1px solid var(--glass-border);border-radius:12px;margin-bottom:8px;background:rgba(255,255,255,0.35);overflow:hidden;}
+.support-inbox-item summary{padding:12px 14px;cursor:pointer;list-style:none;display:flex;flex-wrap:wrap;gap:8px;align-items:center;}
+.support-inbox-item summary::-webkit-details-marker{display:none;}
+.support-inbox-body{padding:0 14px 14px;font-size:0.82rem;line-height:1.5;}
+.support-status-badge{font-size:0.65rem;font-weight:700;padding:2px 8px;border-radius:999px;white-space:nowrap;}
+.support-inbox-meta{color:var(--ink-soft);font-size:0.72rem;}
+.support-inbox-msg{white-space:pre-wrap;word-break:break-word;margin:8px 0;}
+.support-inbox-filters{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;}
+.support-inbox-filters .btn-sm{padding:5px 10px;font-size:0.72rem;}
+.support-inbox-filters .btn-sm.active{background:var(--aqua-dim);color:#fff;border-color:var(--aqua-dim);}
 .quick-action-btn:hover{background:rgba(255,255,255,0.85);border-color:var(--aqua-dim);transform:translateY(-1px);}
 .quick-action-btn:active{transform:translateY(0);}
 html[data-theme="dark"] .quick-action-btn{background:rgba(255,255,255,0.06);}
@@ -1225,21 +1312,62 @@ html[data-theme="dark"] .uygulama-tip-btn small,
 html[data-theme="dark"] .total-chip span.lbl,
 html[data-theme="dark"] thead th{color:var(--ink-soft);}
 html[data-theme="dark"] .brand-mark{background:#0F2229;box-shadow:0 4px 14px rgba(0,0,0,0.4);}
-html[data-theme="dark"] select.proj-select{
-  background-color:rgba(255,255,255,0.08);
-  color:var(--ink);
-  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23F2FBFA' stroke-width='2'><path d='M6 9l6 6 6-6'/></svg>");
-}
 html[data-theme="dark"] .field input,
-html[data-theme="dark"] .field select,
 html[data-theme="dark"] .field textarea,
+html[data-theme="dark"] input.mono,
+html[data-theme="dark"] textarea{
+  background-color:rgba(255,255,255,0.08);border-color:rgba(255,255,255,0.18);color:var(--ink);
+}
+/* Gece modunda select: OS tik işaretini engellemek için appearance sıfırlanır, ok özel çizilir */
+html[data-theme="dark"] .field select,
 html[data-theme="dark"] .filter-bar select,
 html[data-theme="dark"] .month-picker,
 html[data-theme="dark"] .sistem-tip-select,
-html[data-theme="dark"] input.mono,
-html[data-theme="dark"] select,
-html[data-theme="dark"] textarea{
-  background:rgba(255,255,255,0.08);border-color:rgba(255,255,255,0.18);color:var(--ink);
+html[data-theme="dark"] select.proj-select{
+  appearance:none;-webkit-appearance:none;-moz-appearance:none;
+  background-color:rgba(255,255,255,0.08);
+  border-color:rgba(255,255,255,0.18);
+  color:var(--ink);
+  color-scheme:light;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23F2FBFA' stroke-width='2'><path d='M6 9l6 6 6-6'/></svg>");
+  background-repeat:no-repeat;
+  background-position:right 8px center;
+  background-size:16px;
+  padding-right:30px;
+}
+html[data-theme="dark"] .field select option,
+html[data-theme="dark"] .filter-bar select option,
+html[data-theme="dark"] select.proj-select option{
+  background-color:#fff;
+  color:#0B2436;
+}
+html[data-theme="dark"] .pick-item input[type="checkbox"],
+html[data-theme="dark"] .th-teklifOnayItem,
+html[data-theme="dark"] #t-onay,
+html[data-theme="dark"] #m-ciftHesap{
+  appearance:none;-webkit-appearance:none;-moz-appearance:none;
+  width:18px;height:18px;min-width:18px;min-height:18px;
+  border:1.5px solid rgba(255,255,255,0.35);
+  border-radius:4px;
+  background:rgba(16,38,46,0.95);
+  cursor:pointer;
+  vertical-align:middle;
+  accent-color:transparent;
+}
+html[data-theme="dark"] .pick-item input[type="checkbox"]:checked,
+html[data-theme="dark"] .th-teklifOnayItem:checked,
+html[data-theme="dark"] #t-onay:checked,
+html[data-theme="dark"] #m-ciftHesap:checked{
+  background:var(--aqua-dim);
+  border-color:var(--aqua-dim);
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%2304201C' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'><path d='M3.5 8.5l3 3 6-6.5'/></svg>");
+  background-repeat:no-repeat;
+  background-position:center;
+  background-size:12px 12px;
+}
+html[data-theme="dark"] .pick-item input[type="checkbox"]:disabled,
+html[data-theme="dark"] #t-onay:disabled{
+  opacity:0.45;cursor:not-allowed;
 }
 html[data-theme="dark"] .field input::placeholder,
 html[data-theme="dark"] .field textarea::placeholder,
@@ -1266,6 +1394,12 @@ html[data-theme="dark"] tbody td{border-top-color:rgba(255,255,255,0.1);color:va
 html[data-theme="dark"] tbody tr:hover{background:rgba(255,255,255,0.05);}
 html[data-theme="dark"] .project-item{background:rgba(255,255,255,0.06);border-color:rgba(255,255,255,0.12);}
 html[data-theme="dark"] .project-item.active{background:rgba(47,211,199,0.2);}
+html[data-theme="dark"] .project-item .icon-btn[data-act="toggleDurum"]{
+  background:rgba(46,166,98,0.18);color:#7BE0A8;
+}
+html[data-theme="dark"] .project-item .icon-btn[data-act="toggleDurum"]:hover{
+  background:rgba(46,166,98,0.32);color:#B8F0CE;
+}
 html[data-theme="dark"] .total-chip{background:rgba(255,255,255,0.07);border-color:rgba(255,255,255,0.12);}
 html[data-theme="dark"] .pick-item{background:rgba(255,255,255,0.06);color:var(--ink);}
 html[data-theme="dark"] .arama-sonuc-item:hover{background:rgba(47,211,199,0.22);}
@@ -1356,15 +1490,49 @@ main{
   .project-picker{flex:1 1 100%;max-width:none;order:3;}
   table{font-size:0.72rem;min-width:520px;}
   .card{padding:14px;gap:12px;}
-  .field-grid,
+  .field-grid:not(.field-grid-single),
   .field-grid.tk-aktif-row,
-  .field-grid.tk-kdv-row{grid-template-columns:1fr !important;}
-  .field-grid.tk-aktif-row > .btn{width:100%;}
-  .filter-bar{grid-template-columns:1fr 1fr;}
-  .uygulama-tip-grid{grid-template-columns:1fr !important;}
-  .urun-tip-multi{grid-template-columns:1fr 1fr;}
+  .field-grid.tk-kdv-row{grid-template-columns:repeat(2,minmax(0,1fr)) !important;}
+  .field-grid > .field:only-child{grid-column:1 / -1;}
+  .field-grid.tk-aktif-row > .btn{width:100%;min-width:0;}
+  .filter-bar{grid-template-columns:repeat(2,minmax(0,1fr));}
+  .uygulama-tip-grid{grid-template-columns:repeat(2,minmax(0,1fr)) !important;}
+  .urun-tip-multi{grid-template-columns:repeat(2,minmax(0,1fr));}
   .urun-kart-grid{grid-template-columns:1fr;}
-  .quick-action-grid{grid-template-columns:repeat(2,minmax(0,1fr));}
+  .quick-action-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;}
+  .quick-action-btn{padding:10px 4px;gap:5px;font-size:0.62rem;border-radius:12px;}
+  .quick-action-btn svg{width:20px;height:20px;}
+  .report-subnav{
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:6px;
+    max-width:100%;
+  }
+  .report-subtab-btn{
+    width:100%;
+    max-width:none;
+    padding:9px 8px;
+    font-size:0.72rem;
+    white-space:normal;
+  }
+  .btn-row{
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:8px;
+    max-width:100%;
+  }
+  .btn-row > .btn{
+    width:100%;
+    min-width:0;
+    max-width:none;
+    white-space:normal;
+    padding:10px 8px;
+    font-size:0.78rem;
+  }
+  .btn-row > .btn:only-child,
+  .btn-row > .btn:last-child:nth-child(odd){grid-column:1 / -1;}
+  .dir-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;}
+  .dir-btn{padding:10px 6px;font-size:0.72rem;}
   .project-item{
     flex-wrap:wrap;
     align-items:center;
@@ -1380,8 +1548,7 @@ main{
     order:10;
   }
   .project-item .icon-btn{width:36px;height:36px;flex:0 0 auto;}
-  .btn{width:auto;max-width:100%;}
-  .btn-row > .btn{flex:1 1 auto;min-width:0;}
+  .btn{max-width:100%;}
   .total-chip{min-width:0;flex:1 1 40%;}
   .imalat-sema-totals .total-chip{min-width:0;}
   .backup-banner{flex-direction:column;align-items:stretch;gap:8px;}
@@ -1393,9 +1560,11 @@ main{
 }
 
 @media (max-width:400px){
-  .filter-bar{grid-template-columns:1fr;}
-  .urun-tip-multi{grid-template-columns:1fr;}
-  .quick-action-grid{grid-template-columns:1fr;}
+  .filter-bar{grid-template-columns:repeat(2,minmax(0,1fr));}
+  .urun-tip-multi{grid-template-columns:repeat(2,minmax(0,1fr));}
+  .quick-action-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;}
+  .quick-action-btn{padding:9px 3px;font-size:0.58rem;}
+  .quick-action-btn svg{width:18px;height:18px;}
 }
 </style>
 </head>
@@ -1595,7 +1764,11 @@ const IMALAT_URUN_TIPLERI = [
   { id:'yalitim', label:'Yalıtım', color:'#e6c84a' },
   { id:'vida', label:'Vida', color:'#6c757d' },
   { id:'kenar', label:'Kenar Profil', color:'#2f7d4a' },
-  { id:'torba', label:'Torba', color:'#8b6914' }
+  { id:'torba', label:'Torba', color:'#8b6914' },
+  { id:'demir', label:'Demir', color:'#5c4033' },
+  { id:'file', label:'File', color:'#708090' },
+  { id:'tugla_bims', label:'Tuğla/Bims', color:'#b55239' },
+  { id:'armatur', label:'Armatör', color:'#4a5568' }
 ];
 // İmalat sisteminin uygulama yeri — ölçü hesabı buna göre değişir.
 const IMALAT_UYGULAMA_TIPLERI = [
@@ -1777,6 +1950,10 @@ function inferMalzemeBirimFromTips(val){
   if(tips.some(t=>IMALAT_TASIYICI_TIPLERI.has(t)) || tips.includes('kenar')) return 'mt';
   if(tips.includes('plaka') || tips.includes('panel') || tips.includes('yalitim')) return 'm2';
   if(tips.includes('torba')) return 'torba';
+  if(tips.includes('demir')) return 'kg';
+  if(tips.includes('file')) return 'mt';
+  if(tips.includes('tugla_bims')) return 'adet';
+  if(tips.includes('armatur')) return 'm2';
   return 'adet';
 }
 function getMalzemeBirim(m){
@@ -1919,7 +2096,7 @@ function renderTasiyiciFormsHtml(tips, ayarlar, uygulamaTipi){
 }
 
 // Taşıyıcı dışı ürün tipleri için form alanları (panel/plaka/yalıtım/vida/kenar/ekleme/birleştirici/askı)
-const IMALAT_DIGER_TIP_FORM_SIRASI = ['panel','plaka','yalitim','vida','kenar','ekleme','birlestirici','aski','torba'];
+const IMALAT_DIGER_TIP_FORM_SIRASI = ['panel','plaka','yalitim','vida','kenar','ekleme','birlestirici','aski','torba','demir','file','tugla_bims','armatur'];
 const IMALAT_BIRLESTIRICI_TABANLARI = [
   { id:'kesisim', label:'Kesişim' },
   { id:'aski', label:'Askı noktası' },
@@ -1989,6 +2166,10 @@ function emptyEklemeAyar(){ return { hosts:['ana'], aralik:'3' }; }
 function emptyBirlestiriciAyar(){ return { hesapTabani:'kesisim', carpan:'1' }; }
 function emptyAskiAyar(){ return { parallel:'kisa', firstCm:'70', stepCm:'100' }; }
 function emptyTorbaAyar(){ return { paketKg:'25', carpan:'1', bolen:'1' }; }
+function emptyDemirAyar(){ return { boy:'12', agirlik:'', mtAgirlik:'' }; }
+function emptyFileAyar(){ return { en:'', boy:'' }; }
+function emptyTuglaBimsAyar(){ return { uzunluk:'', yukseklik:'' }; }
+function emptyArmaturAyar(){ return { en:'', boy:'' }; }
 function emptyTipAyar(tip){
   if(tip==='panel' || tip==='plaka') return emptyPanelPlakaAyar();
   if(tip==='yalitim') return emptyYalitimAyar();
@@ -1998,6 +2179,10 @@ function emptyTipAyar(tip){
   if(tip==='birlestirici') return emptyBirlestiriciAyar();
   if(tip==='aski') return emptyAskiAyar();
   if(tip==='torba') return emptyTorbaAyar();
+  if(tip==='demir') return emptyDemirAyar();
+  if(tip==='file') return emptyFileAyar();
+  if(tip==='tugla_bims') return emptyTuglaBimsAyar();
+  if(tip==='armatur') return emptyArmaturAyar();
   return {};
 }
 function seciliDigerTipFormlari(val){
@@ -2065,6 +2250,27 @@ function normalizeTipAyarlari(m){
         paketKg: from.paketKg!=null && from.paketKg!=='' ? String(from.paketKg) : base.paketKg,
         carpan: from.carpan!=null && from.carpan!=='' ? String(from.carpan) : base.carpan,
         bolen: from.bolen!=null && from.bolen!=='' ? String(from.bolen) : base.bolen
+      };
+    } else if(tip==='demir'){
+      out[tip] = {
+        boy: from.boy!=null && from.boy!=='' ? String(from.boy) : base.boy,
+        agirlik: from.agirlik!=null && from.agirlik!=='' ? String(from.agirlik) : base.agirlik,
+        mtAgirlik: from.mtAgirlik!=null && from.mtAgirlik!=='' ? String(from.mtAgirlik) : base.mtAgirlik
+      };
+    } else if(tip==='file'){
+      out[tip] = {
+        en: from.en!=null && from.en!=='' ? String(from.en) : base.en,
+        boy: from.boy!=null && from.boy!=='' ? String(from.boy) : base.boy
+      };
+    } else if(tip==='tugla_bims'){
+      out[tip] = {
+        uzunluk: from.uzunluk!=null && from.uzunluk!=='' ? String(from.uzunluk) : base.uzunluk,
+        yukseklik: from.yukseklik!=null && from.yukseklik!=='' ? String(from.yukseklik) : base.yukseklik
+      };
+    } else if(tip==='armatur'){
+      out[tip] = {
+        en: from.en!=null && from.en!=='' ? String(from.en) : base.en,
+        boy: from.boy!=null && from.boy!=='' ? String(from.boy) : base.boy
       };
     }
   });
@@ -2136,6 +2342,21 @@ function serializeTipAyarlari(ayarlar, tips){
         carpan: num(a.carpan, 1),
         bolen: Math.max(0.0001, num(a.bolen, 1))
       };
+    } else if(tip==='demir'){
+      out[tip] = {
+        boy: Math.max(0.01, num(a.boy, 12)),
+        agirlik: num(a.agirlik, 0),
+        mtAgirlik: Math.max(0, num(a.mtAgirlik, 0))
+      };
+    } else if(tip==='file'){
+      const e = parseEbatMetreCift(a.en, a.boy, 0, 0);
+      out[tip] = { en: e.en>0 ? e.en : 0, boy: e.boy>0 ? e.boy : 0 };
+    } else if(tip==='tugla_bims'){
+      const u = parseEbatMetreCift(a.uzunluk, a.yukseklik, 0, 0);
+      out[tip] = { uzunluk: u.en>0 ? u.en : 0, yukseklik: u.boy>0 ? u.boy : 0 };
+    } else if(tip==='armatur'){
+      const e = parseEbatMetreCift(a.en, a.boy, 0, 0);
+      out[tip] = { en: e.en>0 ? e.en : 0, boy: e.boy>0 ? e.boy : 0 };
     }
   });
   return out;
@@ -2306,6 +2527,57 @@ function renderDigerTipFormsHtml(tips, ayarlar, uygulamaTipi){
         </div>
         <p class="hint" style="margin:0;font-size:0.68rem;">Hesap: kg = alan × çarpan ÷ bölen · torba = kg ÷ paket kg (yukarı tamamlanır). Örn: 100 m² × 5 ÷ 1 = 500 kg · paket 25 kg → 20 torba.</p>`);
     }
+    if(tip==='demir'){
+      return tipFormShell(tip, `
+        <div class="field-grid" style="margin:0;">
+          <div class="field"><label>Boy (m)</label>
+            <input class="mono" type="number" step="any" min="0.01" data-tip-field="${tip}" data-field="boy" value="${esc(a.boy??'12')}" placeholder="Örn: 12">
+          </div>
+          <div class="field"><label>Ağırlık (kg)</label>
+            <input class="mono" type="number" step="any" min="0" data-tip-field="${tip}" data-field="agirlik" value="${esc(a.agirlik??'')}" placeholder="Örn: 10.66">
+          </div>
+          <div class="field"><label>Mt Ağırlık (kg/mt)</label>
+            <input class="mono" type="number" step="any" min="0" data-tip-field="${tip}" data-field="mtAgirlik" value="${esc(a.mtAgirlik??'')}" placeholder="Örn: 0.888">
+          </div>
+        </div>
+        <p class="hint" style="margin:0;font-size:0.68rem;">Demir boyu, bir çubuk ağırlığı ve metre başına ağırlık (kg/mt). Örn: Ø12 → mt ağırlık 0.888 kg/m · 12 m çubuk ≈ 10.66 kg.</p>`);
+    }
+    if(tip==='file'){
+      return tipFormShell(tip, `
+        <div class="field-grid" style="margin:0;">
+          <div class="field"><label>En (m)</label>
+            <input class="mono" type="number" step="any" min="0.01" data-tip-field="${tip}" data-field="en" value="${esc(a.en??'')}" placeholder="Örn: 0.05">
+          </div>
+          <div class="field"><label>Boy (m)</label>
+            <input class="mono" type="number" step="any" min="0.01" data-tip-field="${tip}" data-field="boy" value="${esc(a.boy??'')}" placeholder="Örn: 3">
+          </div>
+        </div>
+        <p class="hint" style="margin:0;font-size:0.68rem;">File profil en×boy ölçüsü. cm veya mm girilebilir (örn. 50×3000 mm).</p>`);
+    }
+    if(tip==='tugla_bims'){
+      return tipFormShell(tip, `
+        <div class="field-grid" style="margin:0;">
+          <div class="field"><label>Uzunluk (m)</label>
+            <input class="mono" type="number" step="any" min="0.01" data-tip-field="${tip}" data-field="uzunluk" value="${esc(a.uzunluk??'')}" placeholder="Örn: 0.19">
+          </div>
+          <div class="field"><label>Yükseklik (m)</label>
+            <input class="mono" type="number" step="any" min="0.01" data-tip-field="${tip}" data-field="yukseklik" value="${esc(a.yukseklik??'')}" placeholder="Örn: 0.19">
+          </div>
+        </div>
+        <p class="hint" style="margin:0;font-size:0.68rem;">Tuğla veya bims ebatı uzunluk×yükseklik. cm girilebilir (örn. 19×19 cm).</p>`);
+    }
+    if(tip==='armatur'){
+      return tipFormShell(tip, `
+        <div class="field-grid" style="margin:0;">
+          <div class="field"><label>En (m)</label>
+            <input class="mono" type="number" step="any" min="0.01" data-tip-field="${tip}" data-field="en" value="${esc(a.en??'')}" placeholder="Örn: 2">
+          </div>
+          <div class="field"><label>Boy (m)</label>
+            <input class="mono" type="number" step="any" min="0.01" data-tip-field="${tip}" data-field="boy" value="${esc(a.boy??'')}" placeholder="Örn: 6">
+          </div>
+        </div>
+        <p class="hint" style="margin:0;font-size:0.68rem;">Armatör (hasır) levha en×boy ölçüsü. Sipariş m² = adet × (en×boy).</p>`);
+    }
     return '';
   }).join('');
 }
@@ -2359,6 +2631,14 @@ function renderTipAyarOzetHtml(m, uygulamaTipi){
       detail = `${esc(yon)} · ilk ${esc(fmtNum(a.firstCm))} cm · ara ${esc(fmtNum(a.stepCm))} cm`;
     } else if(tip==='torba'){
       detail = `paket ${esc(fmtNum(a.paketKg))} kg · çarpan ${esc(fmtNum(a.carpan))} · bölen ${esc(fmtNum(a.bolen))}`;
+    } else if(tip==='demir'){
+      detail = `boy ${esc(fmtNum(a.boy))} m · ağırlık ${a.agirlik!==''&&a.agirlik!=null ? esc(fmtNum(a.agirlik))+' kg' : '—'} · mt ağırlık ${a.mtAgirlik!==''&&a.mtAgirlik!=null ? esc(fmtNum(a.mtAgirlik))+' kg/mt' : '—'}`;
+    } else if(tip==='file'){
+      detail = `en ${a.en?esc(fmtNum(a.en))+' m':'—'} · boy ${a.boy?esc(fmtNum(a.boy))+' m':'—'}`;
+    } else if(tip==='tugla_bims'){
+      detail = `uzunluk ${a.uzunluk?esc(fmtNum(a.uzunluk))+' m':'—'} · yükseklik ${a.yukseklik?esc(fmtNum(a.yukseklik))+' m':'—'}`;
+    } else if(tip==='armatur'){
+      detail = `en ${a.en?esc(fmtNum(a.en))+' m':'—'} · boy ${a.boy?esc(fmtNum(a.boy))+' m':'—'}`;
     }
     if(!detail) return '';
     return `<div style="font-size:0.68rem;color:var(--ink-soft);margin-top:3px;line-height:1.35;"><span style="display:inline-flex;align-items:center;gap:5px;"><i style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${imalatUrunTipiColor(tip)};"></i><b style="color:var(--ink);font-weight:600;">${esc(imalatUrunTipiLabel(tip))}</b></span> · ${detail}</div>`;
@@ -3687,7 +3967,6 @@ const DASHBOARD_QUICK_ACTIONS = [
   {key:'personel', label:'Personel Ekle', needsProject:true, icon:'<path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/>', go:()=>{ ui.tab='personel'; }},
   {key:'metraj', label:'Metraj Ekle', needsProject:true, icon:'<path d="M3 3h18v18H3z"/><path d="M9 3v18M15 3v18M3 9h18M3 15h18"/>', go:()=>{ ui.tab='metraj'; }},
   {key:'gunluk', label:'Şantiye Günlüğü', needsProject:true, icon:'<path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/>', go:()=>{ ui.tab='gunluk'; }},
-  {key:'raporlar', label:'Raporlar', needsProject:false, icon:'<path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/>', go:()=>{ ui.tab='raporlar'; }},
   {key:'hesaplama', label:'Hesaplama Paneli', needsProject:false, icon:'<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8M8 11h8M8 15h5"/><path d="M16 15l2 2 3-4"/>', go:()=>{ ui.tab='imalat'; ui.imalatSubTab='hesap'; }}
 ];
 function runDashboardQuickAction(key){
@@ -5381,7 +5660,7 @@ function renderTeklifTab(main){
     <div class="card glass">
       <h2>Teklif Notu</h2>
       <p class="hint">Buraya yazacağınız not (ör. ödeme koşulları, geçerlilik süresi, ek açıklamalar) teklif PDF çıktısının altında görünür.</p>
-      <div class="field-grid" style="grid-template-columns:1fr;">
+      <div class="field-grid field-grid-single">
         <div class="field">
           <textarea id="t-note" rows="3" style="width:100%;padding:9px 10px;border-radius:10px;border:1px solid rgba(11,36,54,0.15);background:rgba(255,255,255,0.6);font-family:var(--font-body);font-size:0.85rem;color:var(--ink);resize:vertical;" placeholder="Örn: Fiyatlarımız 30 gün geçerlidir. KDV hariçtir.">${esc(aktif.teklifNote||'')}</textarea>
         </div>
@@ -5838,7 +6117,7 @@ function renderImalatTanimSection(sub){
     <div class="card glass">
       <h2>${imalatSistemForm.id ? 'İmalat Sistemini Düzenle' : 'İmalat Sistemi Ekle'}</h2>
       <p class="hint">Sistemi istediğiniz uygulama tipine ekleyebilirsiniz. <b>Tavan / Zemin:</b> en × boy · <b>Duvar:</b> uzunluk × yükseklik.</p>
-      <div class="field-grid" style="grid-template-columns:1fr;">
+      <div class="field-grid field-grid-single">
         <div class="field"><label>İmalat Sistemi Adı</label>
           <input type="text" id="is-ad" value="${esc(imalatSistemForm.ad)}" placeholder="Örn: Alçıpan Asma Tavan">
         </div>
@@ -13272,6 +13551,136 @@ async function fetchGuncelDovizKur(){
   }
 }
 
+let supportMessageForm = { konu:'', mesaj:'', dosya:null };
+let supportInboxFilter = 'all';
+
+function canViewSupportInbox(){
+  return typeof window.dnzCanViewSupportInbox === 'function' && window.dnzCanViewSupportInbox();
+}
+function supportStatusLabel(st){
+  if(st==='resolved') return 'Çözüldü';
+  if(st==='read') return 'Okundu';
+  return 'Yeni';
+}
+function supportStatusStyle(st){
+  if(st==='resolved') return 'background:rgba(0,168,150,0.15);color:var(--aqua-dim);';
+  if(st==='read') return 'background:rgba(11,36,54,0.08);color:var(--ink-soft);';
+  return 'background:rgba(199,119,0,0.15);color:#c77700;';
+}
+function supportInboxItemHtml(m){
+  const st = m.status||'new';
+  const konu = (m.konu||'').trim();
+  const preview = konu || String(m.mesaj||'').trim().slice(0,80) || '(Mesaj yok)';
+  const tarih = m.createdAt ? new Date(m.createdAt).toLocaleString('tr-TR') : '—';
+  const att = m.attachment;
+  return `
+    <details class="support-inbox-item" data-support-id="${esc(m.id)}">
+      <summary>
+        <span class="support-status-badge" style="${supportStatusStyle(st)}">${esc(supportStatusLabel(st))}</span>
+        <strong style="flex:1;min-width:0;word-break:break-word;">${esc(preview)}</strong>
+        <span class="support-inbox-meta">${esc(m.userEmail||'—')} · ${esc(tarih)}</span>
+      </summary>
+      <div class="support-inbox-body">
+        ${konu ? `<p><b>Konu:</b> ${esc(konu)}</p>` : ''}
+        <p class="support-inbox-msg">${esc(m.mesaj||'')}</p>
+        <p class="support-inbox-meta">
+          ${m.companyName ? `<span><b>Firma:</b> ${esc(m.companyName)}</span><br>` : ''}
+          ${m.activeProjectName ? `<span><b>Proje:</b> ${esc(m.activeProjectName)}</span><br>` : ''}
+          ${m.userRole ? `<span><b>Rol:</b> ${m.userRole==='admin' ? 'Yönetici' : 'Personel'}</span><br>` : ''}
+        </p>
+        ${att && att.dataUrl ? `
+          <button type="button" class="btn btn-ghost btn-sm" data-support-att="${esc(m.id)}">
+            ${attachmentIconSvg(att)} Dosyayı Aç (${esc(att.name||'ek')})
+          </button>
+        ` : ''}
+        <div class="btn-row" style="margin-top:10px;">
+          ${st!=='read' ? `<button type="button" class="btn btn-ghost btn-sm" data-support-status="read" data-support-id="${esc(m.id)}">Okundu</button>` : ''}
+          ${st!=='resolved' ? `<button type="button" class="btn btn-primary btn-sm" data-support-status="resolved" data-support-id="${esc(m.id)}">Çözüldü</button>` : ''}
+          ${st!=='new' ? `<button type="button" class="btn btn-ghost btn-sm" data-support-status="new" data-support-id="${esc(m.id)}">Yeniden Aç</button>` : ''}
+        </div>
+      </div>
+    </details>
+  `;
+}
+async function loadAndRenderSupportInbox(){
+  const el = document.getElementById('supportInboxList');
+  if(!el) return;
+  el.innerHTML = '<p class="hint">Yükleniyor…</p>';
+  const res = await window.dnzLoadSupportMessages();
+  if(!res.ok){
+    el.innerHTML = `<p class="hint" style="color:#c77700;">${esc(res.error||'Yüklenemedi')}</p>`;
+    return;
+  }
+  const allItems = res.items||[];
+  const counts = {
+    all: allItems.length,
+    new: allItems.filter(m=>(m.status||'new')==='new').length,
+    read: allItems.filter(m=>m.status==='read').length,
+    resolved: allItems.filter(m=>m.status==='resolved').length
+  };
+  document.querySelectorAll('[data-support-filter]').forEach(btn=>{
+    const f = btn.dataset.supportFilter;
+    btn.classList.toggle('active', f===supportInboxFilter);
+    const cnt = counts[f];
+    btn.textContent = f==='all' ? `Tümü (${cnt})` : f==='new' ? `Yeni (${cnt})` : f==='read' ? `Okundu (${cnt})` : `Çözüldü (${cnt})`;
+  });
+  let items = allItems;
+  if(supportInboxFilter !== 'all'){
+    items = items.filter(m=>(supportInboxFilter==='new' ? (m.status||'new')==='new' : m.status===supportInboxFilter));
+  }
+  if(items.length === 0){
+    el.innerHTML = '<p class="hint">Bu filtrede mesaj yok.</p>';
+    return;
+  }
+  const attMap = {};
+  items.forEach(m=>{ if(m.attachment) attMap[m.id]=m.attachment; });
+  el.innerHTML = items.map(supportInboxItemHtml).join('');
+  el.querySelectorAll('[data-support-att]').forEach(btn=>{
+    btn.onclick = ()=>{
+      const att = attMap[btn.dataset.supportAtt];
+      if(att) openAttachment(att);
+    };
+  });
+  el.querySelectorAll('[data-support-status]').forEach(btn=>{
+    btn.onclick = async ()=>{
+      const id = btn.dataset.supportId;
+      const status = btn.dataset.supportStatus;
+      btn.disabled = true;
+      const upd = await window.dnzUpdateSupportMessage(id, {status});
+      if(upd.ok){
+        showToast(status==='resolved' ? 'Mesaj çözüldü olarak işaretlendi.' : status==='read' ? 'Mesaj okundu.' : 'Mesaj yeniden açıldı.');
+        loadAndRenderSupportInbox();
+      } else {
+        showToast(upd.error||'Güncellenemedi.');
+        btn.disabled = false;
+      }
+    };
+  });
+  el.querySelectorAll('.support-inbox-item').forEach(det=>{
+    det.addEventListener('toggle', async ()=>{
+      if(!det.open) return;
+      const id = det.dataset.supportId;
+      const item = allItems.find(m=>m.id===id);
+      if(item && (item.status||'new')==='new'){
+        await window.dnzUpdateSupportMessage(id, {status:'read'});
+        loadAndRenderSupportInbox();
+      }
+    });
+  });
+}
+function wireSupportInboxPanel(){
+  if(!canViewSupportInbox()) return;
+  document.querySelectorAll('[data-support-filter]').forEach(btn=>{
+    btn.onclick = ()=>{
+      supportInboxFilter = btn.dataset.supportFilter;
+      loadAndRenderSupportInbox();
+    };
+  });
+  const refreshBtn = document.getElementById('btnRefreshSupportInbox');
+  if(refreshBtn) refreshBtn.onclick = ()=> loadAndRenderSupportInbox();
+  loadAndRenderSupportInbox();
+}
+
 function renderAyarlarTab(main){
   const fnt0 = Object.assign({baslik:6, metin:6.5, rakam:7.5}, state.metrajPdfFont||{});
   main.innerHTML = `
@@ -13407,6 +13816,52 @@ function renderAyarlarTab(main){
 
     <div class="card glass">
       <h2>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+        Destek Mesajı Gönder
+      </h2>
+      <p class="hint">Bir sorun yaşadığınızda buradan mesaj göndererek bize ulaşabilirsiniz. Ekran görüntüsü veya dosya ekleyebilirsiniz; mesajınız en kısa sürede incelenecektir.</p>
+      <div class="field-grid">
+        <div class="field" style="grid-column:span 2;"><label>Konu (isteğe bağlı)</label>
+          <input type="text" id="s-supportKonu" value="${esc(supportMessageForm.konu)}" placeholder="Örn: PDF indirilemiyor">
+        </div>
+        <div class="field" style="grid-column:span 2;"><label>Mesajınız</label>
+          <textarea id="s-supportMesaj" rows="4" placeholder="Sorununuzu veya önerinizi detaylı yazın…">${esc(supportMessageForm.mesaj)}</textarea>
+        </div>
+        <div class="field" style="grid-column:span 2;"><label>Dosya Ekle (isteğe bağlı, en fazla ${MAX_ATTACHMENT_MB} MB)</label>
+          <div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;">
+            <input type="file" id="s-supportDosya" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt" style="font-size:0.75rem;max-width:100%;">
+            <div id="s-supportDosyaChip"></div>
+          </div>
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary" id="btnSendSupport">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+          Mesajı Gönder
+        </button>
+      </div>
+    </div>
+
+    ${canViewSupportInbox() ? `
+    <div class="card glass" id="supportInboxCard">
+      <h2>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-6l-2 3H4V6h16v6z"/><path d="M18 12V6H4v12h10"/><path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+        Gelen Destek Mesajları
+      </h2>
+      <p class="hint">Kullanıcıların gönderdiği destek mesajları burada listelenir. Mesajı açtığınızda otomatik olarak okundu işaretlenir.</p>
+      <div class="support-inbox-filters">
+        <button type="button" class="btn btn-ghost btn-sm" data-support-filter="all">Tümü</button>
+        <button type="button" class="btn btn-ghost btn-sm" data-support-filter="new">Yeni</button>
+        <button type="button" class="btn btn-ghost btn-sm" data-support-filter="read">Okundu</button>
+        <button type="button" class="btn btn-ghost btn-sm" data-support-filter="resolved">Çözüldü</button>
+        <button type="button" class="btn btn-ghost btn-sm" id="btnRefreshSupportInbox" title="Yenile">↻ Yenile</button>
+      </div>
+      <div id="supportInboxList"><p class="hint">Yükleniyor…</p></div>
+    </div>
+    ` : ''}
+
+    <div class="card glass">
+      <h2>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
         Gizlilik ve KVKK
       </h2>
@@ -13537,6 +13992,43 @@ function renderAyarlarTab(main){
   };
 
   document.getElementById('btnOpenPrivacy').onclick = openPrivacyModal;
+
+  wireAttachmentInput({inputId:'s-supportDosya', chipWrapId:'s-supportDosyaChip', getForm:()=>supportMessageForm});
+  const btnSendSupport = document.getElementById('btnSendSupport');
+  if(btnSendSupport){
+    const btnSendSupportHtml = btnSendSupport.innerHTML;
+    btnSendSupport.onclick = async ()=>{
+      const konu = document.getElementById('s-supportKonu').value.trim();
+      const mesaj = document.getElementById('s-supportMesaj').value.trim();
+      if(!mesaj){ showToast('Lütfen mesajınızı yazın.'); return; }
+      if(typeof window.dnzSendSupportMessage !== 'function'){
+        showToast('Destek servisi hazır değil. Sayfayı yenileyip tekrar deneyin.');
+        return;
+      }
+      btnSendSupport.disabled = true;
+      btnSendSupport.textContent = 'Gönderiliyor…';
+      const activeProj = (state.projects||[]).find(p=>p.id===state.activeProjectId);
+      const res = await window.dnzSendSupportMessage({
+        konu,
+        mesaj,
+        attachment: supportMessageForm.dosya,
+        companyName: state.company?.name||'',
+        activeProjectId: state.activeProjectId||'',
+        activeProjectName: activeProj?.ad||''
+      });
+      btnSendSupport.disabled = false;
+      btnSendSupport.innerHTML = btnSendSupportHtml;
+      if(res.ok){
+        supportMessageForm = { konu:'', mesaj:'', dosya:null };
+        showToast('Mesajınız gönderildi. En kısa sürede size dönüş yapılacaktır.');
+        renderAyarlarTab(main);
+      } else {
+        showToast(res.error||'Mesaj gönderilemedi.');
+      }
+    };
+  }
+
+  wireSupportInboxPanel();
 
   if(window.dnzUserRole === 'admin'){
     const inviteResultEl = document.getElementById('inviteCodeResult');
