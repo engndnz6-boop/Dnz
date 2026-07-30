@@ -874,6 +874,15 @@ td.num,th.num{font-family:var(--font-mono);text-align:right;}
   min-height:280px;overflow:auto;max-height:75vh;
 }
 .imalat-sema-canvas svg{width:100%;max-width:640px;height:auto;display:block;margin:0 auto;}
+.hesap-sema-block{
+  padding:12px 0 16px;border-bottom:1px dashed rgba(11,36,54,0.12);
+}
+.hesap-sema-block:last-child{border-bottom:none;padding-bottom:0;}
+.hesap-sema-block-title{
+  font-size:0.82rem;font-weight:700;color:var(--aqua-dim);margin:0 0 8px;text-align:center;
+}
+.hesap-mahal-row{margin-bottom:0;}
+.hesap-mahal-list{display:flex;flex-direction:column;gap:10px;}
 .imalat-sema-zoom-bar{
   display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;
   margin:0 0 10px;padding:8px 10px;border-radius:12px;
@@ -2450,6 +2459,7 @@ let ui = {
   imalatTanimFilterTip:'all', // 'all' | 'tavan' | 'duvar' | 'zemin'
   imalatCalcSistemId:null,
   imalatCalcInput:'',
+  imalatCalcMahaller:[{ id:'m1', ad:'1. Mahaller', input:'' }],
   imalatCalcUnit:'m2',
   imalatCalcMode:'tek', // 'tek' | 'kenar' | 'poligon'
   imalatSemaZoom:1,
@@ -6541,28 +6551,83 @@ function getTasiyiciHatLengthsForAyar(a, W, L, kind, polyPts, uygulamaTipi){
   return positions.map(()=>run);
 }
 // Hesaplama girdisinden oda ölçüsü (W×L) veya tek hat uzunluğu çıkarır — şema ile aynı kaynak.
+function emptyImalatMahal(idx){
+  return { id: uid(), ad: (idx||1)+'. Mahaller', input:'', poligon: defaultPoligonKenarlar() };
+}
+function defaultPoligonKenarlar(){
+  return [
+    {uzunluk:'', aci:0},
+    {uzunluk:'', aci:270},
+    {uzunluk:'', aci:180},
+    {uzunluk:'', aci:90}
+  ];
+}
+function getMahalPoligon(mahal){
+  if(!mahal) return defaultPoligonKenarlar();
+  if(!Array.isArray(mahal.poligon) || !mahal.poligon.length){
+    mahal.poligon = (Array.isArray(ui.imalatCalcPoligon) && ui.imalatCalcPoligon.length)
+      ? ui.imalatCalcPoligon.map(e=>({ uzunluk: e.uzunluk||'', aci: e.aci!=null ? e.aci : 0 }))
+      : defaultPoligonKenarlar();
+  }
+  return mahal.poligon;
+}
+function syncGlobalPoligonFromMahaller(){
+  if(ui.imalatCalcMahaller && ui.imalatCalcMahaller[0]){
+    ui.imalatCalcPoligon = getMahalPoligon(ui.imalatCalcMahaller[0]);
+  }
+}
+function ensureImalatCalcMahaller(){
+  if(!Array.isArray(ui.imalatCalcMahaller) || !ui.imalatCalcMahaller.length){
+    ui.imalatCalcMahaller = [{
+      id: uid(),
+      ad:'1. Mahaller',
+      input: (ui.imalatCalcInput||'').trim(),
+      poligon: (Array.isArray(ui.imalatCalcPoligon) && ui.imalatCalcPoligon.length)
+        ? ui.imalatCalcPoligon.map(e=>({ uzunluk: e.uzunluk||'', aci: e.aci!=null ? e.aci : 0 }))
+        : defaultPoligonKenarlar()
+    }];
+  }
+  ui.imalatCalcMahaller.forEach((m,i)=>{
+    if(!m || typeof m !== 'object') return;
+    if(!m.id) m.id = uid();
+    if(!m.ad || !String(m.ad).trim()) m.ad = (i+1)+'. Mahaller';
+    if(m.input==null) m.input = '';
+    getMahalPoligon(m);
+  });
+  ui.imalatCalcInput = ui.imalatCalcMahaller[0] ? (ui.imalatCalcMahaller[0].input||'') : '';
+  syncGlobalPoligonFromMahaller();
+}
+function findMahalById(id){
+  return (ui.imalatCalcMahaller||[]).find(m=>m.id===id) || null;
+}
+function getImalatRoomSizeFromInput(input, sistem, unit){
+  const uygulamaTipi = getSistemUygulamaTipi(sistem);
+  const s = (input||'').trim().toLowerCase().replace(/,/g,'.');
+  const m = s.match(/^(\d+(?:\.\d+)?)\s*[x×*]\s*(\d+(?:\.\d+)?)$/);
+  if(m){
+    let W = parseFloat(m[1]), L = parseFloat(m[2]);
+    if(uygulamaTipi!=='duvar'){
+      const K = Math.min(W, L), U = Math.max(W, L);
+      W = K; L = U;
+    }
+    return { W, L, kind:'rect', uygulamaTipi };
+  }
+  const u = unit || ui.imalatCalcUnit || 'm2';
+  const p = parseAlanInput(input, u);
+  if(p.value!=null && p.unit==='mt') return { W:p.value, L:0, kind:'length', uygulamaTipi };
+  if(p.value!=null && p.unit==='m2' && p.value>0){
+    const side = Math.sqrt(p.value);
+    return { W:side, L:side, kind:'rect', uygulamaTipi, approx:true };
+  }
+  return null;
+}
 function getImalatRoomSize(){
   const sistem = state.imalatSistemleri.find(s=>s.id===ui.imalatCalcSistemId) || null;
   const uygulamaTipi = getSistemUygulamaTipi(sistem);
-  if(ui.imalatCalcMode==='tek'){
-    const s = (ui.imalatCalcInput||'').trim().toLowerCase().replace(/,/g,'.');
-    const m = s.match(/^(\d+(?:\.\d+)?)\s*[x×*]\s*(\d+(?:\.\d+)?)$/);
-    if(m){
-      let W = parseFloat(m[1]), L = parseFloat(m[2]);
-      // Tavan/zemin: kısa kenar = en (W), uzun kenar = boy (L) — 5x3 ile 3x5 aynı şema/hesap
-      if(uygulamaTipi!=='duvar'){
-        const K = Math.min(W, L), U = Math.max(W, L);
-        W = K; L = U;
-      }
-      return { W, L, kind:'rect', uygulamaTipi };
-    }
-    const unit = ui.imalatCalcUnit||'m2';
-    const p = parseAlanInput(ui.imalatCalcInput, unit);
-    if(p.value!=null && p.unit==='mt') return { W:p.value, L:0, kind:'length', uygulamaTipi };
-    if(p.value!=null && p.unit==='m2' && p.value>0){
-      const side = Math.sqrt(p.value);
-      return { W:side, L:side, kind:'rect', uygulamaTipi, approx:true };
-    }
+  if(ui.imalatCalcMode==='tek' || isDuvarSistem(sistem)){
+    ensureImalatCalcMahaller();
+    const input = ui.imalatCalcMahaller[0] ? ui.imalatCalcMahaller[0].input : ui.imalatCalcInput;
+    return getImalatRoomSizeFromInput(input, sistem, ui.imalatCalcUnit);
   }
   // Çoklu kenar: mt → lineer toplam; m² → alan toplamı (yaklaşık kare şema)
   if(ui.imalatCalcMode==='kenar' && !isDuvarSistem(sistem)){
@@ -6575,21 +6640,27 @@ function getImalatRoomSize(){
     }
   }
   if(ui.imalatCalcMode==='poligon' && !isDuvarSistem(sistem)){
-    const unit = ui.imalatCalcUnit||'m2';
-    const pts = tracePoligonVertices(ui.imalatCalcPoligon);
-    if(unit==='mt'){
-      const {cevre} = computePoligonAlan(ui.imalatCalcPoligon);
-      if(cevre!=null && cevre>0){
-        return { W:cevre, L:0, kind:'length', uygulamaTipi, polyPts:(pts&&pts.length>=2)?pts:null };
-      }
-      return null;
+    ensureImalatCalcMahaller();
+    return getImalatRoomSizeFromPoligon(getMahalPoligon(ui.imalatCalcMahaller[0]), sistem);
+  }
+  return null;
+}
+function getImalatRoomSizeFromPoligon(poligon, sistem){
+  const uygulamaTipi = getSistemUygulamaTipi(sistem);
+  const unit = ui.imalatCalcUnit||'m2';
+  const pts = tracePoligonVertices(poligon);
+  if(unit==='mt'){
+    const {cevre} = computePoligonAlan(poligon);
+    if(cevre!=null && cevre>0){
+      return { W:cevre, L:0, kind:'length', uygulamaTipi, polyPts:(pts&&pts.length>=2)?pts:null };
     }
-    if(pts && pts.length>=3){
-      const xs = pts.map(p=>p.x), ys = pts.map(p=>p.y);
-      const W = Math.max(...xs) - Math.min(...xs);
-      const L = Math.max(...ys) - Math.min(...ys);
-      if(W>0.01 && L>0.01) return { W, L, kind:'bbox', uygulamaTipi, polyPts:pts };
-    }
+    return null;
+  }
+  if(pts && pts.length>=3){
+    const xs = pts.map(p=>p.x), ys = pts.map(p=>p.y);
+    const W = Math.max(...xs) - Math.min(...xs);
+    const L = Math.max(...ys) - Math.min(...ys);
+    if(W>0.01 && L>0.01) return { W, L, kind:'bbox', uygulamaTipi, polyPts:pts };
   }
   return null;
 }
@@ -7879,7 +7950,10 @@ function buildPoligonTipLayersGroup(points, meta, sistem, opts){
   return { markup:s, borderColor, drawData };
 }
 
-function renderImalatSemaSvgHtml(sistem, parsed){
+function renderImalatSemaSvgHtml(sistem, parsed, opts){
+  opts = opts || {};
+  const inputSrc = opts.input != null ? opts.input : ui.imalatCalcInput;
+  const forceTek = !!opts.forceTek;
   const alanStr = parsed.value!=null ? fmtNum(parsed.value) : '—';
   const unitStr = parsed.unit==='mt' ? 'mt' : 'm²';
   const sistemAd = sistem ? sistem.ad : '';
@@ -7890,25 +7964,34 @@ function renderImalatSemaSvgHtml(sistem, parsed){
       ${sistemAd ? `<div class="sema-sistem">${esc(sistemAd)}</div>` : ''}
     </div>`;
 
-  if(ui.imalatCalcMode==='poligon'){
-    const points = parsed.poligonPoints || [];
+  if((!forceTek && ui.imalatCalcMode==='poligon') || opts.forcePoligon){
+    const poligon = opts.poligon || ui.imalatCalcPoligon;
+    let points = parsed.poligonPoints || [];
+    if((!points || points.length<2) && poligon){
+      const computed = computePoligonAlan(poligon);
+      points = computed.points || [];
+    }
     const valid = (points||[]).filter(p=>!(p.x===0&&p.y===0));
     if(!points || points.length<2 || valid.length===0){
       return `${overlay}<div class="empty-state">Kenar uzunluğu ve açılarını girdikçe şema burada çizilecek.</div>`;
     }
     const box = buildPoligonViewBox(points, { maxDim: 600, padPx: 52, padBottom: 36 });
-    const tip = buildPoligonTipLayersGroup(points, box.meta, sistem, { sw: box.sw, clipId:'semaPolyClip' });
+    const clipId = opts.mahalId ? `semaPolyClip-${opts.mahalId}` : 'semaPolyClip';
+    const tip = buildPoligonTipLayersGroup(points, box.meta, sistem, { sw: box.sw, clipId });
+    const svgId = opts.mahalId ? `poligonSvg-${opts.mahalId}` : 'poligonSvg';
     return overlay + buildPoligonSvgMarkup(points, box.meta, box.sw, box.vbW, box.vbH, {
       tipMarkup: tip.markup,
       borderColor: tip.borderColor,
       interactive: true,
-      maxWidth: 640
+      maxWidth: 640,
+      svgId,
+      mahalId: opts.mahalId || ''
     });
   }
 
   // Tekli ölçü: "3x5" → dikdörtgen şema; düz sayı → kare/alan kutusu
-  if(ui.imalatCalcMode==='tek'){
-    const s = (ui.imalatCalcInput||'').trim().toLowerCase().replace(/,/g,'.');
+  if(forceTek || ui.imalatCalcMode==='tek'){
+    const s = (inputSrc||'').trim().toLowerCase().replace(/,/g,'.');
     const m = s.match(/^(\d+(?:\.\d+)?)\s*[x×*]\s*(\d+(?:\.\d+)?)$/);
     if(m){
       let W = parseFloat(m[1]), L = parseFloat(m[2]);
@@ -7927,7 +8010,7 @@ function renderImalatSemaSvgHtml(sistem, parsed){
     }
   }
 
-  if(ui.imalatCalcMode==='kenar' && parsed.value!=null){
+  if(!forceTek && ui.imalatCalcMode==='kenar' && parsed.value!=null){
     const detay = parsed.kenarDetay || [];
     return overlay + renderKenarSemaSvg(detay, parsed.unit);
   }
@@ -8427,19 +8510,21 @@ function buildPoligonSvgMarkup(points, meta, sw, vbW, vbH, extra){
     if(angleDeg>90 || angleDeg<-90) angleDeg += 180;
     const len = Math.hypot(points[i].x-points[i-1].x, points[i].y-points[i-1].y);
     const offset = fontSize*0.85;
-    labels.push(`<text id="polLabel${i}" x="${midX.toFixed(2)}" y="${(midY-offset).toFixed(2)}" transform="rotate(${angleDeg.toFixed(2)} ${midX.toFixed(2)} ${midY.toFixed(2)})" text-anchor="middle" font-size="${fontSize.toFixed(2)}" font-weight="700" fill="#0B2436" style="paint-order:stroke;stroke:#fff;stroke-width:${(fontSize*0.22).toFixed(2)};stroke-linejoin:round;">${fmtNum(len)} m</text>`);
+    labels.push(`<text data-pol-label="${i}" x="${midX.toFixed(2)}" y="${(midY-offset).toFixed(2)}" transform="rotate(${angleDeg.toFixed(2)} ${midX.toFixed(2)} ${midY.toFixed(2)})" text-anchor="middle" font-size="${fontSize.toFixed(2)}" font-weight="700" fill="#0B2436" style="paint-order:stroke;stroke:#fff;stroke-width:${(fontSize*0.22).toFixed(2)};stroke-linejoin:round;">${fmtNum(len)} m</text>`);
   }
   const circles = pts.map((p,i)=>{
     const isFirst = i===0, isLast = i===pts.length-1;
     const fill = isFirst? '#22A99F' : (isLast? '#E8776B' : '#1C6E8C');
     const draggable = extra.interactive!==false && i>0 && points[i].srcEdgeIndex>=0;
-    return `<circle id="polV${i}" cx="${p.x.toFixed(2)}" cy="${p.y.toFixed(2)}" r="${r.toFixed(3)}" fill="${fill}" stroke="#fff" stroke-width="${Math.max(sw*0.35,1).toFixed(3)}" ${draggable?`data-pol-vertex="${points[i].srcEdgeIndex}" style="cursor:grab;touch-action:none;"`:''}/>`;
+    return `<circle data-pol-v="${i}" cx="${p.x.toFixed(2)}" cy="${p.y.toFixed(2)}" r="${r.toFixed(3)}" fill="${fill}" stroke="#fff" stroke-width="${Math.max(sw*0.35,1).toFixed(3)}" ${draggable?`data-pol-vertex="${points[i].srcEdgeIndex}" style="cursor:grab;touch-action:none;"`:''}/>`;
   }).join('');
+  const svgId = extra.svgId || 'poligonSvg';
+  const mahalAttr = extra.mahalId ? ` data-mahal-id="${esc(extra.mahalId)}"` : '';
   return `
-    <svg id="poligonSvg" viewBox="0 0 ${vbW.toFixed(2)} ${vbH.toFixed(2)}" data-pol-meta='${esc(JSON.stringify(meta))}' style="width:100%;max-width:${maxWidth}px;height:auto;background:rgba(255,255,255,0.55);border-radius:12px;display:block;margin:0 auto;touch-action:none;">
-      <polygon id="polShape" points="${polyStr}" fill="rgba(47,211,199,0.18)" stroke="none"/>
+    <svg id="${svgId}" viewBox="0 0 ${vbW.toFixed(2)} ${vbH.toFixed(2)}" data-pol-meta='${esc(JSON.stringify(meta))}'${mahalAttr} style="width:100%;max-width:${maxWidth}px;height:auto;background:rgba(255,255,255,0.55);border-radius:12px;display:block;margin:0 auto;touch-action:none;">
+      <polygon data-pol-shape points="${polyStr}" fill="rgba(47,211,199,0.18)" stroke="none"/>
       ${tipMarkup}
-      <polygon id="polBorder" points="${polyStr}" fill="none" stroke="${borderColor}" stroke-width="${sw.toFixed(3)}" stroke-linejoin="round"/>
+      <polygon data-pol-border points="${polyStr}" fill="none" stroke="${borderColor}" stroke-width="${sw.toFixed(3)}" stroke-linejoin="round"/>
       ${labels.join('')}
       ${circles}
     </svg>
@@ -8448,19 +8533,19 @@ function buildPoligonSvgMarkup(points, meta, sw, vbW, vbH, extra){
 // Sürükleme sırasında SVG'yi (ve içindeki tüm HTML'i) baştan çizmeden, sadece ilgili
 // DOM elemanlarının konum/metnini güncelleyerek yeniden çizer. Böylece sürüklenen
 // nokta DOM'dan kopmaz ve fare/parmak takibi kesilmez.
-function updatePoligonSvgLive(edges){
-  const svg = document.getElementById('poligonSvg');
+function updatePoligonSvgLive(edges, svg){
+  svg = svg || document.querySelector('#semaCanvas svg[data-pol-meta]');
   if(!svg) return;
   let meta;
   try{ meta = JSON.parse(svg.dataset.polMeta); }catch(e){ return; }
   const points = tracePoligonVertices(edges);
   const pts = points.map(p=>poligonToSvgPoint(p, meta));
-  const poly = document.getElementById('polShape');
+  const poly = svg.querySelector('[data-pol-shape]');
   if(poly) poly.setAttribute('points', pts.map(p=>`${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(' '));
-  const border = document.getElementById('polBorder');
+  const border = svg.querySelector('[data-pol-border]');
   if(border) border.setAttribute('points', pts.map(p=>`${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(' '));
   pts.forEach((p,i)=>{
-    const c = document.getElementById('polV'+i);
+    const c = svg.querySelector(`[data-pol-v="${i}"]`) || document.getElementById('polV'+i);
     if(c){ c.setAttribute('cx', p.x.toFixed(2)); c.setAttribute('cy', p.y.toFixed(2)); }
   });
   for(let i=1;i<points.length;i++){
@@ -8469,7 +8554,7 @@ function updatePoligonSvgLive(edges){
     let angleDeg = Math.atan2(p2.y-p1.y,p2.x-p1.x)*180/Math.PI;
     if(angleDeg>90||angleDeg<-90) angleDeg+=180;
     const len = Math.hypot(points[i].x-points[i-1].x, points[i].y-points[i-1].y);
-    const t = document.getElementById('polLabel'+i);
+    const t = svg.querySelector(`[data-pol-label="${i}"]`) || document.getElementById('polLabel'+i);
     if(t){
       const fontSize = parseFloat(t.getAttribute('font-size'))||10;
       const offset = fontSize*0.85;
@@ -8480,38 +8565,45 @@ function updatePoligonSvgLive(edges){
     }
   }
 }
-// Sürükleme sırasında ilgili kenarın "Uzunluk" ve "Açı" giriş alanlarını (liste
-// görünümünde) tam yeniden çizim yapmadan canlı günceller.
-function updatePoligonEdgeInputsLive(edgeIdx){
-  const lenInp = document.querySelector(`[data-pol-len="${edgeIdx}"]`);
-  if(lenInp) lenInp.value = ui.imalatCalcPoligon[edgeIdx].uzunluk;
-  const aciSel = document.querySelector(`[data-pol-aci="${edgeIdx}"]`);
-  if(aciSel) aciSel.value = String(ui.imalatCalcPoligon[edgeIdx].aci);
+function updatePoligonEdgeInputsLive(edgeIdx, mahalId){
+  const key = mahalId ? `${mahalId}:${edgeIdx}` : String(edgeIdx);
+  const mahal = mahalId ? findMahalById(mahalId) : ui.imalatCalcMahaller[0];
+  const poligon = getMahalPoligon(mahal);
+  const lenInp = document.querySelector(`[data-pol-len="${key}"]`);
+  if(lenInp) lenInp.value = poligon[edgeIdx].uzunluk;
+  const aciSel = document.querySelector(`[data-pol-aci="${key}"]`);
+  if(aciSel) aciSel.value = String(poligon[edgeIdx].aci);
 }
 let poligonDragRaf = null;
-function schedulePoligonDragUpdate(edgeIdx){
+let poligonDragCtx = null;
+function schedulePoligonDragUpdate(edgeIdx, svg, mahalId){
+  poligonDragCtx = { edgeIdx, svg, mahalId };
   if(poligonDragRaf) return;
   poligonDragRaf = requestAnimationFrame(()=>{
     poligonDragRaf = null;
-    updatePoligonSvgLive(ui.imalatCalcPoligon);
-    updatePoligonEdgeInputsLive(edgeIdx);
+    const ctx = poligonDragCtx || {};
+    const mahal = ctx.mahalId ? findMahalById(ctx.mahalId) : ui.imalatCalcMahaller[0];
+    const poligon = getMahalPoligon(mahal);
+    updatePoligonSvgLive(poligon, ctx.svg);
+    updatePoligonEdgeInputsLive(ctx.edgeIdx, ctx.mahalId);
     updateHesapPanel({skipSvg:true});
   });
 }
-// SVG üzerindeki sürüklenebilir köşe noktalarına fare/dokunma olaylarını bağlar.
-// updateHesapPanel her tetiklendiğinde (skipSvg olmadan) SVG'yi baştan çizdiği
-// için bu fonksiyon her tam yeniden çizimden sonra tekrar çağrılmalıdır.
 function bindPoligonSvgEvents(){
-  const svg = document.getElementById('poligonSvg');
-  if(!svg) return;
-  svg.querySelectorAll('[data-pol-vertex]').forEach(circle=>{
-    circle.addEventListener('pointerdown', onPoligonVertexPointerDown);
+  document.querySelectorAll('#semaCanvas svg[data-pol-meta]').forEach(svg=>{
+    svg.querySelectorAll('[data-pol-vertex]').forEach(circle=>{
+      circle.addEventListener('pointerdown', onPoligonVertexPointerDown);
+    });
   });
 }
 function onPoligonVertexPointerDown(e){
   e.preventDefault();
-  const svg = document.getElementById('poligonSvg');
+  const svg = e.currentTarget.closest('svg[data-pol-meta]');
   if(!svg) return;
+  const mahalId = svg.dataset.mahalId || null;
+  const mahal = mahalId ? findMahalById(mahalId) : ui.imalatCalcMahaller[0];
+  const poligon = getMahalPoligon(mahal);
+  if(ui.imalatCalcMahaller[0] && mahal && ui.imalatCalcMahaller[0].id===mahal.id) ui.imalatCalcPoligon = poligon;
   const target = e.currentTarget;
   const edgeIdx = parseInt(target.dataset.polVertex,10);
   target.style.cursor = 'grabbing';
@@ -8524,17 +8616,17 @@ function onPoligonVertexPointerDown(e){
     const svgP = pt.matrixTransform(ctm.inverse());
     const model = svgPointToPoligonModel(svgP, meta);
     const modelX = model.x, modelY = model.y;
-    const prevPoint = computePointBeforeEdge(ui.imalatCalcPoligon, edgeIdx);
+    const prevPoint = computePointBeforeEdge(poligon, edgeIdx);
     const dx = modelX - prevPoint.x, dy = modelY - prevPoint.y;
     const length = Math.hypot(dx,dy);
-    if(length < 0.03) return; // çok küçük hareketleri yoksay (titreşim/rastgele açı önlenir)
+    if(length < 0.03) return;
     let rawAngle = Math.atan2(dy,dx)*180/Math.PI;
     if(rawAngle<0) rawAngle += 360;
     let snapped = Math.round(rawAngle/15)*15;
     if(snapped>=360) snapped -= 360;
-    ui.imalatCalcPoligon[edgeIdx].aci = snapped;
-    ui.imalatCalcPoligon[edgeIdx].uzunluk = String(Math.round(length*100)/100);
-    schedulePoligonDragUpdate(edgeIdx);
+    poligon[edgeIdx].aci = snapped;
+    poligon[edgeIdx].uzunluk = String(Math.round(length*100)/100);
+    schedulePoligonDragUpdate(edgeIdx, svg, mahalId);
   };
   const onUp = ()=>{
     target.style.cursor = 'grab';
@@ -8550,6 +8642,7 @@ function onPoligonVertexPointerDown(e){
 
 function renderImalatHesapSection(sub){
   normalizeImalatCatalogState(state);
+  ensureImalatCalcMahaller();
   const sistemler = (state.imalatSistemleri||[]).slice().sort((a,b)=>a.ad.localeCompare(b.ad,'tr'));
   if(ui.imalatCalcSistemId && !sistemler.find(s=>s.id===ui.imalatCalcSistemId)) ui.imalatCalcSistemId = null;
   const aktifSistem = sistemler.find(s=>s.id===ui.imalatCalcSistemId) || null;
@@ -8591,8 +8684,20 @@ function renderImalatHesapSection(sub){
       </div>
 
       ${mode==='tek' || isDuvar ? `
-      <div class="field"><label>${isDuvar?'Duvar Ölçüsü (uzunluk × yükseklik)':`Ölçü / Alan Girişi (${esc(olcu.short)})`}</label>
-        <input type="text" id="h-alan" value="${esc(ui.imalatCalcInput)}" placeholder="${esc(olcu.placeholder)}">
+      <p class="hint">Birden fazla mahal/oda hesaplamak için <b>+ Mahal Ekle</b> kullanın. Her satıra ölçü girin (ör. 3×5, 4×6); malzeme sonuçları ve şemalar toplam olarak gösterilir.</p>
+      <div class="hesap-mahal-list" id="hesapMahalList">
+        ${ui.imalatCalcMahaller.map((mahal,i)=>`
+          <div class="field hesap-mahal-row">
+            <label>${esc(mahal.ad || ((i+1)+'. Mahaller'))}</label>
+            <div style="display:flex;gap:6px;align-items:center;">
+              <input type="text" class="mono" data-mahal-input="${mahal.id}" value="${esc(mahal.input||'')}" placeholder="${esc(olcu.placeholder)}" style="flex:1;min-width:0;">
+              <button type="button" class="btn btn-ghost" data-mahal-del="${mahal.id}" style="padding:8px 10px;flex-shrink:0;" title="Bu mahali sil" ${ui.imalatCalcMahaller.length<=1?'disabled':''}>✕</button>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+      <div class="btn-row">
+        <button type="button" class="btn btn-ghost" id="btnMahalEkle">+ Mahal Ekle</button>
       </div>
       ` : ''}
       ${renderDuvarHesapSecenekleriHtml(aktifSistem)}
@@ -8616,21 +8721,38 @@ function renderImalatHesapSection(sub){
       ` : ''}
 
       ${!isDuvar && mode==='poligon' ? `
-      <p class="hint">Köşeli (L, T, U, Z) oda/mekân. Kenar uzunluğu + açı girin veya şemada köşeleri sürükleyin. Birim <b>m²</b>: kapalı şeklin alanı. Birim <b>mt</b>: yalnızca kenar uzunlukları toplamı (çevre) — alan kullanılmaz.</p>
-      <div id="hesapPoligonList" style="display:flex;flex-direction:column;gap:8px;">
-        ${ui.imalatCalcPoligon.map((e,i)=>`
-          <div style="display:flex;gap:8px;align-items:center;">
-            <span class="mono" style="min-width:18px;color:var(--ink-soft);font-size:0.78rem;">${i+1}.</span>
-            <input class="mono" type="text" data-pol-len="${i}" value="${esc(e.uzunluk)}" placeholder="Uzunluk (m)" style="flex:1;padding:9px 10px;border-radius:10px;border:1px solid rgba(11,36,54,0.15);background:rgba(255,255,255,0.6);min-width:0;">
-            <select data-pol-aci="${i}" style="flex:1;padding:9px 10px;border-radius:10px;border:1px solid rgba(11,36,54,0.15);background:rgba(255,255,255,0.6);min-width:0;">
-              ${ACI_OPTS.map(a=>`<option value="${a.v}" ${getEdgeAci(e)===a.v?'selected':''}>${a.l}</option>`).join('')}
-            </select>
-            <button type="button" class="btn btn-ghost" data-pol-del="${i}" style="padding:8px 10px;" title="Bu kenarı sil">✕</button>
-          </div>
-        `).join('')}
+      <p class="hint">Birden fazla köşeli oda/mekân için <b>+ Mahal Ekle</b> kullanın. Her mahalde kenar uzunluğu + açı girin veya şemada köşeleri sürükleyin. Birim <b>m²</b>: kapalı şeklin alanı. Birim <b>mt</b>: kenar uzunlukları toplamı.</p>
+      <div class="hesap-mahal-list" id="hesapPoligonMahalList">
+        ${ui.imalatCalcMahaller.map((mahal,i)=>{
+          const pol = getMahalPoligon(mahal);
+          return `
+          <div class="hesap-mahal-poligon-block" data-mahal-block="${mahal.id}" style="padding:12px;border:1px solid rgba(11,36,54,0.1);border-radius:12px;background:rgba(255,255,255,0.35);margin-bottom:10px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+              <label style="margin:0;font-weight:700;">${esc(mahal.ad || ((i+1)+'. Mahaller'))}</label>
+              <button type="button" class="btn btn-ghost" data-mahal-del="${mahal.id}" style="padding:6px 10px;" title="Bu mahali sil" ${ui.imalatCalcMahaller.length<=1?'disabled':''}>✕</button>
+            </div>
+            <div class="hesap-poligon-kenar-list" style="display:flex;flex-direction:column;gap:6px;">
+              ${pol.map((e,j)=>{
+                const key = mahal.id+':'+j;
+                return `
+                <div style="display:flex;gap:8px;align-items:center;">
+                  <span class="mono" style="min-width:18px;color:var(--ink-soft);font-size:0.78rem;">${j+1}.</span>
+                  <input class="mono" type="text" data-pol-len="${key}" value="${esc(e.uzunluk)}" placeholder="Uzunluk (m)" style="flex:1;padding:9px 10px;border-radius:10px;border:1px solid rgba(11,36,54,0.15);background:rgba(255,255,255,0.6);min-width:0;">
+                  <select data-pol-aci="${key}" style="flex:1;padding:9px 10px;border-radius:10px;border:1px solid rgba(11,36,54,0.15);background:rgba(255,255,255,0.6);min-width:0;">
+                    ${ACI_OPTS.map(a=>`<option value="${a.v}" ${getEdgeAci(e)===a.v?'selected':''}>${a.l}</option>`).join('')}
+                  </select>
+                  <button type="button" class="btn btn-ghost" data-pol-del="${key}" style="padding:8px 10px;" title="Bu kenarı sil">✕</button>
+                </div>`;
+              }).join('')}
+            </div>
+            <div class="btn-row" style="margin-top:8px;">
+              <button type="button" class="btn btn-ghost" data-pol-add="${mahal.id}">+ Kenar Ekle</button>
+            </div>
+          </div>`;
+        }).join('')}
       </div>
       <div class="btn-row">
-        <button type="button" class="btn btn-ghost" id="btnPolAddKenar">+ Kenar Ekle</button>
+        <button type="button" class="btn btn-ghost" id="btnMahalEklePoligon">+ Mahal Ekle</button>
       </div>
       ` : ''}
 
@@ -8738,8 +8860,38 @@ function renderImalatHesapSection(sub){
   if(alanEl){
     alanEl.addEventListener('input', e=>{
       ui.imalatCalcInput = e.target.value;
+      if(ui.imalatCalcMahaller[0]) ui.imalatCalcMahaller[0].input = e.target.value;
       updateHesapPanel();
     });
+  }
+  sub.querySelectorAll('[data-mahal-input]').forEach(inp=>{
+    inp.addEventListener('input', e=>{
+      const id = e.target.dataset.mahalInput;
+      const m = ui.imalatCalcMahaller.find(x=>x.id===id);
+      if(m){
+        m.input = e.target.value;
+        if(ui.imalatCalcMahaller[0] && ui.imalatCalcMahaller[0].id===id) ui.imalatCalcInput = m.input;
+        updateHesapPanel();
+      }
+    });
+  });
+  sub.querySelectorAll('[data-mahal-del]').forEach(btn=>{
+    btn.addEventListener('click', e=>{
+      const id = e.target.closest('[data-mahal-del]').dataset.mahalDel;
+      if(ui.imalatCalcMahaller.length<=1){ showToast('En az 1 mahal gerekir.'); return; }
+      ui.imalatCalcMahaller = ui.imalatCalcMahaller.filter(x=>x.id!==id);
+      ensureImalatCalcMahaller();
+      syncGlobalPoligonFromMahaller();
+      renderImalatHesapSection(sub);
+    });
+  });
+  const addMahalBtn = document.getElementById('btnMahalEkle');
+  if(addMahalBtn){
+    addMahalBtn.onclick = ()=>{
+      if(ui.imalatCalcMahaller.length>=20){ showToast('En fazla 20 mahal eklenebilir.'); return; }
+      ui.imalatCalcMahaller.push(emptyImalatMahal(ui.imalatCalcMahaller.length + 1));
+      renderImalatHesapSection(sub);
+    };
   }
   sub.querySelectorAll('[data-kenar-idx]').forEach(inp=>{
     inp.addEventListener('input', e=>{
@@ -8765,31 +8917,59 @@ function renderImalatHesapSection(sub){
   }
   sub.querySelectorAll('[data-pol-len]').forEach(inp=>{
     inp.addEventListener('input', e=>{
-      const idx = parseInt(e.target.dataset.polLen,10);
-      ui.imalatCalcPoligon[idx].uzunluk = e.target.value;
+      const parts = String(e.target.dataset.polLen||'').split(':');
+      const mahalId = parts[0], idx = parseInt(parts[1],10);
+      const mahal = findMahalById(mahalId);
+      if(!mahal || isNaN(idx)) return;
+      const pol = getMahalPoligon(mahal);
+      pol[idx].uzunluk = e.target.value;
+      if(ui.imalatCalcMahaller[0] && ui.imalatCalcMahaller[0].id===mahalId) ui.imalatCalcPoligon = pol;
       updateHesapPanel();
     });
   });
   sub.querySelectorAll('[data-pol-aci]').forEach(sel=>{
     sel.addEventListener('change', e=>{
-      const idx = parseInt(e.target.dataset.polAci,10);
-      ui.imalatCalcPoligon[idx].aci = parseFloat(e.target.value)||0;
+      const parts = String(e.target.dataset.polAci||'').split(':');
+      const mahalId = parts[0], idx = parseInt(parts[1],10);
+      const mahal = findMahalById(mahalId);
+      if(!mahal || isNaN(idx)) return;
+      const pol = getMahalPoligon(mahal);
+      pol[idx].aci = parseFloat(e.target.value)||0;
+      if(ui.imalatCalcMahaller[0] && ui.imalatCalcMahaller[0].id===mahalId) ui.imalatCalcPoligon = pol;
       updateHesapPanel();
     });
   });
   sub.querySelectorAll('[data-pol-del]').forEach(btn=>{
     btn.addEventListener('click', e=>{
-      const idx = parseInt(e.target.closest('[data-pol-del]').dataset.polDel,10);
-      if(ui.imalatCalcPoligon.length<=3){ showToast('En az 3 kenar gerekir.'); return; }
-      ui.imalatCalcPoligon.splice(idx,1);
+      const parts = String(e.target.closest('[data-pol-del]').dataset.polDel||'').split(':');
+      const mahalId = parts[0], idx = parseInt(parts[1],10);
+      const mahal = findMahalById(mahalId);
+      if(!mahal || isNaN(idx)) return;
+      const pol = getMahalPoligon(mahal);
+      if(pol.length<=3){ showToast('En az 3 kenar gerekir.'); return; }
+      pol.splice(idx,1);
+      if(ui.imalatCalcMahaller[0] && ui.imalatCalcMahaller[0].id===mahalId) ui.imalatCalcPoligon = pol;
       renderImalatHesapSection(sub);
     });
   });
-  const addKenarBtn = document.getElementById('btnPolAddKenar');
-  if(addKenarBtn){
-    addKenarBtn.onclick = ()=>{
-      if(ui.imalatCalcPoligon.length>=20){ showToast('En fazla 20 kenar eklenebilir.'); return; }
-      ui.imalatCalcPoligon.push({uzunluk:'', aci:0});
+  sub.querySelectorAll('[data-pol-add]').forEach(btn=>{
+    btn.addEventListener('click', e=>{
+      const mahalId = e.target.closest('[data-pol-add]').dataset.polAdd;
+      const mahal = findMahalById(mahalId);
+      if(!mahal) return;
+      const pol = getMahalPoligon(mahal);
+      if(pol.length>=20){ showToast('En fazla 20 kenar eklenebilir.'); return; }
+      pol.push({uzunluk:'', aci:0});
+      if(ui.imalatCalcMahaller[0] && ui.imalatCalcMahaller[0].id===mahalId) ui.imalatCalcPoligon = pol;
+      renderImalatHesapSection(sub);
+    });
+  });
+  const addMahalPoligonBtn = document.getElementById('btnMahalEklePoligon');
+  if(addMahalPoligonBtn){
+    addMahalPoligonBtn.onclick = ()=>{
+      if(ui.imalatCalcMahaller.length>=20){ showToast('En fazla 20 mahal eklenebilir.'); return; }
+      ui.imalatCalcMahaller.push(emptyImalatMahal(ui.imalatCalcMahaller.length + 1));
+      syncGlobalPoligonFromMahaller();
       renderImalatHesapSection(sub);
     };
   }
@@ -8870,6 +9050,9 @@ function renderAnalizKayitlariHtml(){
             <td>${esc(new Date(k.tarih).toLocaleDateString('tr-TR'))}</td>
             <td>
               <div class="row-actions">
+                ${(k.semalar||[]).length ? `<button class="icon-btn" data-act="sema" title="Şema Gör">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+                </button>` : ''}
                 <button class="icon-btn" data-act="pdf" title="PDF Al">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M9 15h6M9 11h2"/></svg>
                 </button>
@@ -8897,6 +9080,8 @@ function bindAnalizKayitlariEvents(sub){
       if(!kayit) return;
       if(act==='pdf'){
         exportAnalizKaydiPdf(kayit);
+      } else if(act==='sema'){
+        showAnalizSemaModal(kayit);
       } else if(act==='delete'){
         confirmModal(`"${kayit.musteriAd}" adına kayıtlı bu analiz sonucunu silmek istediğinize emin misiniz?`, ()=>{
           state.malzemeAnalizKayitlari = (state.malzemeAnalizKayitlari||[]).filter(x=>x.id!==id);
@@ -8907,6 +9092,70 @@ function bindAnalizKayitlariEvents(sub){
       }
     });
   });
+}
+
+// Kayıtlı analiz için şema HTML'ini saklamaya uygun hale getirir (sürükleme vb. kaldırılır).
+function sanitizeSemaHtmlForStorage(html){
+  return (html||'')
+    .replace(/data-pol-vertex="[^"]*"/g,'')
+    .replace(/\sstyle="cursor:grab;touch-action:none;"/g,'')
+    .replace(/\sid="poligonSvg[^"]*"/g,'')
+    .replace(/\sid="polV\d+"/g,'')
+    .replace(/\sid="polLabel\d+"/g,'')
+    .replace(/\sid="polShape"/g,'')
+    .replace(/\sid="polBorder"/g,'');
+}
+// Mevcut hesap panelindeki şemaları kayıt için yakalar.
+function captureHesapSemaBlocks(sistem, parsed){
+  const mahalList = (parsed.mahaller && parsed.mahaller.length) ? parsed.mahaller : getImalatMahalHesapListesi(sistem);
+  if(!mahalList.length){
+    try{
+      const html = renderImalatSemaSvgHtml(sistem, parsed);
+      const clean = sanitizeSemaHtmlForStorage(html);
+      return clean ? [{ ad:'Şema', html: clean }] : [];
+    }catch(e){ return []; }
+  }
+  return mahalList.map((item,i)=>{
+    const label = item.mahal.ad || ((i+1)+'. Şema');
+    const semaParsed = Object.assign({}, item.parsed, { value: item.deger });
+    let html = '';
+    try{
+      if(item.poligon || semaParsed.isPoligon || ui.imalatCalcMode==='poligon'){
+        html = renderImalatSemaSvgHtml(sistem, semaParsed, {
+          forcePoligon: true,
+          poligon: item.poligon || getMahalPoligon(item.mahal),
+          mahalId: item.mahal.id
+        });
+      } else {
+        html = renderImalatSemaSvgHtml(sistem, semaParsed, { input: item.input, forceTek: true });
+      }
+    }catch(e){ html = ''; }
+    return { ad: label, html: sanitizeSemaHtmlForStorage(html) };
+  }).filter(x=>x.html);
+}
+function showAnalizSemaModal(kayit){
+  const semalar = kayit.semalar || [];
+  if(!semalar.length){ showToast('Bu kayıtta saklı şema yok.'); return; }
+  const modalRoot = document.getElementById('modalRoot');
+  modalRoot.innerHTML = `
+    <div class="modal-backdrop" id="modalBackdrop">
+      <div class="modal glass-strong glass" style="max-width:920px;width:96%;max-height:90vh;overflow:auto;">
+        <h3>Kayıtlı Şemalar — ${esc(kayit.musteriAd||'')}</h3>
+        <div style="margin-top:12px;">
+          ${semalar.map(s=>`
+            <div style="margin-bottom:18px;padding-bottom:14px;border-bottom:1px solid rgba(11,36,54,0.08);">
+              <div style="font-size:11px;font-weight:700;color:#1C6E8C;text-align:center;margin-bottom:8px;">${esc(s.ad)}</div>
+              <div style="text-align:center;">${s.html}</div>
+            </div>
+          `).join('')}
+        </div>
+        <div class="btn-row" style="margin-top:10px;justify-content:flex-end;">
+          <button class="btn btn-primary" id="semaModalClose">Kapat</button>
+        </div>
+      </div>
+    </div>`;
+  document.getElementById('semaModalClose').onclick = closeModal;
+  document.getElementById('modalBackdrop').addEventListener('click',(e)=>{ if(e.target.id==='modalBackdrop') closeModal(); });
 }
 
 // Malzeme Sonuç Paneli'nde girilmiş olan mevcut hesaplamayı ve müşteri bilgilerini
@@ -8939,6 +9188,14 @@ function saveAnalizKaydi(sub){
     musteriAd, musteriTel,
     sistemAd: sistem.ad,
     deger, birim: basisLabel,
+    calcMode: ui.imalatCalcMode,
+    mahaller: (parsed.mahaller||[]).map(x=>({
+      ad: x.mahal.ad,
+      input: x.input,
+      deger: x.deger,
+      poligon: x.poligon ? x.poligon.map(e=>({ uzunluk: e.uzunluk, aci: e.aci })) : undefined
+    })),
+    semalar: captureHesapSemaBlocks(sistem, parsed),
     kalemler,
     toplamlar: toplamlar.byCurrency,
     iskontoPct: getHesapIskontoPct(),
@@ -8986,6 +9243,16 @@ function exportAnalizKaydiPdf(kayit){
     kayit.musteriAd ? `Müşteri: ${esc(kayit.musteriAd)}` : '',
     kayit.musteriTel ? `Tel: ${esc(kayit.musteriTel)}` : ''
   ].filter(Boolean).join(' &nbsp;•&nbsp; ');
+  const mahalOzet = (kayit.mahaller && kayit.mahaller.length>1)
+    ? `<div style="text-align:center;font-size:9px;color:#345264;margin-bottom:8px;">${kayit.mahaller.map((m,i)=>`${esc(m.ad||((i+1)+'. Mahaller'))}: ${fmtNum(m.deger)} ${esc(kayit.birim)}`).join(' · ')}</div>`
+    : '';
+  const semaHtml = (kayit.semalar||[]).length
+    ? `<div style="margin-bottom:16px;">${(kayit.semalar||[]).map(s=>`
+        <div style="margin-bottom:14px;page-break-inside:avoid;">
+          <div style="font-size:10px;font-weight:700;color:#1C6E8C;text-align:center;margin-bottom:6px;">${esc(s.ad)}</div>
+          <div style="text-align:center;">${s.html}</div>
+        </div>`).join('')}</div>`
+    : '';
   const html = `
     ${pdfHeaderHtmlSimple('Teklif Analizi')}
     <div style="font-family:'Outfit',sans-serif;font-weight:700;font-size:15px;letter-spacing:1px;margin-bottom:6px;color:#1C6E8C;text-align:center;">TEKLİF ANALİZİ</div>
@@ -8993,7 +9260,9 @@ function exportAnalizKaydiPdf(kayit){
       ${esc(kayit.sistemAd)} &nbsp;•&nbsp; Hesaplanan Ölçü: ${fmtNum(kayit.deger)} ${esc(kayit.birim)}
     </div>
     ${musteriSatiri ? `<div style="text-align:center;font-size:10px;color:#0B2436;font-weight:700;margin-bottom:4px;">${musteriSatiri}</div>` : ''}
+    ${mahalOzet}
     ${(kayit.fireOran>0 || kayit.iskontoPct>0) ? `<div style="text-align:center;font-size:10px;color:#345264;font-weight:700;margin-bottom:14px;">${[kayit.fireOran>0?`Fire: %${fmtNum(kayit.fireOran)}`:'', kayit.iskontoPct>0?`İskonto: %${fmtNum(kayit.iskontoPct)}`:''].filter(Boolean).join(' &nbsp;•&nbsp; ')}</div>` : '<div style="margin-bottom:14px;"></div>'}
+    ${semaHtml}
     <table style="width:100%;border-collapse:collapse;font-size:10px;table-layout:fixed;">
       <colgroup>
         <col style="width:40%"><col style="width:24%"><col style="width:18%"><col style="width:18%">
@@ -9020,60 +9289,182 @@ function exportAnalizKaydiPdf(kayit){
   showPdfPreview(html, `teklif-analizi-${(kayit.musteriAd||kayit.sistemAd).replace(/[^a-z0-9ığüşöç]+/gi,'_')}.pdf`);
 }
 
-// Aktif ui durumuna göre (tekli ölçü / çoklu kenar toplamı / poligon alan) hesaplamada
-// kullanılacak değeri ve birimini döndürür. exportHesapAnalizPdf da aynı fonksiyonu
-// kullanır, böylece ekrandaki sonuç ile PDF çıktısı her zaman birebir aynı olur.
-function getHesapDeger(){
-  const sistem = state.imalatSistemleri.find(s=>s.id===ui.imalatCalcSistemId) || null;
+function getHesapDegerForMahalInput(input, sistem){
   const uygTip = getSistemUygulamaTipi(sistem);
-  // Duvar: yalnızca uzunluk × yükseklik (tekli ölçü, m²)
   if(isDuvarSistem(sistem)){
-    const parsed = parseAlanInput(ui.imalatCalcInput, 'm2');
-    return {
-      value: parsed.value,
-      unit: parsed.unit,
-      isArea: parsed.isArea,
-      isKenar:false,
-      isPoligon:false,
-      uygulamaTipi: uygTip
-    };
+    const parsed = parseAlanInput(input, 'm2');
+    return { value: parsed.value, unit: parsed.unit, isArea: parsed.isArea, isKenar:false, isPoligon:false, uygulamaTipi: uygTip, input };
+  }
+  const unit = ui.imalatCalcUnit||'m2';
+  const parsed = parseAlanInput(input, unit);
+  return { value: parsed.value, unit: parsed.unit, isArea: parsed.isArea, isKenar:false, isPoligon:false, uygulamaTipi: uygTip, input };
+}
+function getHesapDegerForMahalPoligon(poligon, sistem){
+  const uygTip = getSistemUygulamaTipi(sistem);
+  const unit = ui.imalatCalcUnit||'m2';
+  const {alan, cevre, points, kapali, kenarSayisi} = computePoligonAlan(poligon);
+  if(unit==='mt'){
+    return { value: cevre, unit:'mt', isArea:false, isKenar:false, isPoligon:true, poligonMetrik:'cevre', poligonKapali:kapali, poligonPoints:points, poligonKenarSayisi:kenarSayisi, uygulamaTipi:uygTip };
+  }
+  return { value: alan, unit:'m2', isArea:false, isKenar:false, isPoligon:true, poligonMetrik:'alan', poligonKapali:kapali, poligonPoints:points, poligonKenarSayisi:kenarSayisi, uygulamaTipi:uygTip };
+}
+function getImalatMahalHesapListesi(sistem){
+  ensureImalatCalcMahaller();
+  if(!sistem) return [];
+  const mode = ui.imalatCalcMode;
+  if(mode==='kenar' && !isDuvarSistem(sistem)){
+    const parsed = getHesapDegerGlobal(sistem);
+    if(parsed.value==null) return [];
+    const room = getImalatRoomSize();
+    const polyPts = parsed.isPoligon ? (parsed.poligonPoints||null) : ((room&&room.polyPts)||null);
+    return [{
+      mahal: ui.imalatCalcMahaller[0],
+      parsed,
+      room,
+      deger: parsed.value,
+      polyPts,
+      input: ui.imalatCalcMahaller[0] ? ui.imalatCalcMahaller[0].input : ''
+    }];
+  }
+  if(mode==='poligon' && !isDuvarSistem(sistem)){
+    const list = [];
+    ui.imalatCalcMahaller.forEach((mahal, i)=>{
+      const poligon = getMahalPoligon(mahal);
+      const hasLen = poligon.some(e=>parseFloat(String(e.uzunluk||'').replace(',','.'))>0);
+      if(!hasLen) return;
+      const parsed = getHesapDegerForMahalPoligon(poligon, sistem);
+      if(parsed.value==null) return;
+      const room = getImalatRoomSizeFromPoligon(poligon, sistem);
+      list.push({ mahal, parsed, room, deger: parsed.value, polyPts: parsed.poligonPoints||null, input: '', poligon, index: i });
+    });
+    return list;
+  }
+  const list = [];
+  ui.imalatCalcMahaller.forEach((mahal, i)=>{
+    const input = (mahal.input||'').trim();
+    if(!input) return;
+    const parsed = getHesapDegerForMahalInput(input, sistem);
+    if(parsed.value==null) return;
+    const room = getImalatRoomSizeFromInput(input, sistem, parsed.unit);
+    list.push({ mahal, parsed, room, deger: parsed.value, polyPts: null, input, index: i });
+  });
+  return list;
+}
+function getHesapDegerGlobal(sistem){
+  const uygTip = getSistemUygulamaTipi(sistem);
+  if(isDuvarSistem(sistem)){
+    ensureImalatCalcMahaller();
+    const input = ui.imalatCalcMahaller[0] ? ui.imalatCalcMahaller[0].input : ui.imalatCalcInput;
+    const parsed = parseAlanInput(input, 'm2');
+    return { value: parsed.value, unit: parsed.unit, isArea: parsed.isArea, isKenar:false, isPoligon:false, uygulamaTipi: uygTip };
   }
   if(ui.imalatCalcMode==='poligon'){
     const unit = ui.imalatCalcUnit||'m2';
     const {alan, cevre, points, kapali, kenarSayisi} = computePoligonAlan(ui.imalatCalcPoligon);
     if(unit==='mt'){
-      return {
-        value: cevre,
-        unit:'mt',
-        isArea:false,
-        isKenar:false,
-        isPoligon:true,
-        poligonMetrik:'cevre',
-        poligonKapali:kapali,
-        poligonPoints:points,
-        poligonKenarSayisi:kenarSayisi,
-        uygulamaTipi:uygTip
-      };
+      return { value: cevre, unit:'mt', isArea:false, isKenar:false, isPoligon:true, poligonMetrik:'cevre', poligonKapali:kapali, poligonPoints:points, poligonKenarSayisi:kenarSayisi, uygulamaTipi:uygTip };
     }
-    return {
-      value: alan,
-      unit:'m2',
-      isArea:false,
-      isKenar:false,
-      isPoligon:true,
-      poligonMetrik:'alan',
-      poligonKapali:kapali,
-      poligonPoints:points,
-      poligonKenarSayisi:kenarSayisi,
-      uygulamaTipi:uygTip
-    };
+    return { value: alan, unit:'m2', isArea:false, isKenar:false, isPoligon:true, poligonMetrik:'alan', poligonKapali:kapali, poligonPoints:points, poligonKenarSayisi:kenarSayisi, uygulamaTipi:uygTip };
   }
   if(ui.imalatCalcMode==='kenar'){
     const {toplam, detay} = computeKenarToplam(ui.imalatCalcKenarlar, ui.imalatCalcUnit);
     return { value: toplam, unit: ui.imalatCalcUnit, isArea:false, isKenar:true, kenarDetay:detay, uygulamaTipi:uygTip };
   }
-  const parsed = parseAlanInput(ui.imalatCalcInput, ui.imalatCalcUnit);
+  ensureImalatCalcMahaller();
+  const input = ui.imalatCalcMahaller[0] ? ui.imalatCalcMahaller[0].input : ui.imalatCalcInput;
+  const parsed = parseAlanInput(input, ui.imalatCalcUnit);
   return { value: parsed.value, unit: parsed.unit, isArea: parsed.isArea, isKenar:false, isPoligon:false, uygulamaTipi:uygTip };
+}
+function getHesapDeger(){
+  const sistem = state.imalatSistemleri.find(s=>s.id===ui.imalatCalcSistemId) || null;
+  const mode = ui.imalatCalcMode;
+  if(!isDuvarSistem(sistem) && mode==='kenar'){
+    const g = getHesapDegerGlobal(sistem);
+    return Object.assign({}, g, { isMulti:false, mahaller: getImalatMahalHesapListesi(sistem) });
+  }
+  ensureImalatCalcMahaller();
+  const list = getImalatMahalHesapListesi(sistem);
+  const u = isDuvarSistem(sistem) ? 'm2' : (ui.imalatCalcUnit||'m2');
+  if(!list.length) return { value:null, unit:u, isKenar:false, isPoligon: mode==='poligon', isMulti:false, mahaller:[] };
+  if(list.length===1){
+    const base = Object.assign({}, list[0].parsed, { isMulti:false, mahaller:list, room:list[0].room });
+    if(mode==='poligon') base.isPoligon = true;
+    return base;
+  }
+  const unit = list[0].parsed.unit;
+  const total = Math.round(list.reduce((s,x)=>s+(x.deger||0),0)*100)/100;
+  const firstParsed = list[0].parsed || {};
+  return {
+    value: total,
+    unit,
+    isArea: list.some(x=>x.parsed.isArea),
+    isKenar: false,
+    isPoligon: mode==='poligon',
+    isMulti: true,
+    mahaller: list,
+    uygulamaTipi: getSistemUygulamaTipi(sistem),
+    poligonMetrik: mode==='poligon' ? firstParsed.poligonMetrik : undefined,
+    poligonKapali: mode==='poligon' ? list.every(x=>x.parsed.poligonKapali) : undefined
+  };
+}
+function mergeMalzemeSonuc(a, b){
+  if(!a) return Object.assign({}, b);
+  if(!b) return Object.assign({}, a);
+  const sum = (x,y)=>Math.round(((parseFloat(x)||0)+(parseFloat(y)||0))*100)/100;
+  const adetA = a.adetNote!=null ? parseFloat(a.adetNote) : null;
+  const adetB = b.adetNote!=null ? parseFloat(b.adetNote) : null;
+  let adetNote = null;
+  if(adetA!=null && adetB!=null) adetNote = sum(adetA, adetB);
+  else if(adetA!=null) adetNote = adetA;
+  else if(adetB!=null) adetNote = adetB;
+  return {
+    raw: sum(a.raw, b.raw),
+    miktar: sum(a.miktar, b.miktar),
+    adetNote,
+    baseMiktar: sum(a.baseMiktar, b.baseMiktar),
+    baseAdetNote: (a.baseAdetNote!=null && b.baseAdetNote!=null) ? sum(a.baseAdetNote, b.baseAdetNote) : (a.baseAdetNote ?? b.baseAdetNote),
+    baseKgNote: (a.baseKgNote!=null && b.baseKgNote!=null) ? sum(a.baseKgNote, b.baseKgNote) : (a.baseKgNote ?? b.baseKgNote),
+    kgNote: (a.kgNote!=null && b.kgNote!=null) ? sum(a.kgNote, b.kgNote) : (a.kgNote ?? b.kgNote),
+    paketNote: null,
+    ekstra: a.ekstra||0,
+    fireOran: a.fireOran,
+    iskontoPct: a.iskontoPct,
+    listFiyat: a.listFiyat,
+    netFiyat: a.netFiyat,
+    brutTutar: sum(a.brutTutar, b.brutTutar),
+    tutar: sum(a.tutar, b.tutar),
+    maliyet: sum(a.maliyet, b.maliyet),
+    paraBirimi: a.paraBirimi || b.paraBirimi
+  };
+}
+function finalizeMergedMalzemeSonuc(m, merged, opts){
+  let r = Object.assign({}, merged);
+  const ekstra = parseFloat(opts.ekstra)||0;
+  if(ekstra>0){
+    const applied = applyEkstraAdet(m, r.miktar, r.adetNote, ekstra);
+    r.miktar = applied.miktar;
+    r.adetNote = applied.adetNote;
+  }
+  const paketAdet = parseFloat(m.paketAdet)||0;
+  const birimLower = String(getMalzemeBirim(m)||'').toLowerCase();
+  if(opts.paketTamamla && paketAdet>0 && r.adetNote!=null){
+    const parca = Math.ceil((parseFloat(r.adetNote) - 1e-9)/paketAdet)*paketAdet;
+    r.adetNote = parca;
+    if(birimLower==='adet' || birimLower==='torba') r.miktar = parca;
+    r.paketNote = parca/paketAdet;
+  }
+  const listFiyat = parseFloat(m.satisFiyat)||0;
+  const iskontoPct = Math.min(100, Math.max(0, parseFloat(opts.iskontoPct)||0));
+  const iskCarpan = Math.max(0, 1 - iskontoPct/100);
+  r.listFiyat = listFiyat;
+  r.netFiyat = Math.round(listFiyat * iskCarpan * 10000)/10000;
+  r.brutTutar = Math.round(r.miktar * listFiyat * 100)/100;
+  r.tutar = Math.round(r.miktar * r.netFiyat * 100)/100;
+  r.maliyet = Math.round(r.miktar * (parseFloat(m.alisFiyat)||0) * 100)/100;
+  r.iskontoPct = iskontoPct;
+  r.ekstra = ekstra;
+  r.paraBirimi = (m.paraBirimi && CURRENCY_INFO[m.paraBirimi]) ? m.paraBirimi : 'TRY';
+  return r;
 }
 
 function updateHesapPanel(opts){
@@ -9084,7 +9475,7 @@ function updateHesapPanel(opts){
   if(dispEl) dispEl.textContent = parsed.value!=null ? fmtNum(parsed.value)+' '+(parsed.unit==='m2'?'m²':'mt') : '—';
   const noteEl = document.getElementById('hesapAlanNote');
   if(noteEl){
-    if(parsed.isPoligon){
+    if(parsed.isPoligon && !parsed.isMulti){
       if(parsed.poligonMetrik==='cevre'){
         if(!(parsed.poligonKenarSayisi>0) || parsed.value==null){
           noteEl.textContent = 'mt hesabı için en az bir kenar uzunluğu girin.';
@@ -9101,6 +9492,19 @@ function updateHesapPanel(opts){
     } else if(parsed.isKenar && parsed.value!=null){
       const ifade = parsed.kenarDetay.map(d=>fmtNum(d.value)).join(' + ');
       noteEl.textContent = `${parsed.kenarDetay.length} kenar toplamı: ${ifade} = ${fmtNum(parsed.value)} ${parsed.unit==='m2'?'m²':'mt'} olarak hesaplandı.`;
+    } else if(parsed.isMulti && parsed.mahaller && parsed.mahaller.length){
+      const unitLbl = parsed.unit==='m2'?'m²':'mt';
+      if(parsed.isPoligon){
+        noteEl.textContent = parsed.mahaller.map((x,i)=>{
+          const lbl = x.mahal.ad || ((i+1)+'. Mahaller');
+          return `${lbl}: ${fmtNum(x.deger)} ${unitLbl}`;
+        }).join(' · ') + ` · Toplam: ${fmtNum(parsed.value)} ${unitLbl}`;
+      } else {
+        noteEl.textContent = parsed.mahaller.map((x,i)=>{
+          const lbl = x.mahal.ad || ((i+1)+'. Mahaller');
+          return `${lbl}: ${x.input} → ${fmtNum(x.deger)} ${unitLbl}`;
+        }).join(' · ') + ` · Toplam: ${fmtNum(parsed.value)} ${unitLbl}`;
+      }
     } else if(parsed.isArea && parsed.value!=null){
       const tipId = normalizeUygulamaTipi(parsed.uygulamaTipi || getSistemUygulamaTipi(sistem));
       const olcu = uygulamaTipiOlcuEtiketleri(tipId);
@@ -9130,7 +9534,31 @@ function updateHesapPanel(opts){
     const canvas = document.getElementById('semaCanvas');
     if(canvas){
       try{
-        canvas.innerHTML = renderImalatSemaSvgHtml(sistem, parsed);
+        const mahalList = (parsed.mahaller && parsed.mahaller.length) ? parsed.mahaller : getImalatMahalHesapListesi(sistem);
+        if(mahalList.length > 1){
+          canvas.innerHTML = mahalList.map((item, i)=>{
+            const label = item.mahal.ad || ((i+1)+'. Şema');
+            const semaParsed = Object.assign({}, item.parsed, { value: item.deger });
+            let block = '';
+            try{
+              if(item.poligon || semaParsed.isPoligon || ui.imalatCalcMode==='poligon'){
+                block = renderImalatSemaSvgHtml(sistem, semaParsed, {
+                  forcePoligon: true,
+                  poligon: item.poligon || getMahalPoligon(item.mahal),
+                  mahalId: item.mahal.id
+                });
+              } else {
+                block = renderImalatSemaSvgHtml(sistem, semaParsed, { input: item.input, forceTek: true });
+              }
+            }catch(err){
+              console.error('Mahal şeması hatası', err);
+              block = `<div class="empty-state">Şema çizilemedi.</div>`;
+            }
+            return `<div class="hesap-sema-block"><div class="hesap-sema-block-title">${esc(label)}</div>${block}</div>`;
+          }).join('');
+        } else {
+          canvas.innerHTML = renderImalatSemaSvgHtml(sistem, parsed);
+        }
         if(ui.imalatCalcMode==='poligon') bindPoligonSvgEvents();
         applySemaZoom();
       }catch(err){
@@ -9241,10 +9669,22 @@ function reconcileHedefToplamOnRows(rows){
 }
 function collectHesapSonucRows(sistem, deger){
   const malzemeler = sistemMalzemeleriHesap(sistem);
+  const mahalList = getImalatMahalHesapListesi(sistem);
+  const useMulti = mahalList.length > 1;
   const rows = malzemeler.map(m=>{
-    const opts = getPaketOpts(m.id);
-    const r = computeMalzemeSonuc(m, deger, opts);
-    return { m, opts, r };
+    const baseOpts = getPaketOpts(m.id);
+    if(!useMulti){
+      const r = computeMalzemeSonuc(m, deger, baseOpts);
+      return { m, opts: baseOpts, r };
+    }
+    let merged = null;
+    mahalList.forEach(({ deger: d, room, polyPts })=>{
+      const perOpts = Object.assign({}, baseOpts, { room, polyPts, ekstra: 0, paketTamamla: false });
+      const r = computeMalzemeSonuc(m, d, perOpts);
+      merged = mergeMalzemeSonuc(merged, r);
+    });
+    const r = finalizeMergedMalzemeSonuc(m, merged || { miktar:0, tutar:0, maliyet:0, brutTutar:0, paraBirimi:'TRY' }, baseOpts);
+    return { m, opts: baseOpts, r };
   });
   reconcileHedefToplamOnRows(rows);
   return rows;
@@ -13710,21 +14150,48 @@ function doExportSemaPdf(cfg){
   if(!sistem){ showToast('Lütfen önce bir imalat sistemi seçin.'); return; }
   const parsed = getHesapDeger();
   if(parsed.value==null){ showToast('Lütfen hesaplama için bir ölçü/alan girin.'); return; }
+  const mahalList = (parsed.mahaller && parsed.mahaller.length) ? parsed.mahaller : getImalatMahalHesapListesi(sistem);
   let svgBlock = '';
   try{
-    svgBlock = renderImalatSemaSvgHtml(sistem, parsed);
+    if(mahalList.length > 1){
+      svgBlock = mahalList.map((item, i)=>{
+        const label = item.mahal.ad || ((i+1)+'. Şema');
+        const semaParsed = Object.assign({}, item.parsed, { value: item.deger });
+        let block = '';
+        if(item.poligon || semaParsed.isPoligon || ui.imalatCalcMode==='poligon'){
+          block = renderImalatSemaSvgHtml(sistem, semaParsed, {
+            forcePoligon: true,
+            poligon: item.poligon || getMahalPoligon(item.mahal),
+            mahalId: item.mahal.id
+          });
+        } else {
+          block = renderImalatSemaSvgHtml(sistem, semaParsed, { input: item.input, forceTek: true });
+        }
+        return `<div style="margin-bottom:16px;"><div style="font-size:11px;font-weight:700;color:#1C6E8C;text-align:center;margin-bottom:6px;">${esc(label)}</div>${block}</div>`;
+      }).join('');
+    } else {
+      svgBlock = renderImalatSemaSvgHtml(sistem, parsed);
+    }
   }catch(err){
     console.error(err);
     showToast('Şema çizilemedi.');
     return;
   }
-  let svgOnly = (svgBlock.match(/<svg[\s\S]*?<\/svg>/i) || [])[0] || '';
+  const svgMatches = svgBlock.match(/<svg[\s\S]*?<\/svg>/gi) || [];
+  let svgOnly = svgMatches.length > 1
+    ? mahalList.map((item,i)=>{
+        const label = item.mahal.ad || ((i+1)+'. Şema');
+        return `<div style="margin-bottom:12px;"><div style="font-size:10px;font-weight:700;color:#1C6E8C;text-align:center;margin-bottom:4px;">${esc(label)}</div>${(svgMatches[i]||'').replace(/data-pol-vertex="[^"]*"/g,'').replace(/\sstyle="cursor:grab;touch-action:none;"/g,'').replace(/\sid="poligonSvg[^"]*"/g,'').replace(/max-width:\s*\d+px/g,'max-width:100%')}</div>`;
+      }).join('')
+    : ((svgBlock.match(/<svg[\s\S]*?<\/svg>/i) || [])[0] || '');
   if(!svgOnly){ showToast('Çizilecek şema yok. Ölçü girin.'); return; }
-  svgOnly = svgOnly
-    .replace(/data-pol-vertex="[^"]*"/g, '')
-    .replace(/\sstyle="cursor:grab;touch-action:none;"/g, '')
-    .replace(/id="poligonSvg"/g, 'id="semaPrintSvg"')
-    .replace(/max-width:\s*\d+px/g, 'max-width:100%');
+  if(svgMatches.length <= 1 && typeof svgOnly === 'string'){
+    svgOnly = svgOnly
+      .replace(/data-pol-vertex="[^"]*"/g, '')
+      .replace(/\sstyle="cursor:grab;touch-action:none;"/g, '')
+      .replace(/id="poligonSvg"/g, 'id="semaPrintSvg"')
+      .replace(/max-width:\s*\d+px/g, 'max-width:100%');
+  }
   const basisLabel = parsed.unit==='mt' ? 'mt' : 'm²';
   const tipLbl = IMALAT_UYGULAMA_TIPI_LABEL[getSistemUygulamaTipi(sistem)] || '';
   const legend = renderSemaTipLegendHtml(sistem);
@@ -13774,7 +14241,11 @@ async function exportHesapAnalizPdf(){
   const paraBirimleri = Object.keys(toplamlar.byCurrency);
   const iskPct = getHesapIskontoPct();
   const fireOran = getHesapFireOran();
-  const olcuAciklama = parsed.isPoligon
+  const olcuAciklama = parsed.isMulti && parsed.mahaller && parsed.mahaller.length
+    ? (parsed.isPoligon
+      ? parsed.mahaller.map((x,i)=>`${x.mahal.ad||(i+1)+'. Mahaller'}: ${fmtNum(x.deger)} ${basisLabel}`).join(' · ') + ` · Toplam: ${fmtNum(deger)} ${basisLabel}`
+      : parsed.mahaller.map((x,i)=>`${x.mahal.ad||(i+1)+'. Mahaller'}: ${x.input} (${fmtNum(x.deger)} ${basisLabel})`).join(' · ') + ` · Toplam: ${fmtNum(deger)} ${basisLabel}`)
+    : parsed.isPoligon
     ? (parsed.unit==='mt'
       ? `${parsed.poligonKenarSayisi} kenarlı poligon — kenar uzunlukları toplamı (mt)`
       : `${parsed.poligonKenarSayisi} kenarlı köşeli alan hesaplaması`)
@@ -13885,6 +14356,7 @@ window.__dnzInitApp = async function init(){
   if(!state.urunler) state.urunler = [];
   if(!state.imalatSistemleri) state.imalatSistemleri = [];
   normalizeImalatCatalogState(state);
+  ensureImalatCalcMahaller();
   if(!state.company) state.company = { name:'', logo:'' };
   if(state.company.vergiDairesi===undefined || state.company.vergiDairesi===null) state.company.vergiDairesi = '';
   if(state.company.vergiNo===undefined || state.company.vergiNo===null) state.company.vergiNo = '';
