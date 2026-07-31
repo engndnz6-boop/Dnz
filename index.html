@@ -2958,7 +2958,9 @@ function defaultState(){
     // Anlık/manuel kur bilgisi: "1 [PARA_BİRİMİ] = ? TL" olarak TL'ye sabitlenmiş şekilde
     // tutulur (Türkiye'deki kullanıcılar için en doğal referans TL olduğundan). USD/EUR
     // dışındaki tüm dönüşümler bu tablo üzerinden TL köprüsüyle hesaplanır.
-    dovizKurlari: { USD:'', EUR:'' },
+    // Yeni format: { USD:{alis,satis}, EUR:{alis,satis} }. Eski düz string kayıtlar
+    // (USD:'34.2') okunurken hem alış hem satışa yazılarak geriye uyumlu kalır.
+    dovizKurlari: { USD:{alis:'',satis:''}, EUR:{alis:'',satis:''} },
     dovizKurGuncellenme: null
   };
 }
@@ -3659,30 +3661,88 @@ function currencyTotalChipsHtml(rows, proj, label){
     return `<div class="total-chip"><span class="lbl">${esc(label)}${suffix}</span><span class="val">${fmtMoney(byCurrency[cur], cur)}</span></div>`;
   }).join('');
 }
-// "1 [currency] = ? TL" kurunu döndürür. TRY için her zaman 1'dir. Kur girilmemiş/geçersizse
-// null döner (dönüşüm yapılamadığını belirtmek için).
-function krTRY(currency){
+// Kur kaydını {alis,satis} şekline getirir. Eski düz string/number kayıtlar her iki
+// alana da yazılır; böylece önceki yedekler bozulmaz.
+function normalizeKurPair(val){
+  if(val && typeof val==='object' && !Array.isArray(val)){
+    const alis = val.alis!=null && val.alis!=='' ? String(val.alis) : (val.Buying!=null?String(val.Buying):'');
+    const satis = val.satis!=null && val.satis!=='' ? String(val.satis) : (val.Selling!=null?String(val.Selling):'');
+    // Tek taraflı doluysa diğerini de doldur (eksik alanla dönüşümün kırılmaması için)
+    return {
+      alis: alis || satis || '',
+      satis: satis || alis || ''
+    };
+  }
+  const s = (val!=null && val!=='') ? String(val) : '';
+  return { alis:s, satis:s };
+}
+function ensureDovizKurlariShape(){
+  if(!state.dovizKurlari || typeof state.dovizKurlari!=='object'){
+    state.dovizKurlari = { USD:{alis:'',satis:''}, EUR:{alis:'',satis:''} };
+    return state.dovizKurlari;
+  }
+  ['USD','EUR'].forEach(code=>{
+    state.dovizKurlari[code] = normalizeKurPair(state.dovizKurlari[code]);
+  });
+  return state.dovizKurlari;
+}
+// Ayarlar formunda gösterilecek kur metni (alış veya satış).
+function kurFieldValue(currency, tip){
+  if(currency==='TRY') return '1';
+  ensureDovizKurlariShape();
+  const pair = state.dovizKurlari[currency];
+  if(!pair) return '';
+  const t = (tip==='alis') ? 'alis' : 'satis';
+  return pair[t] || '';
+}
+// "1 [currency] = ? TL" kurunu döndürür. tip: 'alis' | 'satis' (varsayılan satış).
+// TRY için her zaman 1'dir. Kur girilmemiş/geçersizse null döner.
+function krTRY(currency, tip){
   if(currency==='TRY') return 1;
-  const v = parseFloat(state.dovizKurlari && state.dovizKurlari[currency]);
+  ensureDovizKurlariShape();
+  const t = (tip==='alis') ? 'alis' : 'satis';
+  const pair = state.dovizKurlari && state.dovizKurlari[currency];
+  const v = parseFloat(pair && (pair[t] || pair.satis || pair.alis));
   return (v>0) ? v : null;
 }
 // Bir tutarı bir para biriminden başka bir para birimine çevirir. TL her zaman köprü
 // (anchor) para birimidir. rowKurToTRY verilmişse (örn. avans/masraf satırına özel
 // girilen "işlem anındaki kur"), fromCur -> TL dönüşümünde global ayarlar yerine bu
 // öncelikli kullanılır — böylece geçmişte farklı bir kurla yapılan ödemeler bugünün
-// kuruyla yanlış hesaplanmaz. Dönüşüm için gereken kur(lar) mevcut değilse null döner.
-function convertMoney(amount, fromCur, toCur, rowKurToTRY){
+// kuruyla yanlış hesaplanmaz. tip: 'alis' (tahsilat) | 'satis' (ürün/analiz, varsayılan).
+// Dönüşüm için gereken kur(lar) mevcut değilse null döner.
+function convertMoney(amount, fromCur, toCur, rowKurToTRY, tip){
   amount = parseFloat(amount)||0;
   if(fromCur===toCur) return amount;
+  const rateTip = (tip==='alis') ? 'alis' : 'satis';
   let fromRate;
   if(fromCur==='TRY') fromRate = 1;
-  else fromRate = (parseFloat(rowKurToTRY)>0) ? parseFloat(rowKurToTRY) : krTRY(fromCur);
+  else fromRate = (parseFloat(rowKurToTRY)>0) ? parseFloat(rowKurToTRY) : krTRY(fromCur, rateTip);
   if(!(fromRate>0)) return null;
   const amountTRY = amount*fromRate;
   if(toCur==='TRY') return amountTRY;
-  const toRate = krTRY(toCur);
+  const toRate = krTRY(toCur, rateTip);
   if(!(toRate>0)) return null;
   return amountTRY/toRate;
+}
+// Analiz/ürün tarafında döviz tutarını TL'ye çevirir (satış kuru). Çevrilemezse null.
+function toTRYSatis(amount, currency, rowKur){
+  return convertMoney(amount, (currency && CURRENCY_INFO[currency]) ? currency : 'TRY', 'TRY', rowKur, 'satis');
+}
+// Tahsilat/avans tarafında döviz tutarını TL'ye çevirir (alış kuru). Çevrilemezse null.
+function toTRYAlis(amount, currency, rowKur){
+  return convertMoney(amount, (currency && CURRENCY_INFO[currency]) ? currency : 'TRY', 'TRY', rowKur, 'alis');
+}
+// Analiz satır tutarını TL metni + varsa orijinal döviz ipucu olarak döndürür.
+function fmtAnalizTutarHtml(amount, paraBirimi, tip){
+  const cur = (paraBirimi && CURRENCY_INFO[paraBirimi]) ? paraBirimi : 'TRY';
+  const rateTip = (tip==='alis') ? 'alis' : 'satis';
+  if(cur==='TRY') return fmtMoney(amount, 'TRY');
+  const tl = convertMoney(amount, cur, 'TRY', null, rateTip);
+  if(tl==null){
+    return `${fmtMoney(amount, cur)}<div style="font-size:0.66rem;color:#c77700;font-weight:600;">kur girilmedi</div>`;
+  }
+  return `${fmtMoney(tl, 'TRY')}<div style="font-size:0.66rem;color:var(--ink-soft);">${fmtMoney(amount, cur)}</div>`;
 }
 // Avans/Masraf gibi kayıt bazında farklı para biriminde girilebilen bir satırı, projenin
 // kendi para birimine çevirir. Satırda kayıtlı kendi kuru varsa onu, yoksa Ayarlar'daki
@@ -3691,7 +3751,8 @@ function convertMoney(amount, fromCur, toCur, rowKurToTRY){
 // döndürür — yani sessizce veri kaybetmek yerine en iyi tahmini gösterir.
 function rowToProjectCurrency(row, proj){
   const rowCur = (row.paraBirimi && CURRENCY_INFO[row.paraBirimi]) ? row.paraBirimi : projectCurrency(proj);
-  const converted = convertMoney(row.tutar, rowCur, projectCurrency(proj), row.kur);
+  // Tahsilat/avans/masraf satırları alış kuruyla TL'ye çevrilir (satırda özel kur varsa o öncelikli).
+  const converted = convertMoney(row.tutar, rowCur, projectCurrency(proj), row.kur, 'alis');
   return converted!=null ? converted : (parseFloat(row.tutar)||0);
 }
 // Bir satırın para birimi projenin para biriminden farklıysa, tutarın altında küçük
@@ -3701,7 +3762,7 @@ function moneyEquivalentHtml(row, proj){
   const rowCur = (row.paraBirimi && CURRENCY_INFO[row.paraBirimi]) ? row.paraBirimi : projectCurrency(proj);
   const projCur = projectCurrency(proj);
   if(rowCur===projCur) return '';
-  const converted = convertMoney(row.tutar, rowCur, projCur, row.kur);
+  const converted = convertMoney(row.tutar, rowCur, projCur, row.kur, 'alis');
   if(converted==null){
     return `<div style="font-size:0.66rem;color:#c77700;font-weight:600;">kur girilmedi</div>`;
   }
@@ -9940,8 +10001,8 @@ function renderAnalizKayitlariHtml(){
       <thead><tr><th>Müşteri</th><th>Telefon</th><th>Sistem</th><th class="num">Ölçü</th><th class="num">Toplam Tutar</th><th>Tarih</th><th></th></tr></thead>
       <tbody>
         ${list.map(k=>{
-          const curs = Object.keys(k.toplamlar||{});
-          const toplamStr = curs.length ? curs.map(cur=>fmtMoney(k.toplamlar[cur].toplamTutar, cur)).join(' / ') : '—';
+          const tryT = analizKayitTryToplam(k);
+          const toplamStr = fmtMoney(tryT.toplamTutar, 'TRY');
           return `
           <tr data-id="${k.id}">
             <td>${esc(k.musteriAd)}</td>
@@ -10102,19 +10163,14 @@ function recomputeAnalizKayitToplamlar(kayit){
     t.kar = Math.round((t.toplamTutar - t.toplamMaliyet)*100)/100;
   });
   kayit.toplamlar = byCurrency;
+  kayit.tryToplam = analizKayitTryToplam(kayit);
 }
-function renderAnalizKayitEditToplamPreview(kalemler, toplamlar){
-  const curs = Object.keys(toplamlar||{});
-  if(!curs.length){
-    const sum = (kalemler||[]).reduce((a,k)=>a+(parseFloat(k.tutar)||0),0);
-    return `<div class="hint" style="margin-top:8px;">Toplam: <b>${fmtMoney(sum)}</b></div>`;
-  }
-  return `<div class="totals-strip" style="margin-top:10px;">${
-    curs.map(cur=>{
-      const t = toplamlar[cur];
-      return `<div class="total-chip"><span class="lbl">Toplam Satış${curs.length>1?` (${esc(CURRENCY_INFO[cur]?.label||cur)})`:''}</span><span class="val">${fmtMoney(t.toplamTutar, cur)}</span></div>`;
-    }).join('')
-  }</div>`;
+function renderAnalizKayitEditToplamPreview(kalemler){
+  const tryT = analizKayitTryToplam({kalemler});
+  return `<div class="totals-strip" style="margin-top:10px;">
+    <div class="total-chip"><span class="lbl">Toplam Satış (TL)</span><span class="val">${fmtMoney(tryT.toplamTutar, 'TRY')}</span></div>
+    ${tryT.missingKur ? `<div class="total-chip"><span class="lbl" style="color:#c77700;">Bazı döviz kalemlerinde kur eksik</span></div>` : ''}
+  </div>`;
 }
 function openAnalizKayitEditModal(kayit, sub){
   if(!kayit) return;
@@ -10123,12 +10179,12 @@ function openAnalizKayitEditModal(kayit, sub){
   const refreshPreview = ()=>{
     recomputeAnalizKayitToplamlar(draft);
     const el = document.getElementById('akeToplamPreview');
-    if(el) el.innerHTML = renderAnalizKayitEditToplamPreview(draft.kalemler, draft.toplamlar);
+    if(el) el.innerHTML = renderAnalizKayitEditToplamPreview(draft.kalemler);
     document.querySelectorAll('#akeKalemTable tbody tr').forEach((tr,i)=>{
       const k = draft.kalemler[i];
       if(!k) return;
       const tutarEl = tr.querySelector('[data-tutar]');
-      if(tutarEl) tutarEl.textContent = fmtMoney(k.tutar, k.paraBirimi);
+      if(tutarEl) tutarEl.innerHTML = fmtAnalizTutarHtml(k.tutar, k.paraBirimi, 'satis');
     });
   };
   modalRoot.innerHTML = `
@@ -10161,7 +10217,7 @@ function openAnalizKayitEditModal(kayit, sub){
                   <td class="num"><input class="mono ake-miktar" type="number" step="any" min="0" value="${esc(k.miktar??'')}" style="width:90px;text-align:right;"></td>
                   <td>${esc(k.birim||'—')}</td>
                   <td class="num"><input class="mono ake-birimFiyat" type="number" step="any" min="0" value="${esc(k.birimFiyat??'')}" style="width:110px;text-align:right;"></td>
-                  <td class="num" data-tutar style="font-weight:700;">${fmtMoney(k.tutar, k.paraBirimi)}</td>
+                  <td class="num" data-tutar style="font-weight:700;">${fmtAnalizTutarHtml(k.tutar, k.paraBirimi, 'satis')}</td>
                 </tr>
               `).join('')}
             </tbody>
@@ -10210,6 +10266,7 @@ function openAnalizKayitEditModal(kayit, sub){
     orig.deger = draft.deger;
     orig.kalemler = draft.kalemler;
     orig.toplamlar = draft.toplamlar;
+    orig.tryToplam = draft.tryToplam;
     saveState();
     closeModal();
     renderImalatHesapSection(sub);
@@ -10257,6 +10314,7 @@ function saveAnalizKaydi(sub){
     semalar: captureHesapSemaBlocks(sistem, parsed),
     kalemler,
     toplamlar: toplamlar.byCurrency,
+    tryToplam: toplamlar.tryToplam,
     iskontoPct: getHesapIskontoPct(),
     fireOran: getHesapFireOran(),
     hedefToplam: ui.imalatCalcHedefToplam,
@@ -10269,35 +10327,51 @@ function saveAnalizKaydi(sub){
 
 // Kayıtlı bir analiz sonucundan (o anki değerlerle, ekrandaki güncel sistemden
 // BAĞIMSIZ olarak) müşteriye gösterilebilecek bir PDF üretir.
+function analizKayitTryToplam(kayit){
+  // Kayıtlı kalemleri güncel satış kuruyla TL'ye çevirir (analiz ekranı ile aynı mantık).
+  let toplamTutar = 0, missingKur = false;
+  (kayit.kalemler||[]).forEach(k=>{
+    const cur = k.paraBirimi || 'TRY';
+    const tl = toTRYSatis(k.tutar, cur);
+    if(tl==null){ missingKur = true; return; }
+    toplamTutar += tl;
+  });
+  return { toplamTutar: Math.round(toplamTutar*100)/100, missingKur };
+}
 function exportAnalizKaydiPdf(kayit){
   showToast('PDF hazırlanıyor…');
   const tableRows = (kayit.kalemler||[]).map(k=>{
     const miktarText = k.miktarText || [fmtNum(k.miktar), k.birim].filter(Boolean).join(' ');
+    const cur = k.paraBirimi || 'TRY';
+    const fiyatTL = toTRYSatis(k.birimFiyat, cur);
+    const tutarTL = toTRYSatis(k.tutar, cur);
+    const fiyatCell = fiyatTL!=null
+      ? `${fmtMoney(fiyatTL, 'TRY')}${cur!=='TRY' ? `<div style="font-size:8px;color:#8096A3;">${fmtMoney(k.birimFiyat, cur)}</div>` : ''}`
+      : `${fmtMoney(k.birimFiyat, cur)}<div style="font-size:8px;color:#c77700;">kur yok</div>`;
+    const tutarCell = tutarTL!=null
+      ? `${fmtMoney(tutarTL, 'TRY')}${cur!=='TRY' ? `<div style="font-size:8px;color:#8096A3;">${fmtMoney(k.tutar, cur)}</div>` : ''}`
+      : `${fmtMoney(k.tutar, cur)}<div style="font-size:8px;color:#c77700;">kur yok</div>`;
     return `
     <tr>
       <td style="word-break:break-word;">${esc(k.ad)}</td>
       <td style="text-align:right;">${esc(miktarText)}</td>
-      <td style="text-align:right;">${fmtMoney(k.birimFiyat, k.paraBirimi)}</td>
-      <td style="text-align:right;font-weight:700;">${fmtMoney(k.tutar, k.paraBirimi)}</td>
+      <td style="text-align:right;">${fiyatCell}</td>
+      <td style="text-align:right;font-weight:700;">${tutarCell}</td>
     </tr>
   `;
   }).join('');
-  const curs = Object.keys(kayit.toplamlar||{});
-  const toplamKutulariHtml = curs.map(cur=>{
-    const t = kayit.toplamlar[cur];
-    const birimMaliyet = computeBirimMaliyet(t.toplamTutar, kayit.deger);
-    const curSuffix = curs.length>1 ? ` (${esc(CURRENCY_INFO[cur].label)})` : '';
-    return `
+  const tryT = kayit.tryToplam || analizKayitTryToplam(kayit);
+  const birimMaliyet = computeBirimMaliyet(tryT.toplamTutar, kayit.deger);
+  const toplamKutulariHtml = `
       ${birimMaliyet!=null ? `
       <div style="min-width:180px;border:1.5px solid #1C6E8C55;border-radius:8px;padding:12px 16px;text-align:right;">
-        <div style="font-size:10px;color:#345264;font-weight:700;text-transform:uppercase;">Birim Maliyet${curSuffix}</div>
-        <div style="font-size:15px;font-weight:800;color:#0B2436;">${fmtMoney(birimMaliyet, cur)} / ${esc(kayit.birim)}</div>
+        <div style="font-size:10px;color:#345264;font-weight:700;text-transform:uppercase;">Birim Maliyet (TL)</div>
+        <div style="font-size:15px;font-weight:800;color:#0B2436;">${fmtMoney(birimMaliyet, 'TRY')} / ${esc(kayit.birim)}</div>
       </div>` : ''}
       <div style="min-width:220px;border:1.5px solid #1C6E8C;border-radius:8px;padding:12px 16px;text-align:right;">
-        <div style="font-size:10px;color:#345264;font-weight:700;text-transform:uppercase;">Genel Toplam${curSuffix}</div>
-        <div style="font-size:18px;font-weight:800;color:#0B2436;">${fmtMoney(t.toplamTutar, cur)}</div>
+        <div style="font-size:10px;color:#345264;font-weight:700;text-transform:uppercase;">Genel Toplam (TL)</div>
+        <div style="font-size:18px;font-weight:800;color:#0B2436;">${fmtMoney(tryT.toplamTutar, 'TRY')}</div>
       </div>`;
-  }).join('');
   const mahalOzet = (kayit.mahaller && kayit.mahaller.length>1)
     ? `<div style="text-align:center;font-size:9px;color:#345264;margin-bottom:8px;">${kayit.mahaller.map((m,i)=>`${esc(m.ad||((i+1)+'. Mahaller'))}: ${fmtNum(m.deger)} ${esc(kayit.birim)}`).join(' · ')}</div>`
     : '';
@@ -10655,22 +10729,19 @@ function applyIskontoFromBrutAndNet(brut, net){
   ui.imalatCalcIskontoPct = Math.round(pct*1e8)/1e8;
 }
 function getHesapBrutBirincil(sistem, deger){
-  const {byCurrency} = computeHesapToplamlarWithIskonto(sistem, deger, 0);
-  const curs = Object.keys(byCurrency);
-  if(!curs.length) return { cur:null, brut:0 };
-  // Önce TRY, yoksa en yüksek brüt
-  if(byCurrency.TRY) return { cur:'TRY', brut: byCurrency.TRY.toplamBrut };
-  let best = curs[0], bestV = byCurrency[best].toplamBrut;
-  curs.forEach(c=>{ if(byCurrency[c].toplamBrut > bestV){ best=c; bestV=byCurrency[c].toplamBrut; } });
-  return { cur:best, brut:bestV };
+  const {tryToplam, byCurrency} = computeHesapToplamlarWithIskonto(sistem, deger, 0);
+  if(!Object.keys(byCurrency||{}).length) return { cur:null, brut:0 };
+  // Hedef/iskonto TL üzerinden (döviz kalemler satış kuruyla çevrilmiş).
+  return { cur:'TRY', brut: (tryToplam && tryToplam.toplamBrut) || 0 };
 }
 function computeHesapToplamlarWithIskonto(sistem, deger, iskontoPctOverride){
   const byCurrency = {};
+  const tryToplam = { toplamTutar:0, toplamBrut:0, iskontoTutar:0, toplamMaliyet:0, kar:0 };
   const isk = iskontoPctOverride!=null ? iskontoPctOverride : getHesapIskontoPct();
-  if(!sistem || deger==null) return { byCurrency };
+  if(!sistem || deger==null) return { byCurrency, tryToplam };
   // Çoklu mahal dahil doğru miktar için satırları topla; tutarı istenen iskontoyla yeniden hesapla
   const rows = collectHesapSonucRows(sistem, deger);
-  if(!rows.length) return { byCurrency };
+  if(!rows.length) return { byCurrency, tryToplam };
   rows.forEach(({m, r})=>{
     const cur = r.paraBirimi || 'TRY';
     if(!byCurrency[cur]) byCurrency[cur] = { toplamTutar:0, toplamBrut:0, iskontoTutar:0, toplamMaliyet:0 };
@@ -10684,6 +10755,12 @@ function computeHesapToplamlarWithIskonto(sistem, deger, iskontoPctOverride){
     byCurrency[cur].toplamTutar += tutar;
     byCurrency[cur].toplamBrut += brutTutar;
     byCurrency[cur].toplamMaliyet += maliyet;
+    const tutarTL = toTRYSatis(tutar, cur);
+    const brutTL = toTRYSatis(brutTutar, cur);
+    const maliyetTL = toTRYAlis(maliyet, cur);
+    tryToplam.toplamTutar += (tutarTL!=null ? tutarTL : 0);
+    tryToplam.toplamBrut += (brutTL!=null ? brutTL : 0);
+    tryToplam.toplamMaliyet += (maliyetTL!=null ? maliyetTL : 0);
   });
   Object.values(byCurrency).forEach(t=>{
     t.toplamTutar = Math.round(t.toplamTutar*100)/100;
@@ -10692,7 +10769,12 @@ function computeHesapToplamlarWithIskonto(sistem, deger, iskontoPctOverride){
     t.iskontoTutar = Math.round((t.toplamBrut - t.toplamTutar)*100)/100;
     t.kar = Math.round((t.toplamTutar - t.toplamMaliyet)*100)/100;
   });
-  return { byCurrency };
+  tryToplam.toplamTutar = Math.round(tryToplam.toplamTutar*100)/100;
+  tryToplam.toplamBrut = Math.round(tryToplam.toplamBrut*100)/100;
+  tryToplam.toplamMaliyet = Math.round(tryToplam.toplamMaliyet*100)/100;
+  tryToplam.iskontoTutar = Math.round((tryToplam.toplamBrut - tryToplam.toplamTutar)*100)/100;
+  tryToplam.kar = Math.round((tryToplam.toplamTutar - tryToplam.toplamMaliyet)*100)/100;
+  return { byCurrency, tryToplam };
 }
 function applyIskontoFromTutar(iskontoTutar){
   const sistem = state.imalatSistemleri.find(s=>s.id===ui.imalatCalcSistemId) || null;
@@ -10720,26 +10802,30 @@ function reconcileHedefToplamOnRows(rows){
   if(ui.imalatCalcHedefToplam==null || ui.imalatCalcHedefToplam==='') return;
   const hedef = Math.round((parseFloat(ui.imalatCalcHedefToplam)||0)*100)/100;
   if(!(hedef>=0) || !rows || !rows.length) return;
-  const byCur = {};
-  rows.forEach((row, i)=>{
-    const cur = row.r.paraBirimi || 'TRY';
-    if(!byCur[cur]) byCur[cur] = [];
-    byCur[cur].push(i);
-  });
-  const primary = byCur.TRY ? 'TRY' : Object.keys(byCur)[0];
-  if(!primary) return;
-  const idxs = byCur[primary];
-  let sum = 0;
-  idxs.forEach(i=>{ sum += rows[i].r.tutar; });
-  sum = Math.round(sum*100)/100;
-  const diff = Math.round((hedef - sum)*100)/100;
-  if(Math.abs(diff) < 0.005) return;
-  let best = idxs[0];
-  idxs.forEach(i=>{ if(rows[i].r.tutar >= rows[best].r.tutar) best = i; });
+  // Hedef TL; döviz satırları satış kuruyla TL'ye çevrilerek toplanır.
+  let sumTL = 0;
+  let best = 0, bestTL = -1;
+  for(let i=0;i<rows.length;i++){
+    const cur = rows[i].r.paraBirimi || 'TRY';
+    const tl = toTRYSatis(rows[i].r.tutar, cur);
+    const v = tl!=null ? tl : 0;
+    sumTL += v;
+    if(v >= bestTL){ bestTL = v; best = i; }
+  }
+  sumTL = Math.round(sumTL*100)/100;
+  const diffTL = Math.round((hedef - sumTL)*100)/100;
+  if(Math.abs(diffTL) < 0.005) return;
   const r = rows[best].r;
-  r.tutar = Math.round((r.tutar + diff)*100)/100;
+  const cur = r.paraBirimi || 'TRY';
+  let diffRow = diffTL;
+  if(cur!=='TRY'){
+    const rate = krTRY(cur, 'satis');
+    if(!(rate>0)) return;
+    diffRow = Math.round((diffTL / rate)*100)/100;
+  }
+  r.tutar = Math.round((r.tutar + diffRow)*100)/100;
   if(r.miktar>0) r.netFiyat = Math.round((r.tutar / r.miktar)*10000)/10000;
-  r.hedefAdjust = diff;
+  r.hedefAdjust = diffRow;
 }
 function collectHesapSonucRows(sistem, deger){
   const malzemeler = sistemMalzemeleriHesap(sistem);
@@ -10781,9 +10867,8 @@ function syncHesapIskontoFireInputs(sistem, deger){
     if(hEl && document.activeElement !== hEl) hEl.value = '';
     return;
   }
-  const {byCurrency} = computeHesapToplamlar(sistem, deger);
-  const primary = byCurrency.TRY ? 'TRY' : Object.keys(byCurrency)[0];
-  const t = primary ? byCurrency[primary] : null;
+  const {tryToplam} = computeHesapToplamlar(sistem, deger);
+  const t = tryToplam || null;
   const tEl = document.getElementById('h-iskonto-tutar');
   const hEl = document.getElementById('h-toplam-hedef');
   if(tEl && document.activeElement !== tEl) tEl.value = t && t.iskontoTutar>0 ? Math.round(t.iskontoTutar*100)/100 : '';
@@ -10809,7 +10894,7 @@ function bindHesapSonucEvents(sistem, deger, unit){
     if(ui.imalatCalcHedefToplam!=null && ui.imalatCalcHedefToplam!==''){
       collectHesapSonucRows(sistem, deger).forEach(({m, r})=>{
         const tutarCell = wrap.querySelector(`[data-tutar-id="${m.id}"]`);
-        if(tutarCell) tutarCell.textContent = fmtMoney(r.tutar, r.paraBirimi);
+        if(tutarCell) tutarCell.innerHTML = fmtAnalizTutarHtml(r.tutar, r.paraBirimi, 'satis');
         const fiyatInp = wrap.querySelector(`[data-fiyat-id="${m.id}"]`);
         if(fiyatInp && document.activeElement !== fiyatInp && getHesapIskontoPct()>0){
           fiyatInp.value = r.netFiyat;
@@ -10837,7 +10922,7 @@ function bindHesapSonucEvents(sistem, deger, unit){
       const row = collectHesapSonucRows(sistem, deger).find(x=>x.m.id===id);
       const r = row ? row.r : computeMalzemeSonuc(m, deger, getPaketOpts(id));
       const tutarCell = wrap.querySelector(`[data-tutar-id="${id}"]`);
-      if(tutarCell) tutarCell.textContent = fmtMoney(r.tutar, r.paraBirimi);
+      if(tutarCell) tutarCell.innerHTML = fmtAnalizTutarHtml(r.tutar, r.paraBirimi, 'satis');
       const hint = e.target.parentElement && e.target.parentElement.querySelector('div');
       if(hint){
         hint.textContent = `${CURRENCY_INFO[r.paraBirimi].label}${getHesapIskontoPct()>0?` · liste ${fmtNum(r.listFiyat)}`:''}`;
@@ -10860,7 +10945,7 @@ function bindHesapSonucEvents(sistem, deger, unit){
       const miktarCell = wrap.querySelector(`[data-miktarcell-id="${id}"]`);
       if(miktarCell) miktarCell.innerHTML = formatHesapMiktarHtml(m, r);
       const tutarCell = wrap.querySelector(`[data-tutar-id="${id}"]`);
-      if(tutarCell) tutarCell.textContent = fmtMoney(r.tutar, r.paraBirimi);
+      if(tutarCell) tutarCell.innerHTML = fmtAnalizTutarHtml(r.tutar, r.paraBirimi, 'satis');
       refreshTotals();
     });
     inp.addEventListener('change', ()=>{ saveState(); });
@@ -11044,7 +11129,7 @@ function renderHesapSonucHtml(sistem, deger, basisUnit){
               <input class="mono" type="number" step="any" data-ekstra-id="${m.id}" value="${r.ekstra? esc(r.ekstra) : ''}" placeholder="+0" title="Ekstra adet ekler. Örn: 2 yazarsanız 2 adet eklenir; mt satılan profilde metraj da profil boyu kadar artar." style="width:76px;text-align:right;padding:6px 8px;border-radius:8px;border:1px solid rgba(11,36,54,0.15);background:rgba(255,255,255,0.7);">
             </td>
             <td class="num" style="font-weight:700;" data-miktarcell-id="${m.id}">${totalHtml}</td>
-            <td class="num" data-tutar-id="${m.id}">${fmtMoney(r.tutar, r.paraBirimi)}</td>
+            <td class="num" data-tutar-id="${m.id}">${fmtAnalizTutarHtml(r.tutar, r.paraBirimi, 'satis')}</td>
             <td class="num">${m.paketAdet? `<label style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;white-space:nowrap;"><input type="checkbox" data-paket-id="${m.id}" ${opts.paketTamamla?'checked':''}> <span style="font-size:0.72rem;color:var(--ink-soft);">${fmtNum(m.paketAdet)}/paket</span></label>` : '—'}</td>
           </tr>`;
         }).join('')}
@@ -11053,24 +11138,30 @@ function renderHesapSonucHtml(sistem, deger, basisUnit){
   `;
 }
 
-// Sistem malzemelerinden toplam maliyet/satış tutarı/kâr hesaplar. Birim Maliyet de
-// buradaki Toplam Satış Tutarı'na göre türetildiği için hem ekran hem PDF çıktısı
-// (Malzeme Sonuç Paneli ile Teklif Analizi) her zaman aynı rakamı gösterir.
 // Sistem malzemelerinden toplam maliyet/satış tutarı/kâr hesaplar. Malzemeler farklı
-// para birimlerinde olabileceği için (örn. alçıpan TL, profil USD) toplamlar her para
-// birimi için AYRI AYRI biriktirilir — farklı kurlar birbirine karıştırılmaz.
-// Birim Maliyet de buradaki Toplam Satış Tutarı'na göre türetildiği için hem ekran hem
-// PDF çıktısı (Malzeme Sonuç Paneli ile Teklif Analizi) her zaman aynı rakamı gösterir.
+// para birimlerinde olabilir (örn. alçıpan TL, profil USD); byCurrency ham tutarları
+// saklar, tryToplam ise Ayarlar'daki kurlarla (satış→satış tutarı, alış→maliyet)
+// tek TL toplamına çevirir. Analiz ekranı / PDF bu TL toplamını gösterir.
 function computeHesapToplamlar(sistem, deger){
   const byCurrency = {};
-  if(!sistem || deger==null) return { byCurrency, iskontoPct: getHesapIskontoPct(), fireOran: getHesapFireOran() };
+  const tryToplam = { toplamTutar:0, toplamBrut:0, iskontoTutar:0, toplamMaliyet:0, kar:0 };
+  let missingKur = false;
+  if(!sistem || deger==null) return { byCurrency, tryToplam, missingKur, iskontoPct: getHesapIskontoPct(), fireOran: getHesapFireOran() };
   const rows = collectHesapSonucRows(sistem, deger);
-  if(!rows.length) return { byCurrency, iskontoPct: getHesapIskontoPct(), fireOran: getHesapFireOran() };
+  if(!rows.length) return { byCurrency, tryToplam, missingKur, iskontoPct: getHesapIskontoPct(), fireOran: getHesapFireOran() };
   rows.forEach(({r})=>{
-    if(!byCurrency[r.paraBirimi]) byCurrency[r.paraBirimi] = { toplamTutar:0, toplamBrut:0, iskontoTutar:0, toplamMaliyet:0 };
-    byCurrency[r.paraBirimi].toplamTutar += r.tutar;
-    byCurrency[r.paraBirimi].toplamBrut += (r.brutTutar!=null ? r.brutTutar : r.tutar);
-    byCurrency[r.paraBirimi].toplamMaliyet += r.maliyet;
+    const cur = r.paraBirimi || 'TRY';
+    if(!byCurrency[cur]) byCurrency[cur] = { toplamTutar:0, toplamBrut:0, iskontoTutar:0, toplamMaliyet:0 };
+    byCurrency[cur].toplamTutar += r.tutar;
+    byCurrency[cur].toplamBrut += (r.brutTutar!=null ? r.brutTutar : r.tutar);
+    byCurrency[cur].toplamMaliyet += r.maliyet;
+    const tutarTL = toTRYSatis(r.tutar, cur);
+    const brutTL = toTRYSatis(r.brutTutar!=null ? r.brutTutar : r.tutar, cur);
+    const maliyetTL = toTRYAlis(r.maliyet, cur);
+    if(tutarTL==null || brutTL==null || maliyetTL==null) missingKur = true;
+    tryToplam.toplamTutar += (tutarTL!=null ? tutarTL : 0);
+    tryToplam.toplamBrut += (brutTL!=null ? brutTL : 0);
+    tryToplam.toplamMaliyet += (maliyetTL!=null ? maliyetTL : 0);
   });
   Object.values(byCurrency).forEach(t=>{
     t.toplamTutar = Math.round(t.toplamTutar*100)/100;
@@ -11079,38 +11170,40 @@ function computeHesapToplamlar(sistem, deger){
     t.iskontoTutar = Math.round((t.toplamBrut - t.toplamTutar)*100)/100;
     t.kar = Math.round((t.toplamTutar - t.toplamMaliyet)*100)/100;
   });
-  return { byCurrency, iskontoPct: getHesapIskontoPct(), fireOran: getHesapFireOran() };
+  tryToplam.toplamTutar = Math.round(tryToplam.toplamTutar*100)/100;
+  tryToplam.toplamBrut = Math.round(tryToplam.toplamBrut*100)/100;
+  tryToplam.toplamMaliyet = Math.round(tryToplam.toplamMaliyet*100)/100;
+  tryToplam.iskontoTutar = Math.round((tryToplam.toplamBrut - tryToplam.toplamTutar)*100)/100;
+  tryToplam.kar = Math.round((tryToplam.toplamTutar - tryToplam.toplamMaliyet)*100)/100;
+  return { byCurrency, tryToplam, missingKur, iskontoPct: getHesapIskontoPct(), fireOran: getHesapFireOran() };
 }
 
 function renderHesapTotalsHtml(sistem, deger){
   if(!sistem || deger==null || !sistem.malzemeler.length) return '';
-  const {byCurrency, iskontoPct, fireOran} = computeHesapToplamlar(sistem, deger);
-  const currencies = Object.keys(byCurrency);
-  if(!currencies.length) return '';
-  return currencies.map(cur=>{
-    const t = byCurrency[cur];
-    const suffix = currencies.length>1 ? ` (${esc(CURRENCY_INFO[cur].label)})` : '';
-    const showIsk = iskontoPct>0 || t.iskontoTutar>0;
-    return `
-    <div class="total-chip"><span class="lbl">Toplam Maliyet${suffix}</span><span class="val">${fmtMoney(t.toplamMaliyet, cur)}</span></div>
-    ${showIsk?`<div class="total-chip"><span class="lbl">Brüt Satış${suffix}</span><span class="val">${fmtMoney(t.toplamBrut, cur)}</span></div>
-    <div class="total-chip"><span class="lbl">İskonto Tutarı${suffix}</span><span class="val" style="color:var(--coral,#E8776B);">−${fmtMoney(t.iskontoTutar, cur)}</span></div>`:''}
-    <div class="total-chip"><span class="lbl">Toplam Satış Tutarı${suffix}${fireOran>0?` · fire %${fmtNum(fireOran)}`:''}${iskontoPct>0?` · isk. %${fmtNum(iskontoPct)}`:''}</span><span class="val">${fmtMoney(t.toplamTutar, cur)}</span></div>
-    <div class="total-chip"><span class="lbl">Tahmini Kâr${suffix}</span><span class="val">${fmtMoney(t.kar, cur)}</span></div>
-    `;
-  }).join('');
+  const {tryToplam, missingKur, iskontoPct, fireOran, byCurrency} = computeHesapToplamlar(sistem, deger);
+  if(!Object.keys(byCurrency).length) return '';
+  const t = tryToplam;
+  const showIsk = iskontoPct>0 || t.iskontoTutar>0;
+  const kurUyari = missingKur
+    ? `<div class="total-chip" style="grid-column:1/-1;"><span class="lbl" style="color:#c77700;">Bazı döviz kalemleri için Ayarlar’da kur girilmedi — TL toplamı eksik olabilir.</span></div>`
+    : '';
+  return `
+    ${kurUyari}
+    <div class="total-chip"><span class="lbl">Toplam Maliyet (TL)</span><span class="val">${fmtMoney(t.toplamMaliyet, 'TRY')}</span></div>
+    ${showIsk?`<div class="total-chip"><span class="lbl">Brüt Satış (TL)</span><span class="val">${fmtMoney(t.toplamBrut, 'TRY')}</span></div>
+    <div class="total-chip"><span class="lbl">İskonto Tutarı (TL)</span><span class="val" style="color:var(--coral,#E8776B);">−${fmtMoney(t.iskontoTutar, 'TRY')}</span></div>`:''}
+    <div class="total-chip"><span class="lbl">Toplam Satış Tutarı (TL)${fireOran>0?` · fire %${fmtNum(fireOran)}`:''}${iskontoPct>0?` · isk. %${fmtNum(iskontoPct)}`:''}</span><span class="val">${fmtMoney(t.toplamTutar, 'TRY')}</span></div>
+    <div class="total-chip"><span class="lbl">Tahmini Kâr (TL)</span><span class="val">${fmtMoney(t.kar, 'TRY')}</span></div>
+  `;
 }
 
-// Birim Maliyet (Toplam Satış Tutarı ÷ Hesaplanan Değer) satırını, sistemde birden
-// fazla para birimi varsa her biri için ayrı satır halinde döndürür.
+// Birim Maliyet = Toplam Satış Tutarı (TL) ÷ Hesaplanan Değer.
 function renderBirimMaliyetHtml(toplamlar, metraj, unit){
   const basisLabel = unit==='m2'?'m²':'mt';
-  const currencies = Object.keys(toplamlar.byCurrency||{});
-  if(currencies.length===0) return '—';
-  return currencies.map(cur=>{
-    const bm = computeBirimMaliyet(toplamlar.byCurrency[cur].toplamTutar, metraj);
-    return bm!=null ? `${fmtMoney(bm, cur)} / ${basisLabel}` : '—';
-  }).join('<br>');
+  const t = toplamlar.tryToplam || (toplamlar.byCurrency && toplamlar.byCurrency.TRY) || null;
+  if(!t) return '—';
+  const bm = computeBirimMaliyet(t.toplamTutar, metraj);
+  return bm!=null ? `${fmtMoney(bm, 'TRY')} / ${basisLabel}` : '—';
 }
 
 /* ======================= PERSONEL TAB ======================= */
@@ -12179,7 +12272,7 @@ function renderAvansZimmetTab(main, proj){
   const personelList = (proj.personel||[]).slice().sort((a,b)=>a.adSoyad.localeCompare(b.adSoyad,'tr'));
   const avansSeciliPara = (avansForm.paraBirimi && CURRENCY_INFO[avansForm.paraBirimi]) ? avansForm.paraBirimi : projectCurrency(proj);
   const avansKurGerekli = avansSeciliPara !== 'TRY';
-  const avansKurOneri = avansForm.kur || state.dovizKurlari[avansSeciliPara] || '';
+  const avansKurOneri = avansForm.kur || kurFieldValue(avansSeciliPara, 'alis') || '';
   main.innerHTML = `
     <div class="card glass">
       <h2>
@@ -12208,7 +12301,7 @@ function renderAvansZimmetTab(main, proj){
           </select>
         </div>
         ${avansKurGerekli?`
-        <div class="field"><label>Kur (1 ${esc(CURRENCY_INFO[avansSeciliPara].label)} = ? TL)</label>
+        <div class="field"><label>Alış Kuru (1 ${esc(CURRENCY_INFO[avansSeciliPara].label)} = ? TL)</label>
           <input class="mono" type="number" step="any" min="0" id="av-kur" value="${esc(avansKurOneri)}" placeholder="Örn: 34.20">
         </div>`:''}
       </div>
@@ -13356,7 +13449,7 @@ function renderMasrafTab(main, proj){
   const kalemler = distinctFromRows(proj.masraflar||[], 'masrafKalemi');
   const masrafSeciliPara = (masrafForm.paraBirimi && CURRENCY_INFO[masrafForm.paraBirimi]) ? masrafForm.paraBirimi : projectCurrency(proj);
   const masrafKurGerekli = masrafSeciliPara !== 'TRY';
-  const masrafKurOneri = masrafForm.kur || state.dovizKurlari[masrafSeciliPara] || '';
+  const masrafKurOneri = masrafForm.kur || kurFieldValue(masrafSeciliPara, 'alis') || '';
   main.innerHTML = `
     <div class="card glass">
       <h2>
@@ -13386,7 +13479,7 @@ function renderMasrafTab(main, proj){
           </select>
         </div>
         ${masrafKurGerekli?`
-        <div class="field"><label>Kur (1 ${esc(CURRENCY_INFO[masrafSeciliPara].label)} = ? TL)</label>
+        <div class="field"><label>Alış Kuru (1 ${esc(CURRENCY_INFO[masrafSeciliPara].label)} = ? TL)</label>
           <input class="mono" type="number" step="any" min="0" id="ms-kur" value="${esc(masrafKurOneri)}" placeholder="Örn: 34.20">
         </div>`:''}
         <div class="field" style="grid-column:span 2;"><label>Fiş / Fatura Dosyası (isteğe bağlı)</label>
@@ -13913,14 +14006,20 @@ function buildLiveAnalizTeklifKaynak(){
   const parsed = getHesapDeger();
   if(parsed.value==null){ showToast('Lütfen hesaplama için bir ölçü/alan girin.'); return null; }
   const basisLabel = parsed.unit==='mt' ? 'mt' : 'm²';
-  const rows = collectHesapSonucRows(sistem, parsed.value).map(({m,r})=>({
-    aciklama: `${sistem.ad} — ${m.ad}`,
-    miktar: Math.round((parseFloat(r.miktar)||0)*100)/100,
-    birim: mapMalzemeBirimToTeklif(getMalzemeBirim(m)),
-    birimFiyat: Math.round((parseFloat(r.netFiyat)||0)*100)/100,
-    miktarLabel: formatHesapMiktarPlain(m, r),
-    tutarLabel: fmtMoney(r.tutar, r.paraBirimi)
-  }));
+  const rows = collectHesapSonucRows(sistem, parsed.value).map(({m,r})=>{
+    const cur = r.paraBirimi || 'TRY';
+    const fiyatTL = toTRYSatis(r.netFiyat, cur);
+    const tutarTL = toTRYSatis(r.tutar, cur);
+    const birimFiyat = Math.round((fiyatTL!=null ? fiyatTL : (parseFloat(r.netFiyat)||0))*100)/100;
+    return {
+      aciklama: `${sistem.ad} — ${m.ad}`,
+      miktar: Math.round((parseFloat(r.miktar)||0)*100)/100,
+      birim: mapMalzemeBirimToTeklif(getMalzemeBirim(m)),
+      birimFiyat,
+      miktarLabel: formatHesapMiktarPlain(m, r),
+      tutarLabel: tutarTL!=null ? fmtMoney(tutarTL, 'TRY') : fmtMoney(r.tutar, cur)
+    };
+  });
   if(!rows.length){ showToast('Eklenecek malzeme kalemi yok.'); return null; }
   return {
     baslik: `${sistem.ad} · ${fmtNum(parsed.value)} ${basisLabel}`,
@@ -13931,14 +14030,19 @@ function buildLiveAnalizTeklifKaynak(){
 }
 function buildKayitAnalizTeklifKaynak(kayit){
   if(!kayit) return null;
-  const rows = (kayit.kalemler||[]).map(k=>({
-    aciklama: `${kayit.sistemAd} — ${k.ad}`,
-    miktar: Math.round((parseFloat(k.miktar)||0)*100)/100,
-    birim: birimLabelToTeklifCode(k.birim),
-    birimFiyat: Math.round((parseFloat(k.birimFiyat)||0)*100)/100,
-    miktarLabel: k.miktarText || `${fmtNum(k.miktar)} ${k.birim||''}`,
-    tutarLabel: fmtMoney(k.tutar, k.paraBirimi||'TRY')
-  }));
+  const rows = (kayit.kalemler||[]).map(k=>{
+    const cur = k.paraBirimi || 'TRY';
+    const fiyatTL = toTRYSatis(k.birimFiyat, cur);
+    const tutarTL = toTRYSatis(k.tutar, cur);
+    return {
+      aciklama: `${kayit.sistemAd} — ${k.ad}`,
+      miktar: Math.round((parseFloat(k.miktar)||0)*100)/100,
+      birim: birimLabelToTeklifCode(k.birim),
+      birimFiyat: Math.round((fiyatTL!=null ? fiyatTL : (parseFloat(k.birimFiyat)||0))*100)/100,
+      miktarLabel: k.miktarText || `${fmtNum(k.miktar)} ${k.birim||''}`,
+      tutarLabel: tutarTL!=null ? fmtMoney(tutarTL, 'TRY') : fmtMoney(k.tutar, cur)
+    };
+  });
   if(!rows.length){ showToast('Bu analizde kalem yok.'); return null; }
   return {
     baslik: `${kayit.sistemAd} · ${fmtNum(kayit.deger)} ${kayit.birim}`,
@@ -14038,8 +14142,7 @@ function openAnalizKayitPickModal(){
         <p class="hint">Hangi kayıtlı analiz sonucu teklife aktarılsın?</p>
         <div class="pick-list" id="analizKayitPickList">
           ${list.map((k,i)=>{
-            const curs = Object.keys(k.toplamlar||{});
-            const toplamStr = curs.length ? curs.map(cur=>fmtMoney(k.toplamlar[cur].toplamTutar, cur)).join(' / ') : '—';
+            const toplamStr = fmtMoney(analizKayitTryToplam(k).toplamTutar, 'TRY');
             return `<div class="pick-item" style="cursor:pointer;" data-kayit-id="${esc(k.id)}">
               <input type="radio" name="analizKayitPick" id="akp-${i}" value="${esc(k.id)}" ${i===0?'checked':''}>
               <label for="akp-${i}" style="cursor:pointer;">
@@ -14141,32 +14244,56 @@ function openTeklifTemplateModal(){
   document.getElementById('tplHakedis').onclick = ()=>{ closeModal(); exportTeklifPdf('YAPILAN HAKEDİŞ LİSTESİ'); };
 }
 
-// Güncel "1 TL = ? USD/EUR" kurlarını dış kaynaktan çeker.
-// Birincil kaynak Frankfurter'dır (ECB verisi). NOT: Bu API'nin doğru parametreleri
-// "base" ve "symbols"tur — eski "from"/"to" parametreleri API tarafından sessizce
-// yok sayılır ve bu da kur çekmenin hep başarısız görünmesine yol açıyordu.
-// Birincil kaynak çeşitli sebeplerle (bakım, geçici kesinti, TRY için o gün veri
-// yayınlanmamış olması vb.) yanıt vermezse, aynı sonucu döndüren bağımsız bir
-// ikinci kaynağa (open.er-api.com) otomatik olarak geçilir.
+// Güncel USD/EUR alış–satış kurlarını dış kaynaktan çeker.
+// Dönüş: { USD:{alis,satis}, EUR:{alis,satis} } — her değer "1 birim = ? TL".
+// 1) Truncgil (piyasa alış/satış — Bloomberg HT benzeri tablo)
+// 2) Frankfurter / open.er-api (orta kur; alış=satış aynı yazılır)
+function parseTruncgilKurPair(node){
+  if(!node || typeof node!=='object') return null;
+  const alisRaw = node['Alış'] ?? node.Alis ?? node.Buying ?? node.ForexBuying ?? node.alis;
+  const satisRaw = node['Satış'] ?? node.Satis ?? node.Selling ?? node.ForexSelling ?? node.satis;
+  const alis = parseFloat(String(alisRaw!=null?alisRaw:'').replace(',','.'));
+  const satis = parseFloat(String(satisRaw!=null?satisRaw:'').replace(',','.'));
+  if(!(alis>0) && !(satis>0)) return null;
+  return {
+    alis: (alis>0 ? alis : satis),
+    satis: (satis>0 ? satis : alis)
+  };
+}
 async function fetchGuncelDovizKur(){
   try{
-    const res = await fetch('https://api.frankfurter.dev/v1/latest?base=TRY&symbols=USD,EUR');
-    if(!res.ok) throw new Error('Frankfurter isteği başarısız: '+res.status);
+    const res = await fetch('https://finans.truncgil.com/today.json');
+    if(!res.ok) throw new Error('Truncgil isteği başarısız: '+res.status);
     const json = await res.json();
-    const usdPerTry = json.rates && json.rates.USD;
-    const eurPerTry = json.rates && json.rates.EUR;
-    if(!(usdPerTry>0) || !(eurPerTry>0)) throw new Error('Frankfurter kur verisi eksik');
-    return { usdPerTry, eurPerTry };
+    const usd = parseTruncgilKurPair(json.USD || json.usd);
+    const eur = parseTruncgilKurPair(json.EUR || json.eur);
+    if(!usd || !eur) throw new Error('Truncgil kur verisi eksik');
+    return { USD: usd, EUR: eur };
   }catch(primaryErr){
-    console.error('Birincil kur kaynağı (Frankfurter) başarısız, yedek kaynak deneniyor:', primaryErr);
-    const res = await fetch('https://open.er-api.com/v6/latest/TRY');
-    if(!res.ok) throw new Error('Yedek kaynak isteği başarısız: '+res.status);
-    const json = await res.json();
-    if(json.result !== 'success') throw new Error('Yedek kaynak kur verisi alınamadı');
-    const usdPerTry = json.rates && json.rates.USD;
-    const eurPerTry = json.rates && json.rates.EUR;
-    if(!(usdPerTry>0) || !(eurPerTry>0)) throw new Error('Yedek kaynak kur verisi eksik');
-    return { usdPerTry, eurPerTry };
+    console.error('Alış/satış kur kaynağı başarısız, orta kur yedeğine geçiliyor:', primaryErr);
+    let usdPerTry, eurPerTry;
+    try{
+      const res = await fetch('https://api.frankfurter.dev/v1/latest?base=TRY&symbols=USD,EUR');
+      if(!res.ok) throw new Error('Frankfurter isteği başarısız: '+res.status);
+      const json = await res.json();
+      usdPerTry = json.rates && json.rates.USD;
+      eurPerTry = json.rates && json.rates.EUR;
+      if(!(usdPerTry>0) || !(eurPerTry>0)) throw new Error('Frankfurter kur verisi eksik');
+    }catch(frankErr){
+      console.error('Frankfurter başarısız, open.er-api deneniyor:', frankErr);
+      const res = await fetch('https://open.er-api.com/v6/latest/TRY');
+      if(!res.ok) throw new Error('Yedek kaynak isteği başarısız: '+res.status);
+      const json = await res.json();
+      if(json.result !== 'success') throw new Error('Yedek kaynak kur verisi alınamadı');
+      usdPerTry = json.rates && json.rates.USD;
+      eurPerTry = json.rates && json.rates.EUR;
+      if(!(usdPerTry>0) || !(eurPerTry>0)) throw new Error('Yedek kaynak kur verisi eksik');
+    }
+    const usd = 1/usdPerTry, eur = 1/eurPerTry;
+    return {
+      USD: { alis: usd, satis: usd },
+      EUR: { alis: eur, satis: eur }
+    };
   }
 }
 
@@ -14450,13 +14577,19 @@ function renderAyarlarTab(main){
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
         Döviz Kurları
       </h2>
-      <p class="hint">Avans, Masraf ve diğer para birimi seçilebilen kayıtlarda, TL dışındaki tutarların TL karşılığını hesaplamak için kullanılır. Girdiğiniz kur, o an için "güncel" kur olarak kaydedilir ve yeni eklenen kayıtlarda otomatik öneri olarak gelir; her kaydın kendi kuru düzenlenebilir olduğu için geçmiş işlemler etkilenmez.</p>
+      <p class="hint">Alış kuru tahsilat / avans kayıtlarında; satış kuru ürün fiyatı ve analiz bölümünde TL dönüşümü için kullanılır. "Güncel Kuru Çek" piyasa alış–satış kurlarını alır. Her kaydın kendi kuru düzenlenebilir; geçmiş işlemler etkilenmez.</p>
       <div class="field-grid">
-        <div class="field"><label>1 USD = ? TL</label>
-          <input class="mono" type="number" step="any" min="0" id="s-kurUSD" value="${esc(state.dovizKurlari.USD)}" placeholder="Örn: 34.20">
+        <div class="field"><label>1 USD Alış = ? TL</label>
+          <input class="mono" type="number" step="any" min="0" id="s-kurUSD-alis" value="${esc(kurFieldValue('USD','alis'))}" placeholder="Örn: 34.10">
         </div>
-        <div class="field"><label>1 EUR = ? TL</label>
-          <input class="mono" type="number" step="any" min="0" id="s-kurEUR" value="${esc(state.dovizKurlari.EUR)}" placeholder="Örn: 37.10">
+        <div class="field"><label>1 USD Satış = ? TL</label>
+          <input class="mono" type="number" step="any" min="0" id="s-kurUSD-satis" value="${esc(kurFieldValue('USD','satis'))}" placeholder="Örn: 34.30">
+        </div>
+        <div class="field"><label>1 EUR Alış = ? TL</label>
+          <input class="mono" type="number" step="any" min="0" id="s-kurEUR-alis" value="${esc(kurFieldValue('EUR','alis'))}" placeholder="Örn: 37.00">
+        </div>
+        <div class="field"><label>1 EUR Satış = ? TL</label>
+          <input class="mono" type="number" step="any" min="0" id="s-kurEUR-satis" value="${esc(kurFieldValue('EUR','satis'))}" placeholder="Örn: 37.20">
         </div>
       </div>
       <p class="hint" style="font-size:0.72rem;">${state.dovizKurGuncellenme ? 'Son güncelleme: '+new Date(state.dovizKurGuncellenme).toLocaleString('tr-TR') : 'Henüz kur girilmedi.'}</p>
@@ -14652,10 +14785,16 @@ function renderAyarlarTab(main){
     renderMain();
   };
   document.getElementById('btnSaveKur').onclick = ()=>{
-    const usd = document.getElementById('s-kurUSD').value;
-    const eur = document.getElementById('s-kurEUR').value;
-    state.dovizKurlari.USD = usd;
-    state.dovizKurlari.EUR = eur;
+    ensureDovizKurlariShape();
+    state.dovizKurlari.USD = {
+      alis: document.getElementById('s-kurUSD-alis').value,
+      satis: document.getElementById('s-kurUSD-satis').value
+    };
+    state.dovizKurlari.EUR = {
+      alis: document.getElementById('s-kurEUR-alis').value,
+      satis: document.getElementById('s-kurEUR-satis').value
+    };
+    ensureDovizKurlariShape();
     state.dovizKurGuncellenme = Date.now();
     saveState(); showToast('Döviz kurları kaydedildi.');
     renderMain();
@@ -14664,14 +14803,19 @@ function renderAyarlarTab(main){
     const btn = document.getElementById('btnFetchKur');
     btn.disabled = true; btn.textContent = 'Kur çekiliyor…';
     try{
-      const { usdPerTry, eurPerTry } = await fetchGuncelDovizKur();
-      // Her iki kaynak da "1 TL = ? USD/EUR" döndürür; uygulamada "1 USD/EUR = ? TL"
-      // olarak tutulduğu için tersini alıyoruz.
-      state.dovizKurlari.USD = (1/usdPerTry).toFixed(4);
-      state.dovizKurlari.EUR = (1/eurPerTry).toFixed(4);
+      const rates = await fetchGuncelDovizKur();
+      state.dovizKurlari.USD = {
+        alis: Number(rates.USD.alis).toFixed(4),
+        satis: Number(rates.USD.satis).toFixed(4)
+      };
+      state.dovizKurlari.EUR = {
+        alis: Number(rates.EUR.alis).toFixed(4),
+        satis: Number(rates.EUR.satis).toFixed(4)
+      };
+      ensureDovizKurlariShape();
       state.dovizKurGuncellenme = Date.now();
       saveState();
-      showToast('Güncel kur çekildi ve kaydedildi.');
+      showToast('Güncel alış/satış kurları çekildi ve kaydedildi.');
       renderMain();
     }catch(e){
       console.error(e);
@@ -15223,18 +15367,49 @@ function formatPhoneDisplay(tel){
   return raw || normalizePhoneDigits(tel);
 }
 
+// WhatsApp / Web Share için ASCII güvenli dosya adı (Türkçe karakter bazı
+// mobil tarayıcılarda canShare=false veya paylaşım hatasına yol açar).
+function shareSafeFilename(name){
+  const map = {ç:'c',Ç:'C',ğ:'g',Ğ:'G',ı:'i',İ:'I',ö:'o',Ö:'O',ş:'s',Ş:'S',ü:'u',Ü:'U'};
+  let s = String(name||'belge.pdf').replace(/[çÇğĞıİöÖşŞüÜ]/g, ch=>map[ch]||ch);
+  s = s.replace(/[^a-zA-Z0-9._-]+/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
+  if(!/\.pdf$/i.test(s)) s += '.pdf';
+  if(s.length < 5) s = 'belge.pdf';
+  return s.slice(0, 80);
+}
+
 // PDF dosyasını hazırlar; paylaşım ayrı bir kullanıcı dokunuşuyla yapılmalı
 // (mobilde await sonrası user-gesture kaybolunca navigator.share indirmeye düşer).
 async function preparePdfFile(html, filename, orientation, opts){
   const pdf = await buildPdfDoc(html, orientation, opts);
-  const rawBlob = pdf.output('blob');
-  const blob = (rawBlob && rawBlob.type==='application/pdf')
-    ? rawBlob
-    : new Blob([rawBlob], {type:'application/pdf'});
+  const safeName = shareSafeFilename(filename);
+  // ArrayBuffer + File: iOS/Android Web Share dosya paylaşımında blob'dan daha güvenilir.
+  let ab = null;
+  try{ ab = pdf.output('arraybuffer'); }catch(_){ ab = null; }
+  const blob = ab
+    ? new Blob([ab], {type:'application/pdf'})
+    : (()=>{
+        const raw = pdf.output('blob');
+        return (raw && raw.type==='application/pdf') ? raw : new Blob([raw], {type:'application/pdf'});
+      })();
   let file = null;
-  try{ file = new File([blob], filename, {type:'application/pdf', lastModified:Date.now()}); }
-  catch(e){ file = null; }
-  return { pdf, blob, file, filename };
+  const payloads = ab ? [ab, blob] : [blob];
+  for(let i=0;i<payloads.length && !file;i++){
+    try{
+      if(typeof File === 'function'){
+        file = new File([payloads[i]], safeName, {type:'application/pdf', lastModified:Date.now()});
+      }
+    }catch(_){ file = null; }
+  }
+  // File yoksa (eski WebView) Blob'a ad yapıştır — bazı Android sürümleri kabul eder.
+  if(!file && blob){
+    try{
+      blob.name = safeName;
+      blob.lastModified = Date.now();
+      file = blob;
+    }catch(_){}
+  }
+  return { pdf, blob, file, filename: safeName, originalFilename: filename };
 }
 
 // Hazır PDF'i sistem paylaşım menüsüyle gönderir. Mobilde indirme YAPMAZ;
@@ -15253,48 +15428,57 @@ async function sharePreparedPdf(prepared, shareOpts){
     return 'unavailable';
   }
 
-  const tryShare = async (data)=>{
-    await navigator.share(data);
-    return 'shared';
-  };
-
-  try{
-    if(file){
-      let canFiles = true;
-      if(typeof navigator.canShare === 'function'){
-        try{ canFiles = navigator.canShare({files:[file]}); }
-        catch(_){ canFiles = isLikelyMobileDevice(); }
-      }
-      if(canFiles){
-        return await tryShare({ files:[file], title, text });
-      }
-      // Bazı Android sürümleri canShare=false der ama files ile share çalışır.
-      if(isLikelyMobileDevice()){
-        try{ return await tryShare({ files:[file], title, text }); }
-        catch(e){
-          if(e && e.name==='AbortError') return 'cancelled';
-          console.warn('Dosyalı paylaşım başarısız, metin deneniyor', e);
-        }
-      }
-    }
-    // Dosyasız share PDF göndermez; mobilde indirmeye düşme.
-    if(isLikelyMobileDevice()){
-      return 'unavailable';
-    }
-    if(shareOpts.allowDownloadFallback){
-      pdf.save(filename);
-      return 'downloaded';
-    }
-    return 'unavailable';
-  }catch(e){
-    if(e && e.name==='AbortError') return 'cancelled';
-    console.error('Paylaşım hatası', e);
-    if(shareOpts.allowDownloadFallback && !isLikelyMobileDevice()){
-      pdf.save(filename);
-      return 'downloaded';
-    }
-    return 'share_failed';
+  // Stratejiler: WhatsApp Android bazen files+text birlikte olunca başarısız olur;
+  // önce dosya(+başlık), sonra metinli dene. Bu fonksiyon await ÖNCE çağrılmamalı
+  // (kullanıcı jesti korunmalı — confirm/dialog kullanma).
+  const strategies = [];
+  if(file){
+    strategies.push({ files:[file], title });
+    if(text) strategies.push({ files:[file], title, text });
+    strategies.push({ files:[file] });
   }
+
+  let sawAbort = false;
+  let lastErr = null;
+  for(let i=0;i<strategies.length;i++){
+    const data = strategies[i];
+    if(typeof navigator.canShare === 'function'){
+      try{
+        if(!navigator.canShare(data)) continue;
+      }catch(_){
+        // canShare hata verirse yine de dene (özellikle mobil)
+        if(!isLikelyMobileDevice()) continue;
+      }
+    }
+    try{
+      await navigator.share(data);
+      return 'shared';
+    }catch(e){
+      if(e && e.name==='AbortError'){ sawAbort = true; break; }
+      lastErr = e;
+      console.warn('Paylaşım stratejisi başarısız', i, e);
+    }
+  }
+  if(sawAbort) return 'cancelled';
+
+  // canShare hepsini reddettiyse mobilde son bir kez files ile zorla dene
+  if(file && isLikelyMobileDevice() && strategies.length){
+    try{
+      await navigator.share({ files:[file], title });
+      return 'shared';
+    }catch(e){
+      if(e && e.name==='AbortError') return 'cancelled';
+      lastErr = e;
+      console.warn('Zorunlu dosya paylaşımı başarısız', e);
+    }
+  }
+
+  if(lastErr) console.error('Paylaşım hatası', lastErr);
+  if(shareOpts.allowDownloadFallback && !isLikelyMobileDevice()){
+    pdf.save(filename);
+    return 'downloaded';
+  }
+  return file ? 'share_failed' : 'unavailable';
 }
 
 // Eski API — hazırla + paylaş (jest kaybı riski var; mümkünse prepare+sharePrepared kullanın).
@@ -15307,12 +15491,30 @@ async function sharePdf(html, filename, orientation, opts){
   });
 }
 
+function openExternalUrl(url){
+  // Mobilde window.open sıkça engellenir; <a> tıklaması daha güvenilir.
+  try{
+    const a = document.createElement('a');
+    a.href = url;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(()=>{ try{ a.remove(); }catch(_){} }, 500);
+    return true;
+  }catch(_){
+    try{ window.location.href = url; return true; }catch(__){ return false; }
+  }
+}
 function openWhatsAppChat(phone, text){
   const digits = normalizePhoneDigits(phone);
-  if(!digits) return false;
-  const url = `https://wa.me/${digits}?text=${encodeURIComponent(text||'')}`;
-  window.open(url, '_blank');
-  return true;
+  const encoded = encodeURIComponent(text||'');
+  // wa.me mobilde uygulamayı, masaüstünde WhatsApp Web’i açar (çift açılış yok).
+  const url = digits
+    ? `https://wa.me/${digits}?text=${encoded}`
+    : `https://wa.me/?text=${encoded}`;
+  return openExternalUrl(url);
 }
 function openSmsCompose(phone, text){
   const digits = normalizePhoneDigits(phone);
@@ -15324,6 +15526,23 @@ function openSmsCompose(phone, text){
     : `sms:${digits}?body=${encodeURIComponent(text||'')}`;
   window.location.href = url;
   return true;
+}
+// Paylaşım başarısız olursa PDF’i cihaza kaydettir (mobilde paylaşım menüsü yoksa yedek yol).
+function triggerBlobDownload(blob, filename){
+  try{
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename || 'belge.pdf';
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(()=>{ try{ a.remove(); URL.revokeObjectURL(url); }catch(_){} }, 1500);
+    return true;
+  }catch(e){
+    console.error('İndirme tetiklenemedi', e);
+    return false;
+  }
 }
 
 // PDF dosya adından aynı isimde bir Excel (.xlsx) dosya adı türetir.
@@ -15438,20 +15657,25 @@ function showPdfPreview(html, filename, orientation, opts){
   };
 
   const reportShareResult = (result)=>{
-    if(result==='shared') showToast('Paylaşım menüsü açıldı.');
+    if(result==='shared') showToast('Paylaşım menüsü açıldı — listeden WhatsApp’ı seçin.');
     else if(result==='cancelled') showToast('Paylaşım iptal edildi.');
     else if(result==='downloaded') showToast('PDF indirildi.');
     else if(result==='unavailable' || result==='share_failed'){
       showToast(isLikelyMobileDevice()
-        ? 'Paylaşım açılamadı. Lütfen tekrar deneyin veya PDF İndir kullanın.'
+        ? 'Paylaşım menüsü açılamadı. PDF indirildi; WhatsApp’tan ekleyebilirsiniz.'
         : 'Bu tarayıcı dosya paylaşımını desteklemiyor; PDF indirildi.');
     }
   };
 
-  const runShareWithFreshTap = async (prepared, shareOpts, triggerBtn)=>{
-    const result = await sharePreparedPdf(prepared, shareOpts);
-    reportShareResult(result);
-    return result;
+  // Paylaşım başarısızsa: PDF’i indir + isteğe bağlı WhatsApp sohbeti aç.
+  const fallbackShareMobile = (prepared, phone)=>{
+    if(prepared && prepared.blob){
+      triggerBlobDownload(prepared.blob, prepared.filename || filename);
+    } else if(prepared && prepared.pdf){
+      try{ prepared.pdf.save(prepared.filename || filename); }catch(_){}
+    }
+    if(phone) openWhatsAppChat(phone, shareTextDefault);
+    else if(isLikelyMobileDevice()) openWhatsAppChat('', shareTextDefault);
   };
 
   const openSharePanel = async ()=>{
@@ -15472,76 +15696,71 @@ function showPdfPreview(html, filename, orientation, opts){
     const nameBit = shareName ? esc(shareName)+' · ' : '';
     const hasPhone = !!normalizePhoneDigits(sharePhone);
     const msgText = shareTextDefault;
+    const canWebShare = typeof navigator.share === 'function';
 
     sharePanel.innerHTML = `
       <div style="font-family:var(--font-display);font-weight:700;margin-bottom:6px;">PDF paylaş</div>
       <p class="hint" style="margin:0 0 10px;">${hasPhone
-        ? `Müşteri numarası kayıtlı (${nameBit}${phoneLabel}). Onayladıktan sonra paylaşım menüsü açılır; WhatsApp veya Mesaj’ı seçerek PDF’i gönderebilirsiniz.`
-        : 'Sistem paylaşım menüsü açılacak. WhatsApp, Mesaj veya diğer uygulamaları seçebilirsiniz.'}</p>
+        ? `Müşteri: ${nameBit}${phoneLabel}. Aşağıdaki butona basınca paylaşım menüsü açılır — <b>WhatsApp</b>’ı seçin.`
+        : 'Aşağıdaki butona basınca paylaşım menüsü açılır. Listeden <b>WhatsApp</b>’ı seçerek PDF’i gönderebilirsiniz.'}</p>
       <div class="btn-row" style="flex-direction:column;align-items:stretch;gap:8px;">
-        ${hasPhone ? `
-          <button class="btn btn-primary btn-block" id="pvShareWa">WhatsApp ile gönder</button>
-          <button class="btn btn-ghost btn-block" id="pvShareSms">Mesaj (SMS) ile gönder</button>
-        ` : ''}
-        <button class="btn ${hasPhone?'btn-ghost':'btn-primary'} btn-block" id="pvShareOther">Diğer uygulamalarla paylaş</button>
+        <button class="btn btn-primary btn-block" id="pvShareWa" ${canWebShare?'':'disabled'}>WhatsApp ile gönder</button>
+        ${hasPhone ? `<button class="btn btn-ghost btn-block" id="pvShareSms">Mesaj (SMS) ile gönder</button>` : ''}
+        <button class="btn btn-ghost btn-block" id="pvShareOther" ${canWebShare?'':'disabled'}>Diğer uygulamalarla paylaş</button>
+        <button class="btn btn-ghost btn-block" id="pvShareDlWa">PDF indir + WhatsApp aç</button>
         <button class="btn btn-ghost btn-block" id="pvShareCancel">Vazgeç</button>
       </div>
-      <p class="hint" style="margin:10px 0 0;">Not: PDF önce hazırlandı; aşağıdaki butona basınca paylaşım menüsü açılır (mobilde indirme yapılmaz).</p>
+      <p class="hint" style="margin:10px 0 0;">${canWebShare
+        ? 'Önemli: Butona basınca hemen paylaşım menüsü açılır (ek onay kutusu yok — mobilde gerekli).'
+        : 'Bu tarayıcı sistem paylaşımını desteklemiyor. “PDF indir + WhatsApp aç” kullanın.'}</p>
     `;
 
     document.getElementById('pvShareCancel').onclick = hideSharePanel;
 
-    document.getElementById('pvShareOther').onclick = async (e)=>{
-      const btn = e.currentTarget;
+    // ÖNEMLİ: window.confirm KULLANMA — mobilde jesti bozar, navigator.share engellenir.
+    const shareNow = async (btn, label, phoneHint)=>{
+      if(!prepared || !prepared.file){
+        showToast('PDF dosyası hazır değil. “PDF indir + WhatsApp aç” deneyin.');
+        fallbackShareMobile(prepared, sharePhone);
+        return;
+      }
       btn.disabled = true; btn.textContent = 'Açılıyor…';
       try{
-        await runShareWithFreshTap(prepared, {
+        const result = await sharePreparedPdf(prepared, {
           title: opts.shareTitle || filename,
           text: msgText,
           allowDownloadFallback: !isLikelyMobileDevice()
-        }, btn);
+        });
+        reportShareResult(result);
+        if(result==='shared'){
+          if(phoneHint) showToast('WhatsApp’ı seçin → '+phoneHint);
+        } else if(result!=='cancelled'){
+          fallbackShareMobile(prepared, sharePhone);
+        }
       }finally{
-        btn.disabled = false; btn.textContent = 'Diğer uygulamalarla paylaş';
+        btn.disabled = false; btn.textContent = label;
       }
     };
 
-    if(hasPhone){
-      document.getElementById('pvShareWa').onclick = async (e)=>{
-        const btn = e.currentTarget;
-        const ok = window.confirm(
-          `${shareName ? shareName+' · ' : ''}${formatPhoneDisplay(sharePhone)}\n\n`+
-          `Bu numaraya WhatsApp ile teklif PDF'ini göndermek istiyor musunuz?\n\n`+
-          `Onaylarsanız paylaşım menüsü açılır — listeden WhatsApp'ı seçip bu numarayı bulun.`
-        );
-        if(!ok) return;
-        btn.disabled = true; btn.textContent = 'Açılıyor…';
-        try{
-          const result = await sharePreparedPdf(prepared, {
-            title: opts.shareTitle || filename,
-            text: msgText,
-            allowDownloadFallback: false
-          });
-          reportShareResult(result);
-          if(result==='shared'){
-            showToast('WhatsApp’ı seçin → '+formatPhoneDisplay(sharePhone));
-          } else if(result!=='cancelled'){
-            // Dosya paylaşılamadıysa en azından sohbeti aç
-            openWhatsAppChat(sharePhone, msgText);
-            showToast('WhatsApp sohbeti açıldı. PDF eklemek için “Diğer uygulamalarla paylaş”ı deneyin.');
-          }
-        }finally{
-          btn.disabled = false; btn.textContent = 'WhatsApp ile gönder';
-        }
-      };
+    document.getElementById('pvShareWa').onclick = (e)=>{
+      shareNow(e.currentTarget, 'WhatsApp ile gönder', hasPhone ? formatPhoneDisplay(sharePhone) : '');
+    };
 
-      document.getElementById('pvShareSms').onclick = async (e)=>{
+    document.getElementById('pvShareOther').onclick = (e)=>{
+      shareNow(e.currentTarget, 'Diğer uygulamalarla paylaş', '');
+    };
+
+    document.getElementById('pvShareDlWa').onclick = ()=>{
+      fallbackShareMobile(prepared, sharePhone);
+      showToast(hasPhone
+        ? 'PDF indirildi. WhatsApp açılıyor — sohbete PDF ekleyin.'
+        : 'PDF indirildi. WhatsApp açılıyor — kişiyi seçip PDF ekleyin.');
+    };
+
+    const smsBtn = document.getElementById('pvShareSms');
+    if(smsBtn){
+      smsBtn.onclick = async (e)=>{
         const btn = e.currentTarget;
-        const ok = window.confirm(
-          `${shareName ? shareName+' · ' : ''}${formatPhoneDisplay(sharePhone)}\n\n`+
-          `Bu numaraya Mesaj/SMS ile teklif PDF'ini göndermek istiyor musunuz?\n\n`+
-          `Onaylarsanız paylaşım menüsü açılır — listeden Mesaj uygulamasını seçin.`
-        );
-        if(!ok) return;
         btn.disabled = true; btn.textContent = 'Açılıyor…';
         try{
           const result = await sharePreparedPdf(prepared, {
@@ -15553,8 +15772,9 @@ function showPdfPreview(html, filename, orientation, opts){
           if(result==='shared'){
             showToast('Mesaj uygulamasını seçin → '+formatPhoneDisplay(sharePhone));
           } else if(result!=='cancelled'){
+            if(prepared.blob) triggerBlobDownload(prepared.blob, prepared.filename || filename);
             openSmsCompose(sharePhone, msgText);
-            showToast('Mesaj taslağı açıldı. PDF için paylaşım menüsünden Mesaj’ı seçmeniz gerekir.');
+            showToast('PDF indirildi; Mesaj taslağı açıldı.');
           }
         }finally{
           btn.disabled = false; btn.textContent = 'Mesaj (SMS) ile gönder';
@@ -15876,17 +16096,26 @@ async function exportHesapAnalizPdf(){
   const basisLabel = parsed.unit==='mt' ? 'mt' : 'm²';
   const tableRows = collectHesapSonucRows(sistem, deger).map(({m, r})=>{
     const miktarText = formatHesapMiktarPlain(m, r);
+    const cur = r.paraBirimi || 'TRY';
+    const fiyatTL = toTRYSatis(r.netFiyat, cur);
+    const tutarTL = toTRYSatis(r.tutar, cur);
+    const fiyatCell = fiyatTL!=null
+      ? `${fmtMoney(fiyatTL, 'TRY')}${cur!=='TRY' ? `<div style="font-size:8px;color:#8096A3;">${fmtMoney(r.netFiyat, cur)}</div>` : ''}`
+      : `${fmtMoney(r.netFiyat, cur)}<div style="font-size:8px;color:#c77700;">kur yok</div>`;
+    const tutarCell = tutarTL!=null
+      ? `${fmtMoney(tutarTL, 'TRY')}${cur!=='TRY' ? `<div style="font-size:8px;color:#8096A3;">${fmtMoney(r.tutar, cur)}</div>` : ''}`
+      : `${fmtMoney(r.tutar, cur)}<div style="font-size:8px;color:#c77700;">kur yok</div>`;
     return `
       <tr>
         <td style="word-break:break-word;">${esc(m.ad)}</td>
         <td style="text-align:right;">${esc(miktarText)}</td>
-        <td style="text-align:right;">${fmtMoney(r.netFiyat, r.paraBirimi)}</td>
-        <td style="text-align:right;font-weight:700;">${fmtMoney(r.tutar, r.paraBirimi)}</td>
+        <td style="text-align:right;">${fiyatCell}</td>
+        <td style="text-align:right;font-weight:700;">${tutarCell}</td>
       </tr>
     `;
   }).join('');
   const toplamlar = computeHesapToplamlar(sistem, deger);
-  const paraBirimleri = Object.keys(toplamlar.byCurrency);
+  const t = toplamlar.tryToplam || { toplamTutar:0, iskontoTutar:0 };
   const iskPct = getHesapIskontoPct();
   const fireOran = getHesapFireOran();
   const olcuAciklama = parsed.isMulti && parsed.mahaller && parsed.mahaller.length
@@ -15902,30 +16131,26 @@ async function exportHesapAnalizPdf(){
     : (parsed.isArea ? `Girilen ölçü: ${esc(ui.imalatCalcInput)}` : '');
   const ekNotlar = [
     fireOran>0 ? `Fire: %${fmtNum(fireOran)}` : '',
-    iskPct>0 ? `İskonto: %${fmtNum(iskPct)}` : ''
+    iskPct>0 ? `İskonto: %${fmtNum(iskPct)}` : '',
+    toplamlar.missingKur ? 'Bazı döviz kalemlerinde kur eksik' : ''
   ].filter(Boolean).join(' · ');
-  // Farklı para birimindeki malzemeler varsa, her para birimi için ayrı Birim Maliyet +
-  // Genel Toplam kutu çifti oluşturulur (tutarlar birbirine karıştırılmaz).
-  const toplamKutulariHtml = paraBirimleri.map(cur=>{
-    const t = toplamlar.byCurrency[cur];
-    const birimMaliyet = computeBirimMaliyet(t.toplamTutar, deger);
-    const curSuffix = paraBirimleri.length>1 ? ` (${esc(CURRENCY_INFO[cur].label)})` : '';
-    return `
+  // Analiz PDF toplamları Ayarlar satış kuruyla TL'ye çevrilmiş tek toplam olarak gösterilir.
+  const birimMaliyet = computeBirimMaliyet(t.toplamTutar, deger);
+  const toplamKutulariHtml = `
       ${t.iskontoTutar>0 ? `
       <div style="min-width:160px;border:1.5px solid #E8776B55;border-radius:8px;padding:12px 16px;text-align:right;">
-        <div style="font-size:10px;color:#345264;font-weight:700;text-transform:uppercase;">İskonto${curSuffix}</div>
-        <div style="font-size:14px;font-weight:800;color:#E8776B;">−${fmtMoney(t.iskontoTutar, cur)}${iskPct>0?` (%${fmtNum(iskPct)})`:''}</div>
+        <div style="font-size:10px;color:#345264;font-weight:700;text-transform:uppercase;">İskonto (TL)</div>
+        <div style="font-size:14px;font-weight:800;color:#E8776B;">−${fmtMoney(t.iskontoTutar, 'TRY')}${iskPct>0?` (%${fmtNum(iskPct)})`:''}</div>
       </div>` : ''}
       ${birimMaliyet!=null ? `
       <div style="min-width:180px;border:1.5px solid #1C6E8C55;border-radius:8px;padding:12px 16px;text-align:right;">
-        <div style="font-size:10px;color:#345264;font-weight:700;text-transform:uppercase;">Birim Maliyet${curSuffix}</div>
-        <div style="font-size:15px;font-weight:800;color:#0B2436;">${fmtMoney(birimMaliyet, cur)} / ${basisLabel}</div>
+        <div style="font-size:10px;color:#345264;font-weight:700;text-transform:uppercase;">Birim Maliyet (TL)</div>
+        <div style="font-size:15px;font-weight:800;color:#0B2436;">${fmtMoney(birimMaliyet, 'TRY')} / ${basisLabel}</div>
       </div>` : ''}
       <div style="min-width:220px;border:1.5px solid #1C6E8C;border-radius:8px;padding:12px 16px;text-align:right;">
-        <div style="font-size:10px;color:#345264;font-weight:700;text-transform:uppercase;">Genel Toplam${curSuffix}</div>
-        <div style="font-size:18px;font-weight:800;color:#0B2436;">${fmtMoney(t.toplamTutar, cur)}</div>
+        <div style="font-size:10px;color:#345264;font-weight:700;text-transform:uppercase;">Genel Toplam (TL)</div>
+        <div style="font-size:18px;font-weight:800;color:#0B2436;">${fmtMoney(t.toplamTutar, 'TRY')}</div>
       </div>`;
-  }).join('');
 
   const html = `
     ${pdfHeaderHtmlSimple('Teklif Analizi', { musteriAd: ui.imalatCalcMusteriAd, musteriTel: ui.imalatCalcMusteriTel })}
@@ -16011,7 +16236,8 @@ window.__dnzInitApp = async function init(){
   if(state.company.adres===undefined || state.company.adres===null) state.company.adres = '';
   if(state.company.telefon===undefined || state.company.telefon===null) state.company.telefon = '';
   if(state.dashboardHavaKonum===undefined) state.dashboardHavaKonum = null;
-  if(!state.dovizKurlari) state.dovizKurlari = { USD:'', EUR:'' };
+  if(!state.dovizKurlari) state.dovizKurlari = { USD:{alis:'',satis:''}, EUR:{alis:'',satis:''} };
+  else ensureDovizKurlariShape();
   if(state.dovizKurGuncellenme===undefined) state.dovizKurGuncellenme = null;
   let imalatCinsiMigrated = false;
   Object.values(state.projects).forEach(p=>{
