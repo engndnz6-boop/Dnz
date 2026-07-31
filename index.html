@@ -3734,39 +3734,56 @@ function toTRYAlis(amount, currency, rowKur){
   return convertMoney(amount, (currency && CURRENCY_INFO[currency]) ? currency : 'TRY', 'TRY', rowKur, 'alis');
 }
 // Analiz satır tutarını TL metni + varsa orijinal döviz ipucu olarak döndürür.
+// Malzeme analizi / teklif varsayılanı satış kurudur.
 function fmtAnalizTutarHtml(amount, paraBirimi, tip){
   const cur = (paraBirimi && CURRENCY_INFO[paraBirimi]) ? paraBirimi : 'TRY';
   const rateTip = (tip==='alis') ? 'alis' : 'satis';
   if(cur==='TRY') return fmtMoney(amount, 'TRY');
   const tl = convertMoney(amount, cur, 'TRY', null, rateTip);
   if(tl==null){
-    return `${fmtMoney(amount, cur)}<div style="font-size:0.66rem;color:#c77700;font-weight:600;">kur girilmedi</div>`;
+    return `${fmtMoney(amount, cur)}<div style="font-size:0.66rem;color:#c77700;font-weight:600;">satış kuru girilmedi</div>`;
   }
-  return `${fmtMoney(tl, 'TRY')}<div style="font-size:0.66rem;color:var(--ink-soft);">${fmtMoney(amount, cur)}</div>`;
+  return `${fmtMoney(tl, 'TRY')}<div style="font-size:0.66rem;color:var(--ink-soft);">${fmtMoney(amount, cur)} · satış</div>`;
+}
+// Birim fiyat altındaki küçük ipucu: para birimi + (dövizse) satış kuruyla TL karşılığı.
+function fmtAnalizFiyatHint(fiyat, paraBirimi, iskPct, listFiyat){
+  const cur = (paraBirimi && CURRENCY_INFO[paraBirimi]) ? paraBirimi : 'TRY';
+  let t = CURRENCY_INFO[cur].label;
+  if(iskPct>0) t += ` · liste ${fmtNum(listFiyat)}`;
+  if(cur!=='TRY'){
+    const tl = toTRYSatis(fiyat, cur);
+    t += tl!=null ? ` · ≈ ${fmtMoney(tl, 'TRY')} (satış)` : ' · satış kuru yok';
+  }
+  return t;
 }
 // Avans/Masraf gibi kayıt bazında farklı para biriminde girilebilen bir satırı, projenin
 // kendi para birimine çevirir. Satırda kayıtlı kendi kuru varsa onu, yoksa Ayarlar'daki
 // güncel global kuru kullanır. Dönüşüm mümkün değilse (kur hiç girilmemişse), eski
 // davranışla (kur özelliği eklenmeden önceki) uyumlu kalmak için tutarı olduğu gibi
 // döndürür — yani sessizce veri kaybetmek yerine en iyi tahmini gösterir.
-function rowToProjectCurrency(row, proj){
+// tip: 'alis' (tahsilat) | 'satis' (avans/masraf, varsayılan). Satırda özel kur varsa o öncelikli.
+function rowToProjectCurrency(row, proj, tip){
   const rowCur = (row.paraBirimi && CURRENCY_INFO[row.paraBirimi]) ? row.paraBirimi : projectCurrency(proj);
-  // Tahsilat/avans/masraf satırları alış kuruyla TL'ye çevrilir (satırda özel kur varsa o öncelikli).
-  const converted = convertMoney(row.tutar, rowCur, projectCurrency(proj), row.kur, 'alis');
+  const rateTip = (tip==='alis') ? 'alis' : 'satis';
+  const converted = convertMoney(row.tutar, rowCur, projectCurrency(proj), row.kur, rateTip);
   return converted!=null ? converted : (parseFloat(row.tutar)||0);
 }
 // Bir satırın para birimi projenin para biriminden farklıysa, tutarın altında küçük
 // puntoyla "≈ [proje para biriminde] karşılığı" gösterir. Kur girilmemiş/hesaplanamıyorsa
 // (Ayarlar'da da kur yoksa) sessizce yanlış bir rakam göstermek yerine uyarı verir.
-function moneyEquivalentHtml(row, proj){
+function moneyEquivalentHtml(row, proj, tip){
   const rowCur = (row.paraBirimi && CURRENCY_INFO[row.paraBirimi]) ? row.paraBirimi : projectCurrency(proj);
   const projCur = projectCurrency(proj);
   if(rowCur===projCur) return '';
-  const converted = convertMoney(row.tutar, rowCur, projCur, row.kur, 'alis');
+  const rateTip = (tip==='alis') ? 'alis' : 'satis';
+  const converted = convertMoney(row.tutar, rowCur, projCur, row.kur, rateTip);
   if(converted==null){
     return `<div style="font-size:0.66rem;color:#c77700;font-weight:600;">kur girilmedi</div>`;
   }
   return `<div style="font-size:0.66rem;color:var(--ink-soft);">≈ ${fmtMoney(converted, projCur)}</div>`;
+}
+function sumTahsilatProject(proj){
+  return (proj.tahsilatlar||[]).reduce((s,r)=>s+rowToProjectCurrency(r, proj, 'alis'), 0);
 }
 
 function todayStr(){
@@ -4656,7 +4673,7 @@ function collectGlobalAramaResults(query){
     (proj.tahsilatlar||[]).forEach(r=>{
       const hay = normKey(r.odemeYapan) + ' ' + normKey(r.odemeAlan) + ' ' + normKey(r.aciklama);
       if(hay.includes(q)){
-        results.push({kind:'tahsilat', proj, id:r.id, label:'Tahsilat: '+fmtMoney(r.tutar, projectCurrency(proj)), sublabel:(r.aciklama? r.aciklama+' · ':'')+proj.name});
+        results.push({kind:'tahsilat', proj, id:r.id, label:'Tahsilat: '+fmtMoney(r.tutar, (r.paraBirimi && CURRENCY_INFO[r.paraBirimi]) ? r.paraBirimi : projectCurrency(proj)), sublabel:(r.aciklama? r.aciklama+' · ':'')+proj.name});
       }
     });
     (proj.yemekler||[]).forEach(r=>{
@@ -4837,7 +4854,7 @@ function renderGenelOzetHtml(){
     if(!paraToplamlari[cur]) paraToplamlari[cur] = {hakedis:0,tahsilat:0,odenecek:0,odenen:0,masraf:0,yemek:0};
     const t = paraToplamlari[cur];
     t.hakedis += projeIsverenAlacakToplam(p);
-    t.tahsilat += (p.tahsilatlar||[]).reduce((s,r)=>s+(parseFloat(r.tutar)||0),0);
+    t.tahsilat += sumTahsilatProject(p);
     t.odenecek += projeCalisanaOdenecekToplam(p);
     t.odenen += projeCalisanaOdenenToplam(p);
     t.masraf += projeMasrafToplam(p);
@@ -4905,7 +4922,7 @@ function renderProjeBilgiPanosuHtml(proj){
     </div>`;
   }
   const hakedisToplam = projeIsverenAlacakToplam(proj);
-  const alinanToplam = (proj.tahsilatlar||[]).reduce((s,r)=>s+(parseFloat(r.tutar)||0),0);
+  const alinanToplam = sumTahsilatProject(proj);
   const kalanIsveren = hakedisToplam - alinanToplam;
   const calisanaOdenecek = projeCalisanaOdenecekToplam(proj);
   const calisanaOdenen = projeCalisanaOdenenToplam(proj);
@@ -5617,7 +5634,7 @@ function renderRaporDashboardTab(main, proj){
       </div>`;
   } else {
     const hakedis = projeIsverenAlacakToplam(proj);
-    const tahsilat = (proj.tahsilatlar||[]).reduce((s,r)=>s+(parseFloat(r.tutar)||0),0);
+    const tahsilat = sumTahsilatProject(proj);
     const kalanIsveren = hakedis - tahsilat;
     const odenecek = projeCalisanaOdenecekToplam(proj);
     const odenen = projeCalisanaOdenenToplam(proj);
@@ -10757,7 +10774,7 @@ function computeHesapToplamlarWithIskonto(sistem, deger, iskontoPctOverride){
     byCurrency[cur].toplamMaliyet += maliyet;
     const tutarTL = toTRYSatis(tutar, cur);
     const brutTL = toTRYSatis(brutTutar, cur);
-    const maliyetTL = toTRYAlis(maliyet, cur);
+    const maliyetTL = toTRYSatis(maliyet, cur);
     tryToplam.toplamTutar += (tutarTL!=null ? tutarTL : 0);
     tryToplam.toplamBrut += (brutTL!=null ? brutTL : 0);
     tryToplam.toplamMaliyet += (maliyetTL!=null ? maliyetTL : 0);
@@ -10925,7 +10942,7 @@ function bindHesapSonucEvents(sistem, deger, unit){
       if(tutarCell) tutarCell.innerHTML = fmtAnalizTutarHtml(r.tutar, r.paraBirimi, 'satis');
       const hint = e.target.parentElement && e.target.parentElement.querySelector('div');
       if(hint){
-        hint.textContent = `${CURRENCY_INFO[r.paraBirimi].label}${getHesapIskontoPct()>0?` · liste ${fmtNum(r.listFiyat)}`:''}`;
+        hint.textContent = fmtAnalizFiyatHint(r.netFiyat, r.paraBirimi, getHesapIskontoPct(), r.listFiyat);
       }
       refreshTotals();
     });
@@ -11122,7 +11139,7 @@ function renderHesapSonucHtml(sistem, deger, basisUnit){
             <td>${esc(birimLabel)}</td>
             <td class="num">
               <input class="mono" type="number" step="any" data-fiyat-id="${m.id}" value="${esc(gosterFiyat)}" style="width:92px;text-align:right;padding:6px 8px;border-radius:8px;border:1px solid rgba(11,36,54,0.15);background:rgba(255,255,255,0.7);">
-              <div style="font-size:0.68rem;color:var(--ink-soft);margin-top:2px;">${esc(CURRENCY_INFO[r.paraBirimi].label)}${iskPct>0?` · liste ${fmtNum(r.listFiyat)}`:''}</div>
+              <div style="font-size:0.68rem;color:var(--ink-soft);margin-top:2px;">${esc(fmtAnalizFiyatHint(gosterFiyat, r.paraBirimi, iskPct, r.listFiyat))}</div>
             </td>
             <td class="num" data-basecell-id="${m.id}">${baseHtml}</td>
             <td class="num">
@@ -11140,8 +11157,8 @@ function renderHesapSonucHtml(sistem, deger, basisUnit){
 
 // Sistem malzemelerinden toplam maliyet/satış tutarı/kâr hesaplar. Malzemeler farklı
 // para birimlerinde olabilir (örn. alçıpan TL, profil USD); byCurrency ham tutarları
-// saklar, tryToplam ise Ayarlar'daki kurlarla (satış→satış tutarı, alış→maliyet)
-// tek TL toplamına çevirir. Analiz ekranı / PDF bu TL toplamını gösterir.
+// saklar, tryToplam ise Ayarlar'daki SATIŞ kuruyla tek TL toplamına çevirir
+// (malzeme analizi + teklif aktarımı satış kurunu kullanır).
 function computeHesapToplamlar(sistem, deger){
   const byCurrency = {};
   const tryToplam = { toplamTutar:0, toplamBrut:0, iskontoTutar:0, toplamMaliyet:0, kar:0 };
@@ -11157,7 +11174,7 @@ function computeHesapToplamlar(sistem, deger){
     byCurrency[cur].toplamMaliyet += r.maliyet;
     const tutarTL = toTRYSatis(r.tutar, cur);
     const brutTL = toTRYSatis(r.brutTutar!=null ? r.brutTutar : r.tutar, cur);
-    const maliyetTL = toTRYAlis(r.maliyet, cur);
+    const maliyetTL = toTRYSatis(r.maliyet, cur);
     if(tutarTL==null || brutTL==null || maliyetTL==null) missingKur = true;
     tryToplam.toplamTutar += (tutarTL!=null ? tutarTL : 0);
     tryToplam.toplamBrut += (brutTL!=null ? brutTL : 0);
@@ -12272,7 +12289,7 @@ function renderAvansZimmetTab(main, proj){
   const personelList = (proj.personel||[]).slice().sort((a,b)=>a.adSoyad.localeCompare(b.adSoyad,'tr'));
   const avansSeciliPara = (avansForm.paraBirimi && CURRENCY_INFO[avansForm.paraBirimi]) ? avansForm.paraBirimi : projectCurrency(proj);
   const avansKurGerekli = avansSeciliPara !== 'TRY';
-  const avansKurOneri = avansForm.kur || kurFieldValue(avansSeciliPara, 'alis') || '';
+  const avansKurOneri = avansForm.kur || kurFieldValue(avansSeciliPara, 'satis') || '';
   main.innerHTML = `
     <div class="card glass">
       <h2>
@@ -12301,7 +12318,7 @@ function renderAvansZimmetTab(main, proj){
           </select>
         </div>
         ${avansKurGerekli?`
-        <div class="field"><label>Alış Kuru (1 ${esc(CURRENCY_INFO[avansSeciliPara].label)} = ? TL)</label>
+        <div class="field"><label>Satış Kuru (1 ${esc(CURRENCY_INFO[avansSeciliPara].label)} = ? TL)</label>
           <input class="mono" type="number" step="any" min="0" id="av-kur" value="${esc(avansKurOneri)}" placeholder="Örn: 34.20">
         </div>`:''}
       </div>
@@ -12406,7 +12423,10 @@ function saveAvansRow(proj){
   if(tutar<=0){ showToast('Lütfen geçerli bir tutar girin.'); return; }
   const p = proj.personel.find(x=>x.id===avansForm.personelId);
   const paraBirimi = (avansForm.paraBirimi && CURRENCY_INFO[avansForm.paraBirimi]) ? avansForm.paraBirimi : projectCurrency(proj);
-  const kur = paraBirimi!=='TRY' ? (parseFloat(avansForm.kur)||null) : null;
+  // Avans: satış kuru (formda boşsa Ayarlar satış kuru kayda yazılır)
+  const kur = paraBirimi!=='TRY'
+    ? (parseFloat(avansForm.kur) || parseFloat(kurFieldValue(paraBirimi, 'satis')) || null)
+    : null;
   const row = {
     id: avansForm.id || uid(),
     personelId: avansForm.personelId,
@@ -12457,7 +12477,7 @@ function renderAvansTable(proj){
             <td>${esc(r.odemeSekli)}</td>
             <td>${esc(r.aciklama)||'—'}</td>
             <td>${esc(CURRENCY_INFO[cur].label)}</td>
-            <td class="num">${fmtMoney(r.tutar, cur)}${moneyEquivalentHtml(r, proj)}</td>
+            <td class="num">${fmtMoney(r.tutar, cur)}${moneyEquivalentHtml(r, proj, 'satis')}</td>
             <td>
               <div class="row-actions">
                 <button class="icon-btn" data-act="makbuz" title="Makbuz"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h6M9 9h1"/></svg></button>
@@ -13123,7 +13143,7 @@ async function exportTopluHesapPdf(proj, start, end, rows, totals){
 }
 
 /* ======================= TAHSİLAT (İŞVERENDEN ÖDEME) TAB ======================= */
-function emptyTahsilatForm(){ return {id:null, odemeTarihi: todayStr(), odemeYapan:'', odemeAlan:'', odemeSekli:'Nakit', aciklama:'', tutar:''}; }
+function emptyTahsilatForm(){ return {id:null, odemeTarihi: todayStr(), odemeYapan:'', odemeAlan:'', odemeSekli:'Nakit', aciklama:'', tutar:'', paraBirimi:'', kur:''}; }
 let tahsilatForm = emptyTahsilatForm();
 
 // Projede ONAYLI olan tüm tekliflerin KDV DAHİL toplamlarının toplamını verir.
@@ -13144,6 +13164,9 @@ function projeIsverenAlacakToplam(proj){
 }
 
 function renderTahsilatTab(main, proj){
+  const thSeciliPara = (tahsilatForm.paraBirimi && CURRENCY_INFO[tahsilatForm.paraBirimi]) ? tahsilatForm.paraBirimi : projectCurrency(proj);
+  const thKurGerekli = thSeciliPara !== 'TRY';
+  const thKurOneri = tahsilatForm.kur || kurFieldValue(thSeciliPara, 'alis') || '';
   main.innerHTML = `
     <div class="card glass">
       <h2>
@@ -13166,9 +13189,18 @@ function renderTahsilatTab(main, proj){
         <div class="field" style="grid-column:span 2;"><label>Açıklama</label>
           <input type="text" id="th-aciklama" value="${esc(tahsilatForm.aciklama)}" placeholder="Örn: 1. hakediş ödemesi">
         </div>
-        <div class="field"><label>Tutar (TL)</label>
+        <div class="field"><label>Tutar</label>
           <input class="mono" type="number" step="any" id="th-tutar" value="${esc(tahsilatForm.tutar)}">
         </div>
+        <div class="field"><label>Para Birimi</label>
+          <select id="th-paraBirimi">
+            ${Object.keys(CURRENCY_INFO).map(code=>`<option value="${code}" ${thSeciliPara===code?'selected':''}>${esc(CURRENCY_INFO[code].name)}</option>`).join('')}
+          </select>
+        </div>
+        ${thKurGerekli?`
+        <div class="field"><label>Alış Kuru (1 ${esc(CURRENCY_INFO[thSeciliPara].label)} = ? TL)</label>
+          <input class="mono" type="number" step="any" min="0" id="th-kur" value="${esc(thKurOneri)}" placeholder="Örn: 34.20">
+        </div>`:''}
       </div>
       <div class="btn-row">
         <button class="btn btn-primary" id="btnSaveTahsilat">${tahsilatForm.id?'Kaydı Güncelle':'Kaydı Ekle'}</button>
@@ -13220,8 +13252,15 @@ function renderTahsilatTab(main, proj){
       </div>
     </div>
   `;
-  ['odemeTarihi','odemeYapan','odemeAlan','odemeSekli','aciklama','tutar'].forEach(k=>{
-    document.getElementById('th-'+k).addEventListener('input', ()=>{ tahsilatForm[k]=document.getElementById('th-'+k).value; });
+  ['odemeTarihi','odemeYapan','odemeAlan','odemeSekli','aciklama','tutar','kur'].forEach(k=>{
+    const el = document.getElementById('th-'+k);
+    if(el) el.addEventListener('input', ()=>{ tahsilatForm[k]=el.value; });
+  });
+  const thParaSel = document.getElementById('th-paraBirimi');
+  if(thParaSel) thParaSel.addEventListener('change', ()=>{
+    tahsilatForm.paraBirimi = thParaSel.value;
+    tahsilatForm.kur = '';
+    renderTahsilatTab(main, proj);
   });
   document.getElementById('btnSaveTahsilat').onclick = ()=>saveTahsilatRow(proj);
   document.getElementById('btnClearTahsilat').onclick = ()=>{ tahsilatForm = emptyTahsilatForm(); renderMain(); };
@@ -13250,6 +13289,11 @@ function saveTahsilatRow(proj){
   if(!tahsilatForm.odemeTarihi){ showToast('Lütfen ödeme tarihini girin.'); return; }
   const tutar = parseFloat(tahsilatForm.tutar)||0;
   if(tutar<=0){ showToast('Lütfen geçerli bir tutar girin.'); return; }
+  const paraBirimi = (tahsilatForm.paraBirimi && CURRENCY_INFO[tahsilatForm.paraBirimi]) ? tahsilatForm.paraBirimi : projectCurrency(proj);
+  // Tahsilat: alış kuru (formda boşsa Ayarlar alış kuru kayda yazılır)
+  const kur = paraBirimi!=='TRY'
+    ? (parseFloat(tahsilatForm.kur) || parseFloat(kurFieldValue(paraBirimi, 'alis')) || null)
+    : null;
   const row = {
     id: tahsilatForm.id || uid(),
     odemeTarihi: tahsilatForm.odemeTarihi,
@@ -13257,7 +13301,9 @@ function saveTahsilatRow(proj){
     odemeAlan: tahsilatForm.odemeAlan.trim(),
     odemeSekli: tahsilatForm.odemeSekli,
     aciklama: tahsilatForm.aciklama.trim(),
-    tutar
+    tutar,
+    paraBirimi,
+    kur
   };
   if(tahsilatForm.id){
     const idx = proj.tahsilatlar.findIndex(r=>r.id===row.id);
@@ -13280,16 +13326,19 @@ function renderTahsilatTable(proj){
   }
   wrap.innerHTML = `
     <table>
-      <thead><tr><th>Tarih</th><th>Ödeme Yapan</th><th>Ödeme Alan</th><th>Ödeme Şekli</th><th>Açıklama</th><th class="num">Tutar</th><th></th></tr></thead>
+      <thead><tr><th>Tarih</th><th>Ödeme Yapan</th><th>Ödeme Alan</th><th>Ödeme Şekli</th><th>Açıklama</th><th>Para Birimi</th><th class="num">Tutar</th><th></th></tr></thead>
       <tbody>
-        ${rows.map(r=>`
+        ${rows.map(r=>{
+          const cur = (r.paraBirimi && CURRENCY_INFO[r.paraBirimi]) ? r.paraBirimi : projectCurrency(proj);
+          return `
           <tr data-id="${r.id}">
             <td>${fmtDateStr(r.odemeTarihi)}</td>
             <td>${esc(r.odemeYapan)||'—'}</td>
             <td>${esc(r.odemeAlan)||'—'}</td>
             <td>${esc(r.odemeSekli)}</td>
             <td>${esc(r.aciklama)||'—'}</td>
-            <td class="num">${fmtMoney(r.tutar)}</td>
+            <td>${esc(CURRENCY_INFO[cur].label)}</td>
+            <td class="num">${fmtMoney(r.tutar, cur)}${moneyEquivalentHtml(r, proj, 'alis')}</td>
             <td>
               <div class="row-actions">
                 <button class="icon-btn" data-act="makbuz" title="Makbuz"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h6M9 9h1"/></svg></button>
@@ -13297,7 +13346,8 @@ function renderTahsilatTable(proj){
                 <button class="icon-btn danger" data-act="delete" title="Sil"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0l-1 14a2 2 0 01-2 2H7a2 2 0 01-2-2L4 6h16z"/></svg></button>
               </div>
             </td>
-          </tr>`).join('')}
+          </tr>`;
+        }).join('')}
       </tbody>
     </table>
   `;
@@ -13311,7 +13361,12 @@ function renderTahsilatTable(proj){
       if(act==='makbuz'){
         exportTahsilatMakbuzPdf(proj, r);
       } else if(act==='edit'){
-        tahsilatForm = {id:r.id, odemeTarihi:r.odemeTarihi, odemeYapan:r.odemeYapan, odemeAlan:r.odemeAlan, odemeSekli:r.odemeSekli, aciklama:r.aciklama, tutar:String(r.tutar)};
+        tahsilatForm = {
+          id:r.id, odemeTarihi:r.odemeTarihi, odemeYapan:r.odemeYapan, odemeAlan:r.odemeAlan,
+          odemeSekli:r.odemeSekli, aciklama:r.aciklama, tutar:String(r.tutar),
+          paraBirimi:(r.paraBirimi && CURRENCY_INFO[r.paraBirimi]) ? r.paraBirimi : projectCurrency(proj),
+          kur: r.kur!=null? String(r.kur) : ''
+        };
         renderMain(); window.scrollTo({top:0, behavior:'smooth'});
       } else if(act==='delete'){
         confirmModal('Bu ödeme kaydını silmek istediğinize emin misiniz?', ()=>{
@@ -13326,47 +13381,55 @@ function renderTahsilatTable(proj){
 
 function renderTahsilatOzet(proj){
   const el = document.getElementById('tahsilatOzet');
+  const projCur = projectCurrency(proj);
   const toplamAlinacak = projeIsverenAlacakToplam(proj);
-  const alinan = (proj.tahsilatlar||[]).reduce((s,r)=>s+(parseFloat(r.tutar)||0),0);
+  const alinan = sumTahsilatProject(proj);
   const kalan = toplamAlinacak - alinan;
   el.innerHTML = `
-    <div class="total-chip"><span class="lbl">İşverenden Alınacak</span><span class="val">${fmtMoney(toplamAlinacak)}</span></div>
-    <div class="total-chip"><span class="lbl">Alınan Ödeme</span><span class="val">${fmtMoney(alinan)}</span></div>
-    <div class="total-chip"><span class="lbl">Kalan Ödeme</span><span class="val">${fmtMoney(kalan)}</span></div>
+    <div class="total-chip"><span class="lbl">İşverenden Alınacak</span><span class="val">${fmtMoney(toplamAlinacak, projCur)}</span></div>
+    <div class="total-chip"><span class="lbl">Alınan Ödeme</span><span class="val">${fmtMoney(alinan, projCur)}</span></div>
+    <div class="total-chip"><span class="lbl">Kalan Ödeme</span><span class="val">${fmtMoney(kalan, projCur)}</span></div>
+    ${currencyTotalChipsHtml(proj.tahsilatlar||[], proj, 'Alınan (para birimi)')}
   `;
 }
 
 async function exportTahsilatPdf(proj){
   showToast('PDF hazırlanıyor…');
   const rows = (proj.tahsilatlar||[]).slice().sort((a,b)=>(b.odemeTarihi||'').localeCompare(a.odemeTarihi||''));
+  const projCur = projectCurrency(proj);
   const toplamAlinacak = projeIsverenAlacakToplam(proj);
-  const alinan = rows.reduce((s,r)=>s+(parseFloat(r.tutar)||0),0);
+  const alinan = sumTahsilatProject(proj);
   const kalan = toplamAlinacak - alinan;
   const cellStyle = 'border:1px solid #E4EFEF;padding:5px 6px;text-align:left;word-break:break-word;';
   const html = `
     ${pdfHeaderHtml(proj, 'İşveren Ödeme Özeti')}
     <table style="width:100%;border-collapse:collapse;font-size:10px;margin-bottom:16px;table-layout:fixed;">
       <thead><tr style="background:#EAF6F5;">
-        <th style="${cellStyle}">Tarih</th><th style="${cellStyle}">Ödeme Yapan</th><th style="${cellStyle}">Ödeme Alan</th><th style="${cellStyle}">Ödeme Şekli</th><th style="${cellStyle}">Açıklama</th><th style="${cellStyle}text-align:right;">Tutar</th>
+        <th style="${cellStyle}">Tarih</th><th style="${cellStyle}">Ödeme Yapan</th><th style="${cellStyle}">Ödeme Alan</th><th style="${cellStyle}">Ödeme Şekli</th><th style="${cellStyle}">Açıklama</th><th style="${cellStyle}">PB</th><th style="${cellStyle}text-align:right;">Tutar</th>
       </tr></thead>
       <tbody>
-        ${rows.map(r=>`<tr>
+        ${rows.map(r=>{
+          const cur = (r.paraBirimi && CURRENCY_INFO[r.paraBirimi]) ? r.paraBirimi : projCur;
+          const equiv = cur!==projCur ? ` <span style="color:#8096A3;font-size:8px;">(≈ ${fmtMoney(rowToProjectCurrency(r, proj, 'alis'), projCur)})</span>` : '';
+          return `<tr>
           <td style="${cellStyle}">${fmtDateStr(r.odemeTarihi)}</td>
           <td style="${cellStyle}">${esc(r.odemeYapan)||'—'}</td>
           <td style="${cellStyle}">${esc(r.odemeAlan)||'—'}</td>
           <td style="${cellStyle}">${esc(r.odemeSekli)}</td>
           <td style="${cellStyle}">${esc(r.aciklama)||'—'}</td>
-          <td style="${cellStyle}text-align:right;">${fmtMoney(r.tutar)}</td>
-        </tr>`).join('')}
+          <td style="${cellStyle}">${esc(CURRENCY_INFO[cur].label)}</td>
+          <td style="${cellStyle}text-align:right;">${fmtMoney(r.tutar, cur)}${equiv}</td>
+        </tr>`;
+        }).join('')}
       </tbody>
       <tfoot><tr style="background:#EAF6F5;font-weight:700;">
-        <td style="${cellStyle}" colspan="5">Alınan Ödeme (Alt Toplam)</td><td style="${cellStyle}text-align:right;">${fmtMoney(alinan)}</td>
+        <td style="${cellStyle}" colspan="6">Alınan Ödeme (proje PB, alış kuru)</td><td style="${cellStyle}text-align:right;">${fmtMoney(alinan, projCur)}</td>
       </tr></tfoot>
     </table>
     <table style="width:100%;max-width:420px;border-collapse:collapse;font-size:11px;">
-      <tr><td style="padding:6px 4px;font-weight:700;">İşverenden Alınacak</td><td style="padding:6px 4px;text-align:right;">${fmtMoney(toplamAlinacak)}</td></tr>
-      <tr><td style="padding:6px 4px;font-weight:700;">Alınan Ödeme</td><td style="padding:6px 4px;text-align:right;">${fmtMoney(alinan)}</td></tr>
-      <tr style="border-top:2px solid #1C6E8C;"><td style="padding:6px 4px;font-weight:700;color:#1C6E8C;">Kalan Ödeme</td><td style="padding:6px 4px;text-align:right;font-weight:700;color:#1C6E8C;">${fmtMoney(kalan)}</td></tr>
+      <tr><td style="padding:6px 4px;font-weight:700;">İşverenden Alınacak</td><td style="padding:6px 4px;text-align:right;">${fmtMoney(toplamAlinacak, projCur)}</td></tr>
+      <tr><td style="padding:6px 4px;font-weight:700;">Alınan Ödeme</td><td style="padding:6px 4px;text-align:right;">${fmtMoney(alinan, projCur)}</td></tr>
+      <tr style="border-top:2px solid #1C6E8C;"><td style="padding:6px 4px;font-weight:700;color:#1C6E8C;">Kalan Ödeme</td><td style="padding:6px 4px;text-align:right;font-weight:700;color:#1C6E8C;">${fmtMoney(kalan, projCur)}</td></tr>
     </table>
     <div style="margin-top:36px;font-size:9px;color:#8096A3;">DNZ Metraj &amp; Teklif Yönetimi ile oluşturulmuştur.</div>
   `;
@@ -13419,12 +13482,16 @@ function makbuzHtml(proj, opts){
 // "Ödeme Listesi"ndeki (tahsilat) tek bir kayıt için makbuz PDF'i üretir.
 function exportTahsilatMakbuzPdf(proj, r){
   showToast('Makbuz hazırlanıyor…');
+  const cur = (r.paraBirimi && CURRENCY_INFO[r.paraBirimi]) ? r.paraBirimi : projectCurrency(proj);
+  const equiv = cur!==projectCurrency(proj)
+    ? ` ≈ ${fmtMoney(rowToProjectCurrency(r, proj, 'alis'), projectCurrency(proj))} (alış)`
+    : '';
   const html = makbuzHtml(proj, {
     baslik: 'ÖDEME MAKBUZU',
     makbuzNo: makbuzNoUret(r.id),
     tarih: r.odemeTarihi,
     tutar: r.tutar,
-    paraBirimi: projectCurrency(proj),
+    paraBirimi: cur,
     tutarLabel: 'Alınan Tutar',
     not: r.aciklama,
     solImzaEtiket:'ÖDEYEN', solImzaAd: r.odemeYapan||proj.employer||'',
@@ -13435,7 +13502,8 @@ function exportTahsilatMakbuzPdf(proj, r){
       {label:'Ödeme Yapan', value:r.odemeYapan||'—'},
       {label:'Ödeme Alan', value:r.odemeAlan||'—'},
       {label:'Ödeme Şekli', value:r.odemeSekli||'—'},
-      {label:'Açıklama', value:r.aciklama||'—'}
+      {label:'Para Birimi', value:CURRENCY_INFO[cur].name + (r.kur ? ` · kur ${r.kur}` : '')},
+      {label:'Açıklama', value:(r.aciklama||'—') + equiv}
     ]
   });
   showPdfPreview(html, `makbuz-${makbuzNoUret(r.id)}.pdf`, 'p');
@@ -14006,10 +14074,14 @@ function buildLiveAnalizTeklifKaynak(){
   const parsed = getHesapDeger();
   if(parsed.value==null){ showToast('Lütfen hesaplama için bir ölçü/alan girin.'); return null; }
   const basisLabel = parsed.unit==='mt' ? 'mt' : 'm²';
+  // Teklife aktarım: birim fiyat ve tutar Ayarlar satış kuruyla TL'ye çevrilir.
   const rows = collectHesapSonucRows(sistem, parsed.value).map(({m,r})=>{
     const cur = r.paraBirimi || 'TRY';
     const fiyatTL = toTRYSatis(r.netFiyat, cur);
     const tutarTL = toTRYSatis(r.tutar, cur);
+    if(cur!=='TRY' && (fiyatTL==null || tutarTL==null)){
+      console.warn('Teklif aktarımı: satış kuru eksik', m.ad, cur);
+    }
     const birimFiyat = Math.round((fiyatTL!=null ? fiyatTL : (parseFloat(r.netFiyat)||0))*100)/100;
     return {
       aciklama: `${sistem.ad} — ${m.ad}`,
@@ -14030,6 +14102,7 @@ function buildLiveAnalizTeklifKaynak(){
 }
 function buildKayitAnalizTeklifKaynak(kayit){
   if(!kayit) return null;
+  // Kayıtlı analiz → teklif: satış kuruyla TL.
   const rows = (kayit.kalemler||[]).map(k=>{
     const cur = k.paraBirimi || 'TRY';
     const fiyatTL = toTRYSatis(k.birimFiyat, cur);
@@ -14577,7 +14650,7 @@ function renderAyarlarTab(main){
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
         Döviz Kurları
       </h2>
-      <p class="hint">Alış kuru tahsilat / avans kayıtlarında; satış kuru ürün fiyatı ve analiz bölümünde TL dönüşümü için kullanılır. "Güncel Kuru Çek" piyasa alış–satış kurlarını alır. Her kaydın kendi kuru düzenlenebilir; geçmiş işlemler etkilenmez.</p>
+      <p class="hint">Alış kuru tahsilatta; satış kuru avans, malzeme analizi, teklife aktarım ve ürün TL dönüşümünde kullanılır. "Güncel Kuru Çek" piyasa alış–satış kurlarını alır. Her kaydın kendi kuru düzenlenebilir; geçmiş işlemler etkilenmez.</p>
       <div class="field-grid">
         <div class="field"><label>1 USD Alış = ? TL</label>
           <input class="mono" type="number" step="any" min="0" id="s-kurUSD-alis" value="${esc(kurFieldValue('USD','alis'))}" placeholder="Örn: 34.10">
@@ -16301,6 +16374,10 @@ window.__dnzInitApp = async function init(){
     (p.avanslar||[]).forEach(a=>{
       if(a.odemeTarihi) a.odemeTarihi = fixLegacyDateStr(a.odemeTarihi);
       if(!a.paraBirimi || !CURRENCY_INFO[a.paraBirimi]) a.paraBirimi = p.currency||'TRY';
+    });
+    (p.tahsilatlar||[]).forEach(t=>{
+      if(t.odemeTarihi) t.odemeTarihi = fixLegacyDateStr(t.odemeTarihi);
+      if(!t.paraBirimi || !CURRENCY_INFO[t.paraBirimi]) t.paraBirimi = p.currency||'TRY';
     });
     (p.masraflar||[]).forEach(m=>{
       if(!m.paraBirimi || !CURRENCY_INFO[m.paraBirimi]) m.paraBirimi = p.currency||'TRY';
