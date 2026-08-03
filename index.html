@@ -1101,6 +1101,35 @@ main{flex:1;min-width:0;width:100%;padding:0 10px 40px 10px;display:flex;flex-di
 .btn-block{width:100%;}
 .btn-sm{padding:6px 10px;font-size:0.75rem;border-radius:8px;}
 .btn-row{display:flex;gap:8px;flex-wrap:wrap;}
+.btn-row > .btn{
+  white-space:normal;
+  line-height:1.25;
+  text-align:center;
+  flex:0 1 auto;
+  max-width:100%;
+}
+/* Input yanındaki aksiyon butonları — metin kesilmesin */
+.field-actions{
+  display:flex;
+  gap:8px;
+  align-items:stretch;
+  flex-wrap:wrap;
+}
+.field-actions > input,
+.field-actions > select{
+  flex:1 1 160px;
+  min-width:0;
+}
+.field-actions > .btn{
+  flex:0 1 auto;
+  white-space:normal;
+  line-height:1.25;
+  text-align:center;
+  min-height:40px;
+  padding:8px 12px;
+  font-size:0.8rem;
+  max-width:100%;
+}
 .dashboard-toolbar{
   display:flex;flex-wrap:wrap;align-items:stretch;gap:10px;
   max-width:100%;
@@ -1821,6 +1850,16 @@ main{
   }
   .btn-row > .btn:only-child,
   .btn-row > .btn:last-child:nth-child(odd){grid-column:1 / -1;}
+  .field-actions{
+    flex-direction:column;
+    align-items:stretch;
+  }
+  .field-actions > input,
+  .field-actions > select,
+  .field-actions > .btn{
+    flex:1 1 auto;
+    width:100%;
+  }
   .dir-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;}
   .dir-btn{padding:10px 6px;font-size:0.72rem;}
   .project-item{
@@ -2226,9 +2265,6 @@ const IMALAT_TASIYICI_SIRASI = ['ana','alt','tali','ara'];
 function imalatUrunTipiLabel(id){ return IMALAT_URUN_TIPI_LABEL[id] || (id ? String(id) : '—'); }
 function imalatUrunTipiColor(id){ return IMALAT_URUN_TIPI_COLOR[id] || '#8096A3'; }
 function emptyTasiyiciAyar(){ return { parallel:'kisa', firstCm:'70', stepCm:'100', profilBoyu:'3' }; }
-function malzemeHasTasiyici(val){
-  return normalizeUrunTipleri(val).some(id=>IMALAT_TASIYICI_TIPLERI.has(id));
-}
 function seciliTasiyiciTipleri(val){
   const tips = normalizeUrunTipleri(val);
   return IMALAT_TASIYICI_SIRASI.filter(id=>tips.includes(id));
@@ -2969,7 +3005,98 @@ function defaultState(){
     // Yeni format: { USD:{alis,satis}, EUR:{alis,satis} }. Eski düz string kayıtlar
     // (USD:'34.2') okunurken hem alış hem satışa yazılarak geriye uyumlu kalır.
     dovizKurlari: { USD:{alis:'',satis:''}, EUR:{alis:'',satis:''} },
-    dovizKurGuncellenme: null
+    dovizKurGuncellenme: null,
+    // Bordro oranları (Ayarlar'dan düzenlenir). Yasal kesin hesap değil; pratik öneri.
+    bordroOranlari: null
+  };
+}
+/** Varsayılan bordro oranları (%). Kullanıcı Ayarlar'dan güncelleyebilir. */
+function defaultBordroOranlari(){
+  return {
+    asgariUcret: 33030,       // 2026 aylık brüt asgari (TL) — Ayarlar'dan güncellenebilir
+    asgariUcretNet: 28075.50, // 2026 aylık net asgari (bilgi)
+    asgariUcretYil: 2026,
+    sskIsciOran: 14,          // SGK işçi payı %
+    issizlikIsciOran: 1,      // işsizlik işçi %
+    sskIsverenOran: 20.5,     // SGK işveren % (indirimsiz yaklaşık; Ayarlar'dan düzenleyin)
+    issizlikIsverenOran: 2,   // işsizlik işveren %
+    damgaOran: 0.759,         // damga vergisi %
+    gvOran: 15,               // basitleştirilmiş GV % (asgari üstü matrah)
+    gvAsgariIstisna: true     // asgari ücrete kadar GV + damga ≈ 0
+  };
+}
+/** Eski resmi brüt/net asgari tutarları → güncel 2026 brüt değerine yükselt */
+const ESKI_ASGARI_BRUT = [20002.5, 20002.50, 26005.5, 26005.50];
+const ESKI_ASGARI_NET_YANLIS = [17002.12, 22104.67, 28075.5, 28075.50];
+function migrateBordroOranlariAsgari(){
+  if(!state || !state.bordroOranlari || typeof state.bordroOranlari !== 'object') return false;
+  const d = defaultBordroOranlari();
+  const cur = parseFloat(state.bordroOranlari.asgariUcret);
+  if(!(cur > 0)) {
+    state.bordroOranlari.asgariUcret = d.asgariUcret;
+    state.bordroOranlari.asgariUcretYil = d.asgariUcretYil;
+    return true;
+  }
+  const eskiBrut = ESKI_ASGARI_BRUT.some(v => Math.abs(cur - v) < 1);
+  const netYanlis = ESKI_ASGARI_NET_YANLIS.some(v => Math.abs(cur - v) < 1);
+  if(eskiBrut || netYanlis){
+    state.bordroOranlari.asgariUcret = d.asgariUcret;
+    state.bordroOranlari.asgariUcretYil = d.asgariUcretYil;
+    return true;
+  }
+  if(Math.abs(cur - d.asgariUcret) < 0.5 && state.bordroOranlari.asgariUcretYil !== d.asgariUcretYil){
+    state.bordroOranlari.asgariUcretYil = d.asgariUcretYil;
+    return true;
+  }
+  return false;
+}
+function getBordroOranlari(){
+  const d = defaultBordroOranlari();
+  const s = (state && state.bordroOranlari && typeof state.bordroOranlari==='object') ? state.bordroOranlari : {};
+  const out = Object.assign({}, d, s);
+  Object.keys(d).forEach(k=>{
+    if(k==='gvAsgariIstisna'){
+      out[k] = s[k]===false || s[k]==='false' || s[k]===0 || s[k]==='0' ? false : true;
+    } else if(k==='asgariUcretYil'){
+      const n = parseInt(out[k],10);
+      out[k] = isFinite(n) && n>0 ? n : d[k];
+    } else {
+      const n = parseFloat(out[k]);
+      out[k] = isFinite(n) ? n : d[k];
+    }
+  });
+  return out;
+}
+/**
+ * Brüt üzerinden SSK / GV / damga önerisi.
+ * Not: Resmi e-Bildirge/muhasebe yerine geçmez; şantiye tahmini içindir.
+ */
+function hesaplaBordroKesintiler(brut, opts){
+  opts = opts || {};
+  const o = getBordroOranlari();
+  const B = Math.max(0, parseFloat(brut)||0);
+  const asgari = Math.max(0, parseFloat(opts.asgariUcret!=null && opts.asgariUcret!=='' ? opts.asgariUcret : o.asgariUcret)||0);
+  const sskIsci = Math.round(B * (o.sskIsciOran/100) * 100)/100;
+  const issizlikIsci = Math.round(B * (o.issizlikIsciOran/100) * 100)/100;
+  const sskIsciToplam = Math.round((sskIsci + issizlikIsci)*100)/100;
+  const sskIsveren = Math.round(B * ((o.sskIsverenOran + o.issizlikIsverenOran)/100) * 100)/100;
+  let damgaVergisi = Math.round(B * (o.damgaOran/100) * 100)/100;
+  let gvMatrah = Math.max(0, B - sskIsciToplam);
+  if(o.gvAsgariIstisna && asgari>0){
+    // Asgari ücret istisnası: asgari seviyesine kadar GV ve damga yok (2022+ uygulama)
+    const istisnaMatrah = Math.max(0, asgari - Math.round(asgari * ((o.sskIsciOran+o.issizlikIsciOran)/100) * 100)/100);
+    gvMatrah = Math.max(0, gvMatrah - istisnaMatrah);
+    const damgaIstisna = Math.round(asgari * (o.damgaOran/100) * 100)/100;
+    damgaVergisi = Math.max(0, Math.round((damgaVergisi - damgaIstisna)*100)/100);
+  }
+  const gelirVergisi = Math.round(gvMatrah * (o.gvOran/100) * 100)/100;
+  return {
+    asgariUcret: asgari,
+    sskIsci: sskIsciToplam,
+    sskIsveren,
+    gelirVergisi,
+    damgaVergisi,
+    detay: { sskIsci, issizlikIsci, gvMatrah }
   };
 }
 function yeniTeklifKaydi(ad){
@@ -3009,6 +3136,8 @@ function newProject(name, employer){
     personel:[],
     avanslar:[],
     zimmetler:[],
+    bordrolar:[],
+    personelGiderler:[],
     tahsilatlar:[],
     manuelIsverenAlacak:'',
     masraflar:[],
@@ -3082,36 +3211,6 @@ function yeniTeklifEkleGlobal(){
   ui.aktifTeklifKayitId = t.id;
   return t;
 }
-// Bir projenin "şu an ekranda açık olan" bağlı teklifini döndürür (finans/PDF köprüleri).
-function aktifTeklif(proj){
-  const list = projeTumTeklifler(proj);
-  if(!list.length) return null;
-  let t = list.find(x=>x.id===proj.aktifTeklifId);
-  if(!t){ t = list[0]; proj.aktifTeklifId = t.id; }
-  return normalizeTeklifFields(t);
-}
-function loadAktifTeklifToProj(proj){
-  const t = aktifTeklif(proj);
-  if(!t){
-    proj.teklifRows = [];
-    proj.teklifNote = '';
-    proj.teklifOnaylandi = true;
-    return null;
-  }
-  proj.teklifRows = t.teklifRows;
-  proj.teklifNote = t.teklifNote;
-  proj.teklifOnaylandi = t.teklifOnaylandi;
-  proj.aktifTeklifId = t.id;
-  return t;
-}
-function syncProjToAktifTeklif(proj){
-  const t = aktifTeklif(proj);
-  if(!t) return null;
-  t.teklifRows = proj.teklifRows;
-  t.teklifNote = proj.teklifNote;
-  t.teklifOnaylandi = proj.teklifOnaylandi;
-  return t;
-}
 // Projedeki TÜM bağlı teklifler (state.teklifKayitlari üzerinden).
 function projeTumTeklifler(proj){
   if(!proj) return [];
@@ -3119,16 +3218,6 @@ function projeTumTeklifler(proj){
 }
 function projeTumTeklifKalemleri(proj){
   return projeTumTeklifler(proj).flatMap(t=>t.teklifRows||[]);
-}
-// Eski isim — yeni teklif global listeye eklenir; isteğe bağlı aktif projeye bağlanır.
-function yeniTeklifEkle(proj){
-  const t = yeniTeklifEkleGlobal();
-  if(proj && proj.id){
-    t.projectId = proj.id;
-    proj.aktifTeklifId = t.id;
-    loadAktifTeklifToProj(proj);
-  }
-  return t;
 }
 function teklifKdvliToplam(teklif){
   if(!teklif) return { net:0, oran:0, kdv:0, brut:0 };
@@ -3187,6 +3276,10 @@ let ui = {
   puantajAy: currentYm(),
   avansFilterId:'',
   zimmetFilterId:'',
+  bordroFilterId:'',
+  personelGiderFilterId:'',
+  bordroTopluDonem: currentYm(),
+  bordroTopluOdeme: isoToday(),
   topluIcmalId:'',
   topluIcmalStart: isoMonthStart(),
   topluIcmalEnd: isoToday(),
@@ -3313,11 +3406,14 @@ function normalizeImalatCatalogState(s){
       if(!m.tasiyiciAyarlari || typeof m.tasiyiciAyarlari !== 'object') m.tasiyiciAyarlari = {};
       if(!m.tipAyarlari || typeof m.tipAyarlari !== 'object') m.tipAyarlari = {};
       if(!m.paraBirimi || !CURRENCY_INFO[m.paraBirimi]) m.paraBirimi = 'TRY';
+      if(m.kur===undefined) m.kur = null;
     });
   });
   s.urunler.forEach(u=>{
     if(!u || typeof u !== 'object') return;
     if(!u.id) u.id = uid();
+    if(!u.paraBirimi || !CURRENCY_INFO[u.paraBirimi]) u.paraBirimi = 'TRY';
+    if(u.kur===undefined || u.kur===null) u.kur = null;
   });
 }
 function imalatCatalogHasData(catalog){
@@ -3737,29 +3833,25 @@ function convertMoney(amount, fromCur, toCur, rowKurToTRY, tip){
 function toTRYSatis(amount, currency, rowKur){
   return convertMoney(amount, (currency && CURRENCY_INFO[currency]) ? currency : 'TRY', 'TRY', rowKur, 'satis');
 }
-// Tahsilat/avans tarafında döviz tutarını TL'ye çevirir (alış kuru). Çevrilemezse null.
-function toTRYAlis(amount, currency, rowKur){
-  return convertMoney(amount, (currency && CURRENCY_INFO[currency]) ? currency : 'TRY', 'TRY', rowKur, 'alis');
-}
 // Analiz satır tutarını TL metni + varsa orijinal döviz ipucu olarak döndürür.
 // Malzeme analizi / teklif varsayılanı satış kurudur.
-function fmtAnalizTutarHtml(amount, paraBirimi, tip){
+function fmtAnalizTutarHtml(amount, paraBirimi, tip, rowKur){
   const cur = (paraBirimi && CURRENCY_INFO[paraBirimi]) ? paraBirimi : 'TRY';
   const rateTip = (tip==='alis') ? 'alis' : 'satis';
   if(cur==='TRY') return fmtMoney(amount, 'TRY');
-  const tl = convertMoney(amount, cur, 'TRY', null, rateTip);
+  const tl = convertMoney(amount, cur, 'TRY', rowKur, rateTip);
   if(tl==null){
     return `${fmtMoney(amount, cur)}<div style="font-size:0.66rem;color:#c77700;font-weight:600;">satış kuru girilmedi</div>`;
   }
   return `${fmtMoney(tl, 'TRY')}<div style="font-size:0.66rem;color:var(--ink-soft);">${fmtMoney(amount, cur)} · satış</div>`;
 }
 // Birim fiyat altındaki küçük ipucu: para birimi + (dövizse) satış kuruyla TL karşılığı.
-function fmtAnalizFiyatHint(fiyat, paraBirimi, iskPct, listFiyat){
+function fmtAnalizFiyatHint(fiyat, paraBirimi, iskPct, listFiyat, rowKur){
   const cur = (paraBirimi && CURRENCY_INFO[paraBirimi]) ? paraBirimi : 'TRY';
   let t = CURRENCY_INFO[cur].label;
   if(iskPct>0) t += ` · liste ${fmtNum(listFiyat)}`;
   if(cur!=='TRY'){
-    const tl = toTRYSatis(fiyat, cur);
+    const tl = toTRYSatis(fiyat, cur, rowKur);
     t += tl!=null ? ` · ≈ ${fmtMoney(tl, 'TRY')} (satış)` : ' · satış kuru yok';
   }
   return t;
@@ -4278,9 +4370,11 @@ function renderRaporlarTab(main, proj){
   else if(ui.raporTab==='tahsilat') renderTahsilatTab(sub, proj);
 }
 
-/* ======================= MASRAFLAR (Avans/Zimmet / Masraf / Yemek) ======================= */
+/* ======================= MASRAFLAR (Avans/Zimmet / Masraf / Yemek / Bordro / Personel Gider) ======================= */
 const MASRAFLAR_SUBTABS = [
   {key:'avanszimmet', label:'Avans/Zimmet', icon:'<rect x="2" y="6" width="20" height="13" rx="2"/><path d="M2 10h20"/><path d="M6 15h4"/>'},
+  {key:'bordro', label:'Maaş Bordro', icon:'<path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h5"/><path d="M12 1v22M17 5H9.5"/>'},
+  {key:'personelgider', label:'Personel Gider', icon:'<path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/>'},
   {key:'masraf', label:'Masraf', icon:'<path d="M20 12V8H6a2 2 0 010-4h12v4"/><path d="M4 6v12a2 2 0 002 2h14v-4"/><path d="M18 12a2 2 0 000 4h4v-4z"/>'},
   {key:'yemek', label:'Yemek', icon:'<path d="M3 2v7c0 1.1.9 2 2 2h1v11"/><path d="M6 2v10"/><path d="M9 2v10"/><path d="M18 2a5 5 0 00-5 5v6h3v9"/>'}
 ];
@@ -4292,7 +4386,7 @@ function renderMasraflarTab(main, proj){
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="6" width="20" height="13" rx="2"/><path d="M2 10h20"/><path d="M6 15h4"/></svg>
         Masraflar — <span style="color:var(--aqua-dim)">${esc(proj.name)}</span>
       </h2>
-      <p class="hint">Avans/Zimmet, Masraf ve Yemek kayıtlarının tümüne buradan ulaşabilir, filtreleyebilir ve PDF çıktısı alabilirsiniz. Tahsilat kayıtları Raporlar bölümündedir.</p>
+      <p class="hint">Avans/Zimmet, Maaş Bordro (SSK / asgari / kesintiler), Personel Gider, Masraf ve Yemek kayıtlarına buradan ulaşabilirsiniz. Tahsilat Raporlar bölümündedir.</p>
       <div class="report-subnav" id="masraflarSubnav">
         ${MASRAFLAR_SUBTABS.map(t=>`
           <button class="report-subtab-btn ripple-el-host ${ui.masraflarTab===t.key?'active':''}" data-mas="${t.key}">
@@ -4313,6 +4407,8 @@ function renderMasraflarTab(main, proj){
   });
   const sub = document.getElementById('masraflarSubContent');
   if(ui.masraflarTab==='avanszimmet') renderAvansZimmetTab(sub, proj);
+  else if(ui.masraflarTab==='bordro') renderBordroTab(sub, proj);
+  else if(ui.masraflarTab==='personelgider') renderPersonelGiderTab(sub, proj);
   else if(ui.masraflarTab==='masraf') renderMasrafTab(sub, proj);
   else if(ui.masraflarTab==='yemek') renderYemekTab(sub, proj);
 }
@@ -4329,6 +4425,8 @@ function projeDurum(p){ return (p.durum && PROJE_DURUM_META[p.durum]) ? p.durum 
 const DASHBOARD_QUICK_ACTIONS = [
   {key:'avans', label:'Avans Ekle', needsProject:true, icon:'<rect x="2" y="6" width="20" height="13" rx="2"/><path d="M2 10h20"/><path d="M6 15h4"/>', go:()=>{ ui.tab='masraflar'; ui.masraflarTab='avanszimmet'; }},
   {key:'zimmet', label:'Zimmet Ekle', needsProject:true, icon:'<path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/><path d="M3.3 7L12 12l8.7-5M12 22V12"/>', go:()=>{ ui.tab='masraflar'; ui.masraflarTab='avanszimmet'; }},
+  {key:'bordro', label:'Maaş Bordro', needsProject:true, icon:'<path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h5"/>', go:()=>{ ui.tab='masraflar'; ui.masraflarTab='bordro'; }},
+  {key:'personelgider', label:'Personel Gider', needsProject:true, icon:'<path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5"/>', go:()=>{ ui.tab='masraflar'; ui.masraflarTab='personelgider'; }},
   {key:'tahsilat', label:'Tahsilat Ekle', needsProject:true, icon:'<path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/>', go:()=>{ ui.tab='raporlar'; ui.raporTab='tahsilat'; }},
   {key:'masraf', label:'Masraf Ekle', needsProject:true, icon:'<path d="M20 12V8H6a2 2 0 010-4h12v4"/><path d="M4 6v12a2 2 0 002 2h14v-4"/><path d="M18 12a2 2 0 000 4h4v-4z"/>', go:()=>{ ui.tab='masraflar'; ui.masraflarTab='masraf'; }},
   {key:'teklif', label:'Teklif Ekle', needsProject:false, icon:'<path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/>', go:()=>{ ui.tab='teklif'; }},
@@ -4350,13 +4448,6 @@ function runDashboardQuickAction(key){
   renderMain();
   pushAppHistory();
   window.scrollTo({top:0, behavior:'smooth'});
-}
-function focusGlobalArama(){
-  const input = document.getElementById('globalAramaInput');
-  if(input){
-    input.scrollIntoView({behavior:'smooth', block:'center'});
-    setTimeout(()=>input.focus(), 350);
-  }
 }
 /* ---- Anasayfa Hava Durumu: Şantiye Günlüğü'ndeki widget ile aynı ücretsiz open-meteo.com
    servisini kullanır, ancak projeye değil doğrudan state.dashboardHavaKonum'a bağlıdır;
@@ -4672,6 +4763,18 @@ function collectGlobalAramaResults(query){
         results.push({kind:'avans', proj, id:r.id, label:'Avans: '+(r.adSoyad||'—'), sublabel:(r.aciklama? r.aciklama+' · ':'')+proj.name});
       }
     });
+    (proj.bordrolar||[]).forEach(r=>{
+      const hay = normKey(r.adSoyad) + ' ' + normKey(r.donem) + ' ' + normKey(r.aciklama);
+      if(hay.includes(q)){
+        results.push({kind:'bordro', proj, id:r.id, label:'Bordro: '+(r.adSoyad||'—'), sublabel:(r.donem? r.donem+' · ':'')+proj.name});
+      }
+    });
+    (proj.personelGiderler||[]).forEach(r=>{
+      const hay = normKey(r.adSoyad) + ' ' + normKey(r.giderTuru) + ' ' + normKey(r.aciklama);
+      if(hay.includes(q)){
+        results.push({kind:'personelgider', proj, id:r.id, label:'Gider: '+(r.giderTuru||r.adSoyad||'—'), sublabel:(r.adSoyad? r.adSoyad+' · ':'')+proj.name});
+      }
+    });
     (proj.zimmetler||[]).forEach(r=>{
       const hay = normKey(r.adSoyad) + ' ' + normKey(r.markaModel) + ' ' + normKey(r.aciklama);
       if(hay.includes(q)){
@@ -4743,6 +4846,8 @@ const ARAMA_TAB_MAP = {
   masraf:{tab:'masraflar', masraflarTab:'masraf'},
   avans:{tab:'masraflar', masraflarTab:'avanszimmet'},
   zimmet:{tab:'masraflar', masraflarTab:'avanszimmet'},
+  bordro:{tab:'masraflar', masraflarTab:'bordro'},
+  personelgider:{tab:'masraflar', masraflarTab:'personelgider'},
   tahsilat:{tab:'raporlar', raporTab:'tahsilat'},
   yemek:{tab:'masraflar', masraflarTab:'yemek'},
   gunluk:{tab:'gunluk'}
@@ -4827,7 +4932,7 @@ function goToPersonel(projId, personId){
   const p = (proj.personel||[]).find(x=>x.id===personId);
   if(!p) return;
   state.activeProjectId = projId;
-  personelForm = {id:p.id, adSoyad:p.adSoyad, babaAdi:p.babaAdi, kimlikNo:p.kimlikNo, banka:p.banka, girisTarihi:p.girisTarihi, cikisTarihi:p.cikisTarihi, pozisyon:p.pozisyon, yevmiye:String(p.yevmiye), dosya:p.dosya||null};
+  personelForm = {id:p.id, adSoyad:p.adSoyad, babaAdi:p.babaAdi, kimlikNo:p.kimlikNo, banka:p.banka, girisTarihi:p.girisTarihi, cikisTarihi:p.cikisTarihi, pozisyon:p.pozisyon, yevmiye:String(p.yevmiye??''), aylikMaas:String(p.aylikMaas??''), asgariUcretli:!!p.asgariUcretli, dosya:p.dosya||null};
   ui.tab = 'personel';
   ui.personelHighlightId = p.id;
   saveState();
@@ -4859,7 +4964,7 @@ function renderGenelOzetHtml(){
     toplamMetraj += (p.metrajRows||[]).length;
     toplamTeklif += projeTumTeklifKalemleri(p).length;
     const cur = projectCurrency(p);
-    if(!paraToplamlari[cur]) paraToplamlari[cur] = {hakedis:0,tahsilat:0,odenecek:0,odenen:0,masraf:0,yemek:0};
+    if(!paraToplamlari[cur]) paraToplamlari[cur] = {hakedis:0,tahsilat:0,odenecek:0,odenen:0,masraf:0,yemek:0,personelGider:0};
     const t = paraToplamlari[cur];
     t.hakedis += projeIsverenAlacakToplam(p);
     t.tahsilat += sumTahsilatProject(p);
@@ -4867,12 +4972,13 @@ function renderGenelOzetHtml(){
     t.odenen += projeCalisanaOdenenToplam(p);
     t.masraf += projeMasrafToplam(p);
     t.yemek += projeYemekToplam(p);
+    t.personelGider += projePersonelGiderToplam(p) + projeBordroSskIsverenToplam(p);
   });
   const paraBlocklariHtml = Object.keys(paraToplamlari).map(cur=>{
     const t = paraToplamlari[cur];
     const kalanIsveren = t.hakedis - t.tahsilat;
     const kalanCalisan = t.odenecek - t.odenen;
-    const genelKalanKar = t.hakedis - t.odenecek - t.masraf - t.yemek;
+    const genelKalanKar = t.hakedis - t.odenecek - t.masraf - t.yemek - (t.personelGider||0);
     const paraBaslik = Object.keys(paraToplamlari).length>1 ? ` — ${esc(CURRENCY_INFO[cur].label)}` : '';
     return `
       <div class="field-grid" style="grid-template-columns:repeat(auto-fill,minmax(210px,1fr));">
@@ -4937,14 +5043,15 @@ function renderProjeBilgiPanosuHtml(proj){
   const kalanCalisan = calisanaOdenecek - calisanaOdenen;
   const masrafToplam = projeMasrafToplam(proj);
   const yemekToplam = projeYemekToplam(proj);
-  const kalanKar = hakedisToplam - calisanaOdenecek - masrafToplam - yemekToplam;
+  const personelGiderToplam = projePersonelGiderToplam(proj) + projeBordroSskIsverenToplam(proj);
+  const kalanKar = hakedisToplam - calisanaOdenecek - masrafToplam - yemekToplam - personelGiderToplam;
   return `
     <div class="card glass">
       <h2>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/></svg>
         Proje Bilgilendirme Panosu — <span style="color:var(--aqua-dim)">${esc(proj.name)}</span>
       </h2>
-      <p class="hint">İşveren ve çalışan hesapları ile proje kârının genel görünümü. Tutarlar; Teklif, Tahsilat, Puantaj/Mesai, Avans ve Masraf modüllerindeki kayıtlardan otomatik hesaplanır.</p>
+      <p class="hint">İşveren ve çalışan hesapları ile proje kârının genel görünümü. Tutarlar; Teklif, Tahsilat, Puantaj/Mesai, Avans, Maaş Bordro, Personel Gider ve Masraf kayıtlarından otomatik hesaplanır.</p>
       ${(proj.baslangicTarihi || proj.bitisTarihi) ? `<p class="hint"><b>Proje Süresi:</b> ${proj.baslangicTarihi? fmtDateStr(proj.baslangicTarihi) : 'Başlangıç belirtilmedi'} — ${proj.bitisTarihi? fmtDateStr(proj.bitisTarihi) : 'Bitiş belirtilmedi'}</p>` : ''}
       <div class="field-grid" style="grid-template-columns:repeat(auto-fill,minmax(210px,1fr));">
         <div class="card glass" style="padding:12px;gap:8px;">
@@ -4968,6 +5075,7 @@ function renderProjeBilgiPanosuHtml(proj){
           <div class="totals-strip">
             <div class="total-chip"><span class="lbl">Yapılan Masraf</span><span class="val">${fmtMoney(masrafToplam)}</span></div>
             <div class="total-chip"><span class="lbl">Yemek Masrafı</span><span class="val">${fmtMoney(yemekToplam)}</span></div>
+            <div class="total-chip"><span class="lbl">Personel Gider + SSK İşv.</span><span class="val">${fmtMoney(personelGiderToplam)}</span></div>
             <div class="total-chip"><span class="lbl">Kalan Kâr</span><span class="val">${fmtMoney(kalanKar)}</span></div>
           </div>
         </div>
@@ -5067,33 +5175,6 @@ function confirmModal(msg, onYes){
   document.getElementById('cCancel').onclick = closeModal;
   document.getElementById('modalBackdrop').addEventListener('click',(e)=>{ if(e.target.id==='modalBackdrop') closeModal(); });
   document.getElementById('cYes').onclick = ()=>{ closeModal(); onYes(); };
-}
-
-// Kullanıcıdan tek satırlık metin girişi almak için (ör. teklif adı) confirmModal ile
-// aynı görsel dile sahip küçük bir modal. onOk yalnızca "Kaydet"e basılırsa çağrılır.
-function promptModal(title, msg, initialValue, onOk){
-  const modalRoot = document.getElementById('modalRoot');
-  modalRoot.innerHTML = `
-    <div class="modal-backdrop" id="modalBackdrop">
-      <div class="modal glass-strong glass">
-        <h3>${esc(title)}</h3>
-        ${msg ? `<p class="hint">${esc(msg)}</p>` : ''}
-        <div class="field" style="margin-top:8px;">
-          <input type="text" id="pmInput" value="${esc(initialValue||'')}">
-        </div>
-        <div class="btn-row" style="margin-top:10px;justify-content:flex-end;">
-          <button class="btn btn-ghost" id="pmCancel">Vazgeç</button>
-          <button class="btn btn-primary" id="pmOk">Kaydet</button>
-        </div>
-      </div>
-    </div>`;
-  const input = document.getElementById('pmInput');
-  document.getElementById('pmCancel').onclick = closeModal;
-  document.getElementById('modalBackdrop').addEventListener('click',(e)=>{ if(e.target.id==='modalBackdrop') closeModal(); });
-  const submit = ()=>{ const val = input.value; closeModal(); onOk(val); };
-  document.getElementById('pmOk').onclick = submit;
-  input.addEventListener('keydown',(e)=>{ if(e.key==='Enter') submit(); });
-  input.focus(); input.select();
 }
 
 // KVKK / gizlilik bilgilendirme modalı. Bu, bir hukuki metin değil; kullanıcıya
@@ -5649,7 +5730,8 @@ function renderRaporDashboardTab(main, proj){
     const kalanCalisan = odenecek - odenen;
     const masrafToplam = projeMasrafToplam(proj);
     const yemekToplam = projeYemekToplam(proj);
-    const kalanKar = hakedis - odenecek - masrafToplam - yemekToplam;
+    const personelGiderToplam = projePersonelGiderToplam(proj) + projeBordroSskIsverenToplam(proj);
+    const kalanKar = hakedis - odenecek - masrafToplam - yemekToplam - personelGiderToplam;
 
     const personelList = proj.personel || [];
     const aktifSayi = personelList.filter(p=>personelStatus(p).cls==='aktif').length;
@@ -6409,7 +6491,7 @@ let imalatSistemForm = emptyImalatSistemForm();
 function emptyImalatMalzemeForm(){
   return {
     id:null, ad:'', urunTipi:[], paketAdet:'',
-    alisFiyat:'', satisFiyat:'', paraBirimi:'TRY',
+    alisFiyat:'', satisFiyat:'', paraBirimi:'TRY', kur:'',
     grup:1, ciftHesap:false,
     tasiyiciAyarlari:{},
     tipAyarlari:{}
@@ -6422,12 +6504,10 @@ let imalatMalzemeForm = emptyImalatMalzemeForm();
 // ortaktır — imalatSistemleri ile aynı mantık). Bir sisteme malzeme eklerken "Malzeme Adı"
 // kutusuna bu listeden bir ürün seçilirse, Alış Fiyatı ve Satış Fiyatı otomatik doldurulur;
 // kullanıcı dilerse bu fiyatları elle değiştirebilir.
-function emptyUrunForm(){ return {id:null, ad:'', birim:'', alisFiyat:'', satisFiyat:''}; }
+function emptyUrunForm(){ return {id:null, ad:'', birim:'', alisFiyat:'', satisFiyat:'', paraBirimi:'TRY', kur:''}; }
 let urunForm = emptyUrunForm();
-function findUrunByAd(ad){
-  if(!ad) return null;
-  const key = normKey(ad);
-  return (state.urunler||[]).find(u=>normKey(u.ad)===key) || null;
+function urunParaBirimi(u){
+  return (u && u.paraBirimi && CURRENCY_INFO[u.paraBirimi]) ? u.paraBirimi : 'TRY';
 }
 
 function renderImalatTab(main){
@@ -6517,7 +6597,7 @@ function renderImalatTanimSection(sub){
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
         Ürün Ekle
       </h2>
-      <p class="hint">Kullandığınız ürünleri (ör. "Alçıpan Levha 12.5mm") birimi, alış ve satış fiyatlarıyla buraya kaydedin. Bu liste tüm imalat sistemlerinde ortak kullanılır: aşağıda bir sisteme malzeme eklerken "Malzeme Adı" kutusundan bu ürünlerden birini seçtiğinizde Alış ve Satış Fiyatı otomatik gelir; isterseniz sonradan değiştirebilirsiniz.</p>
+      <p class="hint">Kullandığınız ürünleri (ör. "Alçıpan Levha 12.5mm") birimi, para birimi, alış/satış fiyatı ve (dövizse) kuruyla kaydedin. Bu liste tüm imalat sistemlerinde ortaktır; malzeme eklerken ürün seçince fiyat, para birimi ve kur otomatik gelir.</p>
       <div class="field-grid">
         <div class="field" style="grid-column:span 2;"><label>Ürün Adı</label>
           <input type="text" id="ur-ad" value="${esc(urunForm.ad)}" placeholder="Örn: Alçıpan Levha 12.5mm">
@@ -6528,8 +6608,21 @@ function renderImalatTanimSection(sub){
             ${IMALAT_UNITS.map(u=>`<option value="${u}" ${(urunForm.birim||'')===u?'selected':''}>${esc(UNIT_LABEL[u]||u)}</option>`).join('')}
           </select>
         </div>
-        <div class="field"><label>Alış Fiyatı (TL)</label><input class="mono" type="number" step="any" id="ur-alisFiyat" value="${esc(urunForm.alisFiyat)}"></div>
-        <div class="field"><label>Satış Fiyatı (TL)</label><input class="mono" type="number" step="any" id="ur-satisFiyat" value="${esc(urunForm.satisFiyat)}"></div>
+        <div class="field"><label>Para Birimi</label>
+          <select id="ur-paraBirimi">
+            ${Object.keys(CURRENCY_INFO).map(code=>`<option value="${code}" ${(urunForm.paraBirimi||'TRY')===code?'selected':''}>${esc(CURRENCY_INFO[code].name)}</option>`).join('')}
+          </select>
+        </div>
+        ${(()=>{
+          const cur = (urunForm.paraBirimi && CURRENCY_INFO[urunForm.paraBirimi]) ? urunForm.paraBirimi : 'TRY';
+          if(cur==='TRY') return '';
+          const kurOneri = urunForm.kur || kurFieldValue(cur, 'satis') || '';
+          return `<div class="field"><label>Satış Kuru (1 ${esc(CURRENCY_INFO[cur].label)} = ? TL)</label>
+            <input class="mono" type="number" step="any" min="0" id="ur-kur" value="${esc(kurOneri)}" placeholder="Örn: 34.20">
+          </div>`;
+        })()}
+        <div class="field"><label>Alış Fiyatı</label><input class="mono" type="number" step="any" id="ur-alisFiyat" value="${esc(urunForm.alisFiyat)}"></div>
+        <div class="field"><label>Satış Fiyatı</label><input class="mono" type="number" step="any" id="ur-satisFiyat" value="${esc(urunForm.satisFiyat)}"></div>
       </div>
       <div class="btn-row">
         <button class="btn btn-primary ripple-el-host" id="btnSaveUrun">${urunForm.id? 'Ürünü Güncelle':'Ürünü Kaydet'}</button>
@@ -6689,11 +6782,12 @@ function renderUrunTableHtml(){
         <div class="urun-kart" data-id="${u.id}">
           <div class="urun-kart-body">
             <b class="urun-kart-ad">${esc(u.ad)}</b>
-            <span class="urun-kart-meta">${esc(UNIT_LABEL[u.birim]||u.birim||'Birim yok')}</span>
+            <span class="urun-kart-meta">${esc(UNIT_LABEL[u.birim]||u.birim||'Birim yok')} · ${esc(CURRENCY_INFO[urunParaBirimi(u)].label)}</span>
             <div class="urun-kart-fiyat">
-              <span>Alış <strong>${fmtMoney(u.alisFiyat)}</strong></span>
-              <span>Satış <strong>${fmtMoney(u.satisFiyat)}</strong></span>
+              <span>Alış <strong>${fmtMoney(u.alisFiyat, urunParaBirimi(u))}</strong></span>
+              <span>Satış <strong>${fmtMoney(u.satisFiyat, urunParaBirimi(u))}</strong></span>
             </div>
+            ${urunParaBirimi(u)!=='TRY' ? `<div class="urun-kart-meta" style="margin-top:4px;">Kur: ${u.kur!=null && u.kur!=='' ? esc(String(u.kur)) : (kurFieldValue(urunParaBirimi(u),'satis')||'Ayarlar’dan')}</div>` : ''}
           </div>
           <div class="row-actions">
             <button class="icon-btn" data-act="edit" title="Düzenle">
@@ -6714,10 +6808,19 @@ function bindUrunFiyatEvents(){
   const birimEl = document.getElementById('ur-birim');
   const alisEl = document.getElementById('ur-alisFiyat');
   const satisEl = document.getElementById('ur-satisFiyat');
+  const paraEl = document.getElementById('ur-paraBirimi');
+  const kurEl = document.getElementById('ur-kur');
   if(adEl) adEl.addEventListener('input', ()=>{ urunForm.ad = adEl.value; });
   if(birimEl) birimEl.addEventListener('change', ()=>{ urunForm.birim = birimEl.value; });
   if(alisEl) alisEl.addEventListener('input', ()=>{ urunForm.alisFiyat = alisEl.value; });
   if(satisEl) satisEl.addEventListener('input', ()=>{ urunForm.satisFiyat = satisEl.value; });
+  if(kurEl) kurEl.addEventListener('input', ()=>{ urunForm.kur = kurEl.value; });
+  if(paraEl) paraEl.addEventListener('change', ()=>{
+    urunForm.paraBirimi = paraEl.value;
+    if(paraEl.value==='TRY') urunForm.kur = '';
+    else if(!urunForm.kur) urunForm.kur = kurFieldValue(paraEl.value, 'satis') || '';
+    renderImalatTab(document.getElementById('mainContent'));
+  });
   const saveBtn = document.getElementById('btnSaveUrun');
   if(saveBtn) saveBtn.onclick = ()=>saveUrun();
   const clearBtn = document.getElementById('btnClearUrun');
@@ -6757,7 +6860,13 @@ function bindUrunFiyatEvents(){
       if(act==='edit'){
         const u = (state.urunler||[]).find(x=>x.id===id);
         if(u){
-          urunForm = {id:u.id, ad:u.ad, birim:u.birim||'', alisFiyat:u.alisFiyat, satisFiyat:u.satisFiyat};
+          urunForm = {
+            id:u.id, ad:u.ad, birim:u.birim||'',
+            alisFiyat:u.alisFiyat!=null?String(u.alisFiyat):'',
+            satisFiyat:u.satisFiyat!=null?String(u.satisFiyat):'',
+            paraBirimi: urunParaBirimi(u),
+            kur: u.kur!=null && u.kur!=='' ? String(u.kur) : ''
+          };
           ui.imalatUrunListOpen = true;
           renderImalatTab(document.getElementById('mainContent'));
           requestAnimationFrame(()=>{
@@ -6785,18 +6894,29 @@ function saveUrun(){
   const birim = urunForm.birim || '';
   const alisFiyat = parseFloat(String(urunForm.alisFiyat).replace(',','.')) || 0;
   const satisFiyat = parseFloat(String(urunForm.satisFiyat).replace(',','.')) || 0;
+  const paraBirimi = (urunForm.paraBirimi && CURRENCY_INFO[urunForm.paraBirimi]) ? urunForm.paraBirimi : 'TRY';
+  const kur = paraBirimi!=='TRY'
+    ? (parseFloat(String(urunForm.kur).replace(',','.')) || parseFloat(kurFieldValue(paraBirimi, 'satis')) || null)
+    : null;
   if(!ad){ showToast('Lütfen ürün adı girin.'); return; }
+  if(paraBirimi!=='TRY' && !(kur>0)){
+    showToast('Döviz için satış kuru girin veya Ayarlar’dan kur kaydedin.'); return;
+  }
   if(!state.urunler) state.urunler = [];
+  const applyFields = (u)=>{
+    u.ad = ad; u.birim = birim; u.alisFiyat = alisFiyat; u.satisFiyat = satisFiyat;
+    u.paraBirimi = paraBirimi; u.kur = kur;
+  };
   if(urunForm.id){
     const u = state.urunler.find(x=>x.id===urunForm.id);
-    if(u){ u.ad = ad; u.birim = birim; u.alisFiyat = alisFiyat; u.satisFiyat = satisFiyat; }
+    if(u) applyFields(u);
   } else {
     // Aynı isimde (büyük/küçük harf ve boşluk farkı gözetmeksizin) zaten bir ürün varsa
     // yeni bir satır açmak yerine mevcut kaydın fiyatlarını günceller.
     const key = normKey(ad);
     const existing = state.urunler.find(x=>normKey(x.ad)===key);
-    if(existing){ existing.birim = birim; existing.alisFiyat = alisFiyat; existing.satisFiyat = satisFiyat; }
-    else { state.urunler.push({id:uid(), ad, birim, alisFiyat, satisFiyat}); }
+    if(existing) applyFields(existing);
+    else state.urunler.push({id:uid(), ad, birim, alisFiyat, satisFiyat, paraBirimi, kur});
   }
   const savedUrunId = urunForm.id || null;
   const savedUrunAd = ad;
@@ -6855,6 +6975,14 @@ function renderImalatMalzemeSectionHtml(sistem){
             ${Object.keys(CURRENCY_INFO).map(code=>`<option value="${code}" ${(imalatMalzemeForm.paraBirimi||'TRY')===code?'selected':''}>${esc(CURRENCY_INFO[code].name)}</option>`).join('')}
           </select>
         </div>
+        ${(()=>{
+          const cur = (imalatMalzemeForm.paraBirimi && CURRENCY_INFO[imalatMalzemeForm.paraBirimi]) ? imalatMalzemeForm.paraBirimi : 'TRY';
+          if(cur==='TRY') return '';
+          const kurOneri = imalatMalzemeForm.kur || kurFieldValue(cur, 'satis') || '';
+          return `<div class="field"><label>Satış Kuru (1 ${esc(CURRENCY_INFO[cur].label)} = ? TL)</label>
+            <input class="mono" type="number" step="any" min="0" id="m-kur" value="${esc(kurOneri)}" placeholder="Örn: 34.20">
+          </div>`;
+        })()}
         <div class="field"><label>Alış Fiyatı</label><input class="mono" type="number" step="any" id="m-alisFiyat" value="${esc(imalatMalzemeForm.alisFiyat)}"></div>
         <div class="field"><label>Satış Fiyatı</label><input class="mono" type="number" step="any" id="m-satisFiyat" value="${esc(imalatMalzemeForm.satisFiyat)}"></div>
       </div>
@@ -6922,11 +7050,18 @@ function renderMalzemeTableHtml(sistem){
 }
 
 function bindImalatMalzemeSectionEvents(sistem){
-  ['ad','paketAdet','alisFiyat','satisFiyat','paraBirimi'].forEach(k=>{
+  ['ad','paketAdet','alisFiyat','satisFiyat','paraBirimi','kur'].forEach(k=>{
     const el = document.getElementById('m-'+k);
     if(!el) return;
-    const ev = k==='paraBirimi' ? 'change' : 'input';
-    el.addEventListener(ev, ()=>{ imalatMalzemeForm[k] = el.value; });
+    const ev = (k==='paraBirimi') ? 'change' : 'input';
+    el.addEventListener(ev, ()=>{
+      imalatMalzemeForm[k] = el.value;
+      if(k==='paraBirimi'){
+        if(el.value==='TRY') imalatMalzemeForm.kur = '';
+        else if(!imalatMalzemeForm.kur) imalatMalzemeForm.kur = kurFieldValue(el.value, 'satis') || '';
+        renderImalatTab(document.getElementById('mainContent'));
+      }
+    });
   });
   const grupEl = document.getElementById('m-grup');
   if(grupEl){
@@ -7066,13 +7201,18 @@ function bindImalatMalzemeSectionEvents(sistem){
       [...adList.children].forEach((item,i)=>{
         const pick = ()=>{
           const u = matches[i];
-          adInput.value = u.ad;
-          adInput.dispatchEvent(new Event('input', {bubbles:true}));
-          const alisEl = document.getElementById('m-alisFiyat');
-          const satisEl = document.getElementById('m-satisFiyat');
-          if(alisEl){ alisEl.value = u.alisFiyat; alisEl.dispatchEvent(new Event('input', {bubbles:true})); }
-          if(satisEl){ satisEl.value = u.satisFiyat; satisEl.dispatchEvent(new Event('input', {bubbles:true})); }
+          const cur = urunParaBirimi(u);
+          imalatMalzemeForm.ad = u.ad;
+          imalatMalzemeForm.alisFiyat = u.alisFiyat!=null ? String(u.alisFiyat) : '';
+          imalatMalzemeForm.satisFiyat = u.satisFiyat!=null ? String(u.satisFiyat) : '';
+          imalatMalzemeForm.paraBirimi = cur;
+          imalatMalzemeForm.kur = (u.kur!=null && u.kur!=='') ? String(u.kur) : (kurFieldValue(cur,'satis')||'');
           adList.style.display = 'none';
+          renderImalatTab(document.getElementById('mainContent'));
+          requestAnimationFrame(()=>{
+            const ad2 = document.getElementById('m-ad');
+            if(ad2) ad2.focus({ preventScroll:true });
+          });
         };
         item.addEventListener('mousedown', (e)=>{ e.preventDefault(); pick(); });
         item.addEventListener('touchstart', (e)=>{ e.preventDefault(); pick(); }, {passive:false});
@@ -7176,6 +7316,9 @@ function saveImalatMalzeme(sistem){
     alisFiyat: parseFloat(String(imalatMalzemeForm.alisFiyat).replace(',','.'))||0,
     satisFiyat: parseFloat(String(imalatMalzemeForm.satisFiyat).replace(',','.'))||0,
     paraBirimi: (imalatMalzemeForm.paraBirimi && CURRENCY_INFO[imalatMalzemeForm.paraBirimi]) ? imalatMalzemeForm.paraBirimi : 'TRY',
+    kur: ((imalatMalzemeForm.paraBirimi && CURRENCY_INFO[imalatMalzemeForm.paraBirimi] && imalatMalzemeForm.paraBirimi!=='TRY')
+      ? (parseFloat(String(imalatMalzemeForm.kur).replace(',','.')) || parseFloat(kurFieldValue(imalatMalzemeForm.paraBirimi,'satis')) || null)
+      : null),
     grup: isDuvarSistem(sistem) ? (Number(imalatMalzemeForm.grup)===2 ? 2 : 1) : 1,
     ciftHesap: isDuvarSistem(sistem) ? !!imalatMalzemeForm.ciftHesap : false,
     tasiyiciAyarlari: tasiyiciTips.length ? tasiyiciAyarlari : {},
@@ -7329,13 +7472,6 @@ function imalatSemaSpacingPositions(axisLenM, firstCm, stepCm){
 
 // Hesap sonucunu malzeme ebatına (profil boyu, plaka en×boy vb.) göre yukarı tamamlar.
 // Örn: profil 3 m, net 5,4 mt → 6 mt (3'ün katı); adet = 6/3 = 2.
-function tamEbatKatina(deger, ebat){
-  const d = parseFloat(deger)||0;
-  const e = parseFloat(ebat)||0;
-  if(!(d>0)) return 0;
-  if(!(e>0)) return Math.round(d*100)/100;
-  return Math.round(Math.ceil((d / e) - 1e-9) * e * 100) / 100;
-}
 function tamAdetYuvarla(deger){
   const d = parseFloat(deger)||0;
   if(!(d>0)) return 0;
@@ -7909,32 +8045,7 @@ function getImalatPolyPts(){
   const pts = tracePoligonVertices(ui.imalatCalcPoligon);
   return (pts && pts.length>=3) ? pts : null;
 }
-// Plaka: kolon kolon döşenir; kesilen kalan boy sonraki kolona aktarılır (şaşırtmalı derz).
-// Örn: yükseklik 2.7, plaka boyu 2.5 → 0.2 m kalan sonraki şeride eklenir.
-// NOT: Bu fonksiyon yalnızca şema çizimi içindir. Sipariş adedi alan÷(en×boy) ile hesaplanır
-// (dar son şerit yüzünden siparişin şişmesini önlemek için).
-function countPlakaAdetWithCarry(roomW, roomH, pw, ph){
-  const W = parseFloat(roomW)||0, H = parseFloat(roomH)||0;
-  const en = parseFloat(pw)||0, boy = parseFloat(ph)||0;
-  if(!(W>0) || !(H>0) || !(en>0) || !(boy>0)) return 0;
-  let rem = 0, adet = 0, n = 0;
-  const maxTiles = 20000;
-  for(let x = 0; x < W - 1e-9 && n < maxTiles; x += en){
-    let y = 0;
-    while(y < H - 1e-9 && n < maxTiles){
-      if(rem <= 1e-9){ rem = boy; adet++; }
-      const th = Math.min(rem, H - y);
-      rem -= th;
-      y += th;
-      n++;
-    }
-  }
-  return adet;
-}
 // Gerçek dikdörtgen (3x5): W×L + carry. Poligon/bbox/yaklaşık kare: hesaplanan alan (deger).
-function roomIsExactRect(room){
-  return !!(room && room.kind==='rect' && !room.approx && room.W>0 && room.L>0);
-}
 function roomAlanFromDeger(room, deger){
   if(room && room.kind==='length' && room.W>0) return room.W;
   const d = parseFloat(deger)||0;
@@ -8235,19 +8346,6 @@ function imalatSemaPanelPatternDefs(){
       <path d="M0 17 Q7 12 14 17 T28 17" fill="none" stroke="#d4a84a" stroke-width="1.2" stroke-linecap="round" opacity=".9"/>
     </pattern>
   </defs>`;
-}
-function semaYalitimFillMarkup(ox, oy, drawW, drawH, opts){
-  opts = opts || {};
-  if(!(drawW>0) || !(drawH>0)) return '';
-  const border = opts.border || '#e6c84a';
-  const sw = opts.strokeWidth != null ? opts.strokeWidth : 3.2;
-  const fillId = opts.fillId || 'semaYalitimDalga';
-  let t = `<rect x="${(+ox).toFixed(2)}" y="${(+oy).toFixed(2)}" width="${(+drawW).toFixed(2)}" height="${(+drawH).toFixed(2)}" fill="url(#${fillId})" stroke="${border}" stroke-width="${sw}" rx="1.5"/>`;
-  const inset = Math.min(4.5, Math.min(drawW, drawH) * 0.04);
-  if(inset >= 2){
-    t += `<rect x="${(ox+inset).toFixed(2)}" y="${(oy+inset).toFixed(2)}" width="${(drawW-inset*2).toFixed(2)}" height="${(drawH-inset*2).toFixed(2)}" fill="none" stroke="${border}" stroke-width="1.3" opacity=".75" rx="1"/>`;
-  }
-  return `<g class="schema-yalitim">${t}</g>`;
 }
 function imalatSemaPanelTilesMarkup(ox, oy, roomW, roomH, scale, panel, opts){
   if(!panel || !(panel.w>0) || !(panel.h>0) || !(roomW>0) || !(roomH>0) || !(scale>0)) return '';
@@ -10262,7 +10360,7 @@ function openAnalizKayitEditModal(kayit, sub){
       const k = draft.kalemler[i];
       if(!k) return;
       const tutarEl = tr.querySelector('[data-tutar]');
-      if(tutarEl) tutarEl.innerHTML = fmtAnalizTutarHtml(k.tutar, k.paraBirimi, 'satis');
+      if(tutarEl) tutarEl.innerHTML = fmtAnalizTutarHtml(k.tutar, k.paraBirimi, 'satis', k.kur);
     });
   };
   modalRoot.innerHTML = `
@@ -10295,7 +10393,7 @@ function openAnalizKayitEditModal(kayit, sub){
                   <td class="num"><input class="mono ake-miktar" type="number" step="any" min="0" value="${esc(k.miktar??'')}" style="width:90px;text-align:right;"></td>
                   <td>${esc(k.birim||'—')}</td>
                   <td class="num"><input class="mono ake-birimFiyat" type="number" step="any" min="0" value="${esc(k.birimFiyat??'')}" style="width:110px;text-align:right;"></td>
-                  <td class="num" data-tutar style="font-weight:700;">${fmtAnalizTutarHtml(k.tutar, k.paraBirimi, 'satis')}</td>
+                  <td class="num" data-tutar style="font-weight:700;">${fmtAnalizTutarHtml(k.tutar, k.paraBirimi, 'satis', k.kur)}</td>
                 </tr>
               `).join('')}
             </tbody>
@@ -10371,7 +10469,7 @@ function saveAnalizKaydi(sub){
     const birimLabel = UNIT_LABEL[getMalzemeBirim(m)]||getMalzemeBirim(m);
     return {
       ad:m.ad, miktar:r.miktar, miktarText: formatHesapMiktarPlain(m, r), birim:birimLabel,
-      birimFiyat: r.netFiyat, listFiyat: r.listFiyat, tutar:r.tutar, paraBirimi:r.paraBirimi
+      birimFiyat: r.netFiyat, listFiyat: r.listFiyat, tutar:r.tutar, paraBirimi:r.paraBirimi, kur:r.kur||null
     };
   });
   const toplamlar = computeHesapToplamlar(sistem, deger);
@@ -10421,8 +10519,8 @@ function exportAnalizKaydiPdf(kayit){
   const tableRows = (kayit.kalemler||[]).map(k=>{
     const miktarText = k.miktarText || [fmtNum(k.miktar), k.birim].filter(Boolean).join(' ');
     const cur = k.paraBirimi || 'TRY';
-    const fiyatTL = toTRYSatis(k.birimFiyat, cur);
-    const tutarTL = toTRYSatis(k.tutar, cur);
+    const fiyatTL = toTRYSatis(k.birimFiyat, cur, k.kur);
+    const tutarTL = toTRYSatis(k.tutar, cur, k.kur);
     const fiyatCell = fiyatTL!=null
       ? `${fmtMoney(fiyatTL, 'TRY')}${cur!=='TRY' ? `<div style="font-size:8px;color:#8096A3;">${fmtMoney(k.birimFiyat, cur)}</div>` : ''}`
       : `${fmtMoney(k.birimFiyat, cur)}<div style="font-size:8px;color:#c77700;">kur yok</div>`;
@@ -10684,6 +10782,7 @@ function finalizeMergedMalzemeSonuc(m, merged, opts){
   r.iskontoPct = iskontoPct;
   r.ekstra = ekstra;
   r.paraBirimi = (m.paraBirimi && CURRENCY_INFO[m.paraBirimi]) ? m.paraBirimi : 'TRY';
+  r.kur = (r.paraBirimi!=='TRY' && parseFloat(m.kur)>0) ? parseFloat(m.kur) : null;
   return r;
 }
 
@@ -11000,7 +11099,7 @@ function bindHesapSonucEvents(sistem, deger, unit){
     if(ui.imalatCalcHedefToplam!=null && ui.imalatCalcHedefToplam!==''){
       collectHesapSonucRows(sistem, deger).forEach(({m, r})=>{
         const tutarCell = wrap.querySelector(`[data-tutar-id="${m.id}"]`);
-        if(tutarCell) tutarCell.innerHTML = fmtAnalizTutarHtml(r.tutar, r.paraBirimi, 'satis');
+        if(tutarCell) tutarCell.innerHTML = fmtAnalizTutarHtml(r.tutar, r.paraBirimi, 'satis', r.kur);
         const fiyatInp = wrap.querySelector(`[data-fiyat-id="${m.id}"]`);
         if(fiyatInp && document.activeElement !== fiyatInp && getHesapIskontoPct()>0){
           fiyatInp.value = r.netFiyat;
@@ -11028,10 +11127,10 @@ function bindHesapSonucEvents(sistem, deger, unit){
       const row = collectHesapSonucRows(sistem, deger).find(x=>x.m.id===id);
       const r = row ? row.r : computeMalzemeSonuc(m, deger, getPaketOpts(id));
       const tutarCell = wrap.querySelector(`[data-tutar-id="${id}"]`);
-      if(tutarCell) tutarCell.innerHTML = fmtAnalizTutarHtml(r.tutar, r.paraBirimi, 'satis');
+      if(tutarCell) tutarCell.innerHTML = fmtAnalizTutarHtml(r.tutar, r.paraBirimi, 'satis', r.kur);
       const hint = e.target.parentElement && e.target.parentElement.querySelector('div');
       if(hint){
-        hint.textContent = fmtAnalizFiyatHint(r.netFiyat, r.paraBirimi, getHesapIskontoPct(), r.listFiyat);
+        hint.textContent = fmtAnalizFiyatHint(r.netFiyat, r.paraBirimi, getHesapIskontoPct(), r.listFiyat, r.kur);
       }
       refreshTotals();
     });
@@ -11058,7 +11157,7 @@ function bindHesapSonucEvents(sistem, deger, unit){
       const miktarCell = wrap.querySelector(`[data-miktarcell-id="${id}"]`);
       if(miktarCell) miktarCell.innerHTML = formatHesapMiktarHtml(m, r);
       const tutarCell = wrap.querySelector(`[data-tutar-id="${id}"]`);
-      if(tutarCell) tutarCell.innerHTML = fmtAnalizTutarHtml(r.tutar, r.paraBirimi, 'satis');
+      if(tutarCell) tutarCell.innerHTML = fmtAnalizTutarHtml(r.tutar, r.paraBirimi, 'satis', r.kur);
       refreshTotals();
     });
     inp.addEventListener('change', ()=>{ saveState(); });
@@ -11236,14 +11335,14 @@ function renderHesapSonucHtml(sistem, deger, basisUnit){
             <td>${esc(birimLabel)}</td>
             <td class="num">
               <input class="mono" type="number" step="any" data-fiyat-id="${m.id}" value="${esc(gosterFiyat)}" style="width:92px;text-align:right;padding:6px 8px;border-radius:8px;border:1px solid rgba(11,36,54,0.15);background:rgba(255,255,255,0.7);">
-              <div style="font-size:0.68rem;color:var(--ink-soft);margin-top:2px;">${esc(fmtAnalizFiyatHint(gosterFiyat, r.paraBirimi, iskPct, r.listFiyat))}</div>
+              <div style="font-size:0.68rem;color:var(--ink-soft);margin-top:2px;">${esc(fmtAnalizFiyatHint(gosterFiyat, r.paraBirimi, iskPct, r.listFiyat, r.kur))}</div>
             </td>
             <td class="num" data-basecell-id="${m.id}">${baseHtml}</td>
             <td class="num">
               <input class="mono" type="number" step="any" data-ekstra-id="${m.id}" value="${(r.ekstra!=null && Number(r.ekstra)!==0) ? esc(r.ekstra) : ''}" placeholder="±0" title="Ekstra adet: + ekler, − çıkarır. Örn: 2 → +2 adet, -2 → 2 adet düşer. mt satılan profilde metraj da profil boyu kadar değişir." style="width:76px;text-align:right;padding:6px 8px;border-radius:8px;border:1px solid rgba(11,36,54,0.15);background:rgba(255,255,255,0.7);">
             </td>
             <td class="num" style="font-weight:700;" data-miktarcell-id="${m.id}">${totalHtml}</td>
-            <td class="num" data-tutar-id="${m.id}">${fmtAnalizTutarHtml(r.tutar, r.paraBirimi, 'satis')}</td>
+            <td class="num" data-tutar-id="${m.id}">${fmtAnalizTutarHtml(r.tutar, r.paraBirimi, 'satis', r.kur)}</td>
             <td class="num">${m.paketAdet? `<label style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;white-space:nowrap;"><input type="checkbox" data-paket-id="${m.id}" ${opts.paketTamamla?'checked':''}> <span style="font-size:0.72rem;color:var(--ink-soft);">${fmtNum(m.paketAdet)}/paket</span></label>` : '—'}</td>
           </tr>`;
         }).join('')}
@@ -11269,9 +11368,9 @@ function computeHesapToplamlar(sistem, deger){
     byCurrency[cur].toplamTutar += r.tutar;
     byCurrency[cur].toplamBrut += (r.brutTutar!=null ? r.brutTutar : r.tutar);
     byCurrency[cur].toplamMaliyet += r.maliyet;
-    const tutarTL = toTRYSatis(r.tutar, cur);
-    const brutTL = toTRYSatis(r.brutTutar!=null ? r.brutTutar : r.tutar, cur);
-    const maliyetTL = toTRYSatis(r.maliyet, cur);
+    const tutarTL = toTRYSatis(r.tutar, cur, r.kur);
+    const brutTL = toTRYSatis(r.brutTutar!=null ? r.brutTutar : r.tutar, cur, r.kur);
+    const maliyetTL = toTRYSatis(r.maliyet, cur, r.kur);
     if(tutarTL==null || brutTL==null || maliyetTL==null) missingKur = true;
     tryToplam.toplamTutar += (tutarTL!=null ? tutarTL : 0);
     tryToplam.toplamBrut += (brutTL!=null ? brutTL : 0);
@@ -11322,7 +11421,7 @@ function renderBirimMaliyetHtml(toplamlar, metraj, unit){
 
 /* ======================= PERSONEL TAB ======================= */
 function emptyPersonelForm(){
-  return {id:null, adSoyad:'', babaAdi:'', kimlikNo:'', banka:'', girisTarihi:'', cikisTarihi:'', pozisyon:'', yevmiye:'', dosya:null};
+  return {id:null, adSoyad:'', babaAdi:'', kimlikNo:'', banka:'', girisTarihi:'', cikisTarihi:'', pozisyon:'', yevmiye:'', aylikMaas:'', asgariUcretli:false, dosya:null};
 }
 let personelForm = emptyPersonelForm();
 
@@ -11356,7 +11455,16 @@ function renderPersonelTab(main, proj){
           <input type="date" id="p-cikisTarihi" value="${esc(personelForm.cikisTarihi)}">
         </div>
         <div class="field"><label>Yevmiye (TL)</label>
-          <input class="mono" type="number" step="any" id="p-yevmiye" value="${esc(personelForm.yevmiye)}">
+          <input class="mono" type="number" step="any" id="p-yevmiye" value="${esc(personelForm.yevmiye)}" ${personelForm.asgariUcretli?'disabled':''}>
+        </div>
+        <div class="field"><label>Aylık Toplam Maaş (TL)</label>
+          <input class="mono" type="number" step="any" id="p-aylikMaas" value="${esc(personelForm.aylikMaas)}" placeholder="Örn: 60000 — puantajda gün×(maaş/30)">
+        </div>
+        <div class="field" style="grid-column:span 2;">
+          <label style="display:inline-flex;align-items:flex-start;gap:8px;cursor:pointer;">
+            <input type="checkbox" id="p-asgariUcretli" ${personelForm.asgariUcretli?'checked':''} style="margin-top:3px;">
+            <span><b>SGK / bordro asgari üzerinden</b><br><span style="font-weight:500;color:var(--ink-soft);font-size:0.78rem;">Sigorta asgari ücretten yatırılır. Aylık maaş yazarsanız bordroda toplam = <b>puantaj günü × (aylık÷30)</b>; avans Avans kayıtlarından gelir; kalan elden otomatik çıkar.</span></span>
+          </label>
         </div>
         <div class="field" style="grid-column:span 2;"><label>Özgeçmiş / Kimlik Dosyası (isteğe bağlı)</label>
           <div class="file-attach-row">
@@ -11376,11 +11484,19 @@ function renderPersonelTab(main, proj){
       <div class="table-scroll" id="personelTableWrap"></div>
     </div>
   `;
-  ['adSoyad','babaAdi','kimlikNo','banka','pozisyon','girisTarihi','cikisTarihi','yevmiye'].forEach(k=>{
+  ['adSoyad','babaAdi','kimlikNo','banka','pozisyon','girisTarihi','cikisTarihi','yevmiye','aylikMaas'].forEach(k=>{
     document.getElementById('p-'+k).addEventListener('input', ()=>{
       personelForm[k] = document.getElementById('p-'+k).value;
     });
   });
+  const asgChk = document.getElementById('p-asgariUcretli');
+  if(asgChk){
+    asgChk.addEventListener('change', ()=>{
+      personelForm.asgariUcretli = !!asgChk.checked;
+      const yev = document.getElementById('p-yevmiye');
+      if(yev) yev.disabled = personelForm.asgariUcretli;
+    });
+  }
   document.getElementById('btnSavePersonel').onclick = ()=>savePersonelRow(proj);
   document.getElementById('btnClearPersonel').onclick = ()=>{ personelForm = emptyPersonelForm(); renderMain(); };
   wireAttachmentInput({inputId:'p-dosya', chipWrapId:'p-dosyaChip', getForm:()=>personelForm});
@@ -11403,6 +11519,8 @@ function savePersonelRow(proj){
     girisTarihi: personelForm.girisTarihi,
     cikisTarihi: personelForm.cikisTarihi,
     yevmiye: parseFloat(personelForm.yevmiye)||0,
+    aylikMaas: parseFloat(personelForm.aylikMaas)||0,
+    asgariUcretli: !!personelForm.asgariUcretli,
     dosya: personelForm.dosya || null,
     puantaj: (proj.personel.find(p=>p.id===personelForm.id)||{}).puantaj || {},
     mesai: (proj.personel.find(p=>p.id===personelForm.id)||{}).mesai || {}
@@ -11440,7 +11558,7 @@ function renderPersonelTable(proj){
   }
   wrap.innerHTML = `
     <table>
-      <thead><tr><th>Adı Soyadı</th><th>Pozisyon</th><th>Giriş</th><th>Çıkış</th><th class="num">Yevmiye</th><th>Durum</th><th></th></tr></thead>
+      <thead><tr><th>Adı Soyadı</th><th>Pozisyon</th><th>Giriş</th><th>Çıkış</th><th class="num">Yevmiye</th><th class="num">Aylık Maaş</th><th>Ücret Tipi</th><th>Durum</th><th></th></tr></thead>
       <tbody>
         ${list.map(p=>{
           const st = personelStatus(p);
@@ -11450,7 +11568,9 @@ function renderPersonelTable(proj){
             <td>${esc(p.pozisyon)||'—'}</td>
             <td>${fmtDateStr(p.girisTarihi)}</td>
             <td>${fmtDateStr(p.cikisTarihi)}</td>
-            <td class="num">${fmtMoney(p.yevmiye)}</td>
+            <td class="num">${p.asgariUcretli ? '—' : fmtMoney(p.yevmiye)}</td>
+            <td class="num">${(parseFloat(p.aylikMaas)||0)>0 ? fmtMoney(p.aylikMaas) : '—'}</td>
+            <td>${p.asgariUcretli ? '<span class="status-badge aktif">SGK asgari</span>' : 'Yevmiye'}</td>
             <td><span class="status-badge ${st.cls}">${st.text}</span></td>
             <td>
               <div class="row-actions">
@@ -11489,7 +11609,7 @@ function renderPersonelTable(proj){
       const p = proj.personel.find(x=>x.id===id);
       if(!p) return;
       if(act==='edit'){
-        personelForm = {id:p.id, adSoyad:p.adSoyad, babaAdi:p.babaAdi, kimlikNo:p.kimlikNo, banka:p.banka, girisTarihi:p.girisTarihi, cikisTarihi:p.cikisTarihi, pozisyon:p.pozisyon, yevmiye:String(p.yevmiye), dosya:p.dosya||null};
+        personelForm = {id:p.id, adSoyad:p.adSoyad, babaAdi:p.babaAdi, kimlikNo:p.kimlikNo, banka:p.banka, girisTarihi:p.girisTarihi, cikisTarihi:p.cikisTarihi, pozisyon:p.pozisyon, yevmiye:String(p.yevmiye??''), aylikMaas:String(p.aylikMaas??''), asgariUcretli:!!p.asgariUcretli, dosya:p.dosya||null};
         renderMain(); window.scrollTo({top:0, behavior:'smooth'});
       } else if(act==='delete'){
         confirmModal(`"${p.adSoyad}" adlı personel kartını silmek istediğinize emin misiniz? (Puantaj/mesai kayıtları da silinir.)`, ()=>{
@@ -12379,7 +12499,10 @@ let zimmetForm = emptyZimmetForm();
 
 function personelOptionsHtml(list, selectedId, placeholder){
   return `<option value="">${esc(placeholder)}</option>` +
-    list.map(p=>`<option value="${p.id}" ${p.id===selectedId?'selected':''}>${esc(p.adSoyad)}</option>`).join('');
+    list.map(p=>{
+      const tag = p.asgariUcretli ? ((parseFloat(p.aylikMaas)||0)>0 ? ' — SGK asgari + elden' : ' — Asgari ücret') : '';
+      return `<option value="${p.id}" ${p.id===selectedId?'selected':''}>${esc(p.adSoyad)}${tag}</option>`;
+    }).join('');
 }
 
 function renderAvansZimmetTab(main, proj){
@@ -12782,6 +12905,1212 @@ async function exportZimmetPdf(proj){
   showPdfPreview(html, `zimmet-listesi-${proj.name.replace(/[^a-z0-9ığüşöç]+/gi,'_')}.pdf`, 'p');
 }
 
+/* ======================= MAAŞ BORDRO (SSK / ASGARİ / KESİNTİLER) ======================= */
+const PERSONEL_GIDER_TURLERI = ['Yol','Konaklama','İş Elbisesi','Sağlık','Araç','SSK','Asgari Ücret Farkı','Yemek (kişisel)','Diğer'];
+function emptyBordroForm(){
+  return {
+    id:null, personelId:'', donem: currentYm(), odemeTarihi: isoToday(), odemeSekli:'Banka Havalesi',
+    brut:'', asgariUcret:'', sskIsci:'', sskIsveren:'', gelirVergisi:'', damgaVergisi:'',
+    avansKesinti:'', digerKesinti:'', net:'', aciklama:'', paraBirimi:'', kur:'',
+    toplamMaas:'', yatanAsgari:'', kalanElden:'',
+    netManuel:false, kesintiManuel:false, yatanManuel:false, toplamManuel:false, avansManuel:false
+  };
+}
+function emptyPersonelGiderForm(){
+  return {id:null, personelId:'', tarih: isoToday(), giderTuru:'SSK', aciklama:'', tutar:'', paraBirimi:'', kur:'', dosya:null};
+}
+let bordroForm = emptyBordroForm();
+let personelGiderForm = emptyPersonelGiderForm();
+
+function personelDonemHakedis(p, ym){
+  if(!p || !ym) return 0;
+  const yevmiye = parseFloat(p.yevmiye)||0;
+  const gun = personelPuantajToplam(p, ym);
+  const mesai = personelMesaiToplam(p, ym);
+  return Math.round((gun*yevmiye + mesai*(yevmiye/8))*100)/100;
+}
+/**
+ * Dönem toplam maaşı (puantajdan):
+ * - Aylık maaş tanımlıysa: (aylık/30)×gün + mesai×(aylık/30/8)
+ * - Değilse yevmiye×puantaj hakedişi
+ */
+function personelDonemToplamMaas(p, ym){
+  if(!p || !ym) return 0;
+  const aylik = parseFloat(p.aylikMaas)||0;
+  const gun = personelPuantajToplam(p, ym);
+  const mesai = personelMesaiToplam(p, ym);
+  if(aylik>0){
+    const gunluk = aylik / 30;
+    return Math.round((gun * gunluk + mesai * (gunluk / 8)) * 100) / 100;
+  }
+  return personelDonemHakedis(p, ym);
+}
+function personelDonemAvansToplam(proj, personelId, ym){
+  if(!ym) return 0;
+  return (proj.avanslar||[]).filter(a=>{
+    if(a.personelId!==personelId) return false;
+    const t = a.odemeTarihi||'';
+    return t.slice(0,7)===ym;
+  }).reduce((s,a)=>s+(parseFloat(a.tutar)||0),0);
+}
+function bordroKesintiToplam(f){
+  const keys = ['sskIsci','gelirVergisi','damgaVergisi','avansKesinti','digerKesinti'];
+  return keys.reduce((s,k)=>s+(parseFloat(f[k])||0),0);
+}
+function bordroNetHesapla(f){
+  const brut = parseFloat(f.brut)||0;
+  const net = Math.round((brut - bordroKesintiToplam(f))*100)/100;
+  return net;
+}
+/** Brütten yasal kesinti sonrası net (avans hariç) — bankaya yatan asgari için */
+function bordroNetAvansiz(brut, asgariRef){
+  const B = parseFloat(brut)||0;
+  if(!(B>0)) return 0;
+  const h = hesaplaBordroKesintiler(B, { asgariUcret: asgariRef });
+  return Math.round((B - (h.sskIsci||0) - (h.gelirVergisi||0) - (h.damgaVergisi||0))*100)/100;
+}
+/**
+ * Ödeme dağılımı: Toplam maaş − yatan asgari − avans = kalan elden
+ * Örn: 60000 − 20000 − 15000 = 25000
+ */
+function bordroOdemeDagilim(f){
+  const toplam = Math.round((parseFloat(f.toplamMaas)||0)*100)/100;
+  const yatan = Math.round((parseFloat(f.yatanAsgari)||0)*100)/100;
+  const avans = Math.round((parseFloat(f.avansKesinti)||0)*100)/100;
+  const kalan = Math.round((toplam - yatan - avans)*100)/100;
+  return { toplam, yatan, avans, kalan };
+}
+function syncBordroKalanElden(){
+  const d = bordroOdemeDagilim(bordroForm);
+  if(d.toplam>0){
+    bordroForm.kalanElden = String(d.kalan);
+  } else if(!bordroForm.kalanElden){
+    bordroForm.kalanElden = '';
+  }
+  return d;
+}
+/** Bordro satırında personele fiilen giden (avans hariç: banka + elden) */
+function bordroPersoneleOdenen(r){
+  const toplam = parseFloat(r.toplamMaas)||0;
+  if(toplam>0){
+    const yatan = parseFloat(r.yatanAsgari);
+    const kalan = parseFloat(r.kalanElden);
+    if(isFinite(yatan) || isFinite(kalan))
+      return Math.round(((isFinite(yatan)?yatan:0) + (isFinite(kalan)?kalan:0))*100)/100;
+  }
+  return parseFloat(r.net)||0;
+}
+function fmtYmLabel(ym){
+  if(!ym || !/^\d{4}-\d{2}$/.test(ym)) return ym||'—';
+  const [y,m] = ym.split('-');
+  const aylar = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
+  return `${aylar[parseInt(m,10)-1]||m} ${y}`;
+}
+function personelAsgariUcretli(p){
+  return !!(p && p.asgariUcretli);
+}
+/** Aylık asgari / 30 = günlük brüt asgari */
+function asgariGunlukBrut(asgariAylik){
+  const a = parseFloat(asgariAylik);
+  const aylik = (isFinite(a) && a>0) ? a : getBordroOranlari().asgariUcret;
+  return Math.round((aylik / 30) * 100) / 100;
+}
+/**
+ * Asgari ücretli: brüt = günlük asgari × çalışılan gün (+ mesai saat × günlük/8).
+ * Gün = puantaj toplamı.
+ */
+function personelDonemAsgariBrut(p, ym, asgariAylik){
+  if(!p || !ym) return 0;
+  const gunluk = asgariGunlukBrut(asgariAylik);
+  const gun = personelPuantajToplam(p, ym);
+  const mesai = personelMesaiToplam(p, ym);
+  return Math.round((gun * gunluk + mesai * (gunluk / 8)) * 100) / 100;
+}
+/**
+ * Hedef net ücrete göre brütü bulur (SSK/GV/damga + avans/diğer kesinti dikkate alınır).
+ */
+function brutFromHedefNet(hedefNet, opts){
+  opts = opts || {};
+  const target = parseFloat(hedefNet)||0;
+  if(!(target>0)) return 0;
+  const avans = parseFloat(opts.avansKesinti)||0;
+  const diger = parseFloat(opts.digerKesinti)||0;
+  const asgariRef = opts.asgariUcret;
+  let lo = 0;
+  let hi = Math.max(target * 2.5, (parseFloat(asgariRef)||getBordroOranlari().asgariUcret) * 2, 5000);
+  for(let i=0;i<48;i++){
+    const mid = (lo + hi) / 2;
+    const h = hesaplaBordroKesintiler(mid, { asgariUcret: asgariRef });
+    const net = mid - (h.sskIsci||0) - (h.gelirVergisi||0) - (h.damgaVergisi||0) - avans - diger;
+    if(net < target) lo = mid;
+    else hi = mid;
+  }
+  return Math.round(hi * 100) / 100;
+}
+function applyBordroFromHedefNet(){
+  const hedef = parseFloat(bordroForm.net)||0;
+  if(!(hedef>0)) return false;
+  const brut = brutFromHedefNet(hedef, {
+    asgariUcret: bordroForm.asgariUcret,
+    avansKesinti: bordroForm.avansKesinti,
+    digerKesinti: bordroForm.digerKesinti
+  });
+  if(!(brut>0)) return false;
+  bordroForm.brut = String(brut);
+  bordroForm.netManuel = true;
+  const keptNet = String(hedef);
+  applyBordroOtomatikKesinti();
+  // Kesinti sonrası net'i kullanıcının yazdığı hedefe sabitle (yuvarlama farkı olmasın)
+  bordroForm.net = keptNet;
+  bordroForm.netManuel = true;
+  return true;
+}
+function syncBordroOneri(proj){
+  const p = (proj.personel||[]).find(x=>x.id===bordroForm.personelId);
+  if(!p || !bordroForm.donem) return;
+  const oran = getBordroOranlari();
+  if(!bordroForm.asgariUcret) bordroForm.asgariUcret = String(oran.asgariUcret||'');
+  if(personelAsgariUcretli(p)){
+    const asg = parseFloat(bordroForm.asgariUcret)||oran.asgariUcret;
+    bordroForm.asgariUcret = String(asg);
+    // Çalışılan güne göre asgari brüt (SGK bildirimi)
+    const brutGun = personelDonemAsgariBrut(p, bordroForm.donem, asg);
+    bordroForm.brut = String(brutGun);
+  } else {
+    const hak = personelDonemHakedis(p, bordroForm.donem);
+    if(!bordroForm.brut) bordroForm.brut = hak ? String(hak) : '';
+  }
+  // Avans: Personel Avans kayıtlarından (dönem toplamı)
+  if(!bordroForm.avansManuel){
+    const av = personelDonemAvansToplam(proj, p.id, bordroForm.donem);
+    bordroForm.avansKesinti = av>0 ? String(Math.round(av*100)/100) : '';
+  }
+  // Toplam maaş: puantajdan (aylık maaş/30×gün veya yevmiye×gün)
+  if(!bordroForm.toplamManuel){
+    const tm = personelDonemToplamMaas(p, bordroForm.donem);
+    bordroForm.toplamMaas = tm>0 ? String(tm) : '';
+  }
+  if(!bordroForm.kesintiManuel) applyBordroOtomatikKesinti();
+  if(!bordroForm.netManuel) bordroForm.net = String(bordroNetHesapla(bordroForm));
+  // Bankaya yatan asgari net (avans düşülmeden)
+  if(!bordroForm.yatanManuel){
+    const yatanOneri = bordroNetAvansiz(bordroForm.brut, bordroForm.asgariUcret);
+    if(yatanOneri>0) bordroForm.yatanAsgari = String(yatanOneri);
+  }
+  syncBordroKalanElden();
+}
+function applyBordroOtomatikKesinti(){
+  const h = hesaplaBordroKesintiler(bordroForm.brut, { asgariUcret: bordroForm.asgariUcret });
+  bordroForm.asgariUcret = String(h.asgariUcret||'');
+  bordroForm.sskIsci = String(h.sskIsci);
+  bordroForm.sskIsveren = String(h.sskIsveren);
+  bordroForm.gelirVergisi = String(h.gelirVergisi);
+  bordroForm.damgaVergisi = String(h.damgaVergisi);
+  bordroForm.kesintiManuel = false;
+  if(!bordroForm.netManuel) bordroForm.net = String(bordroNetHesapla(bordroForm));
+  if(!bordroForm.yatanManuel){
+    const yatanOneri = bordroNetAvansiz(bordroForm.brut, bordroForm.asgariUcret);
+    if(yatanOneri>0) bordroForm.yatanAsgari = String(yatanOneri);
+  }
+  syncBordroKalanElden();
+}
+function buildBordroRowFromPersonel(proj, p, donem, odemeTarihi){
+  const oran = getBordroOranlari();
+  const asgari = oran.asgariUcret;
+  const brut = personelAsgariUcretli(p)
+    ? personelDonemAsgariBrut(p, donem, asgari)
+    : personelDonemHakedis(p, donem);
+  const gun = personelPuantajToplam(p, donem);
+  const avansKesinti = personelDonemAvansToplam(proj, p.id, donem);
+  const h = hesaplaBordroKesintiler(brut, { asgariUcret: asgari });
+  const draft = {
+    brut, asgariUcret: h.asgariUcret, sskIsci: h.sskIsci, sskIsveren: h.sskIsveren,
+    gelirVergisi: h.gelirVergisi, damgaVergisi: h.damgaVergisi,
+    avansKesinti, digerKesinti: 0
+  };
+  const net = bordroNetHesapla(draft);
+  const gunluk = asgariGunlukBrut(asgari);
+  const yatanAsgari = bordroNetAvansiz(brut, asgari);
+  const toplamMaas = personelDonemToplamMaas(p, donem);
+  const kalanElden = toplamMaas>0 ? Math.round((toplamMaas - yatanAsgari - avansKesinti)*100)/100 : 0;
+  return {
+    id: uid(),
+    personelId: p.id,
+    adSoyad: p.adSoyad,
+    donem,
+    odemeTarihi: odemeTarihi || isoToday(),
+    odemeSekli: 'Banka Havalesi',
+    brut, asgariUcret: h.asgariUcret,
+    sskIsci: h.sskIsci, sskIsveren: h.sskIsveren,
+    gelirVergisi: h.gelirVergisi, damgaVergisi: h.damgaVergisi,
+    avansKesinti, digerKesinti: 0,
+    net,
+    toplamMaas,
+    yatanAsgari,
+    kalanElden,
+    aciklama: personelAsgariUcretli(p)
+      ? (fmtYmLabel(donem) + ` asgari+elden bordro (${fmtNum(gun)} gün × ${fmtNum(gunluk)} TL)` + (toplamMaas?`; toplam ${fmtNum(toplamMaas)}`:''))
+      : (fmtYmLabel(donem) + ' maaş bordrosu (otomatik)'),
+    paraBirimi: projectCurrency(proj),
+    kur: null,
+    asgariUcretli: personelAsgariUcretli(p),
+    calisilanGun: gun
+  };
+}
+
+function renderBordroTab(main, proj){
+  if(!Array.isArray(proj.bordrolar)) proj.bordrolar = [];
+  const personelList = (proj.personel||[]).slice().sort((a,b)=>a.adSoyad.localeCompare(b.adSoyad,'tr'));
+  const seciliPara = (bordroForm.paraBirimi && CURRENCY_INFO[bordroForm.paraBirimi]) ? bordroForm.paraBirimi : projectCurrency(proj);
+  const kurGerekli = seciliPara !== 'TRY';
+  const kurOneri = bordroForm.kur || kurFieldValue(seciliPara, 'satis') || '';
+  if(!bordroForm.asgariUcret) bordroForm.asgariUcret = String(getBordroOranlari().asgariUcret||'');
+  // Formda eski resmi asgari (2024/2025) kaldıysa Ayarlar'daki güncel değere çek
+  else {
+    const guncelAsg = getBordroOranlari().asgariUcret;
+    const formAsg = parseFloat(bordroForm.asgariUcret);
+    if(isFinite(formAsg) && isFinite(guncelAsg) && (
+      ESKI_ASGARI_BRUT.some(v=>Math.abs(formAsg-v)<0.05) ||
+      ESKI_ASGARI_NET_YANLIS.some(v=>Math.abs(formAsg-v)<0.05)
+    )){
+      bordroForm.asgariUcret = String(guncelAsg);
+    }
+  }
+  const netOto = bordroNetHesapla(bordroForm);
+  const seciliP = (proj.personel||[]).find(x=>x.id===bordroForm.personelId);
+  const asgariMi = personelAsgariUcretli(seciliP);
+  const oranRef = getBordroOranlari();
+  const asgRef = parseFloat(bordroForm.asgariUcret)||oranRef.asgariUcret;
+  const gunlukRef = asgariGunlukBrut(asgRef);
+  const calGun = (seciliP && bordroForm.donem) ? personelPuantajToplam(seciliP, bordroForm.donem) : 0;
+  const calMesai = (seciliP && bordroForm.donem) ? personelMesaiToplam(seciliP, bordroForm.donem) : 0;
+  if(!bordroForm.toplamManuel && seciliP && bordroForm.donem){
+    const tm = personelDonemToplamMaas(seciliP, bordroForm.donem);
+    bordroForm.toplamMaas = tm>0 ? String(tm) : '';
+  }
+  if(!bordroForm.avansManuel && seciliP && bordroForm.donem){
+    const av = personelDonemAvansToplam(proj, seciliP.id, bordroForm.donem);
+    bordroForm.avansKesinti = av>0 ? String(Math.round(av*100)/100) : '';
+  }
+  const dagilim = syncBordroKalanElden();
+  const puantajToplamOneri = (seciliP && bordroForm.donem) ? personelDonemToplamMaas(seciliP, bordroForm.donem) : 0;
+  const avansOneri = (seciliP && bordroForm.donem) ? personelDonemAvansToplam(proj, seciliP.id, bordroForm.donem) : 0;
+  main.innerHTML = `
+    <div class="card glass">
+      <h2>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h5"/></svg>
+        Maaş Bordro — <span style="color:var(--aqua-dim)">${esc(proj.name)}</span>
+      </h2>
+      <p class="hint"><b>Toplam maaş</b> puantajdan (aylık maaş÷30 × gün veya yevmiye × gün), <b>avans</b> Personel Avans kayıtlarından çekilir. Kalan elden = toplam − yatan asgari − avans.</p>
+      ${seciliP?`
+      <div class="totals-strip" style="margin-bottom:10px;">
+        <div class="total-chip"><span class="lbl">Ücret tipi</span><span class="val">${asgariMi?'SGK asgari + elden':'Yevmiye / hakediş'}</span></div>
+        <div class="total-chip"><span class="lbl">Çalışılan gün</span><span class="val">${fmtNum(calGun)}</span></div>
+        ${asgariMi?`<div class="total-chip"><span class="lbl">Günlük asgari</span><span class="val">${fmtMoney(gunlukRef)}</span></div>
+        <div class="total-chip"><span class="lbl">Gün × asgari</span><span class="val">${fmtMoney(Math.round((calGun*gunlukRef + calMesai*(gunlukRef/8))*100)/100)}</span></div>`:''}
+        ${calMesai?`<div class="total-chip"><span class="lbl">Mesai saati</span><span class="val">${fmtNum(calMesai)}</span></div>`:''}
+      </div>`:''}
+      <div class="field-grid">
+        <div class="field" style="grid-column:span 2;"><label>Personel</label>
+          <select id="bd-personelId">${personelOptionsHtml(personelList, bordroForm.personelId, '— Personel Seçin —')}</select>
+        </div>
+        <div class="field"><label>Dönem (Ay)</label>
+          <input type="month" id="bd-donem" value="${esc(bordroForm.donem)}">
+        </div>
+        <div class="field"><label>Ödeme Tarihi</label>
+          <input type="date" id="bd-odemeTarihi" value="${esc(bordroForm.odemeTarihi)}">
+        </div>
+        <div class="field"><label>Ödeme Şekli</label>
+          <select id="bd-odemeSekli">${ODEME_SEKLI_OPTIONS.map(o=>`<option value="${o}" ${bordroForm.odemeSekli===o?'selected':''}>${o}</option>`).join('')}</select>
+        </div>
+        <div class="field"><label>Asgari Ücret (genel referans / GV istisnası)</label>
+          <div class="field-actions">
+            <input class="mono" type="number" step="any" id="bd-asgariUcret" value="${esc(bordroForm.asgariUcret)}" placeholder="Ayarlar'daki tutar">
+            <button type="button" class="btn btn-ghost" id="btnAsgariAyarlardan" title="Ayarlar > Bordro Oranları tutarını getir">Ayarlardan Al</button>
+          </div>
+        </div>
+        <div class="field"><label>Brüt / Hak Ediş (SGK bildirimi)</label>
+          <div class="field-actions">
+            <input class="mono" type="number" step="any" id="bd-brut" value="${esc(bordroForm.brut)}" placeholder="${asgariMi?'Gün × günlük asgari':'Puantaj hakediş'}">
+            <button type="button" class="btn btn-ghost" id="btnBrutAsgari" title="${asgariMi?'Brüt = günlük asgari × çalışılan gün':'Brüt = aylık asgari ücret'}">${asgariMi?'Gün × Asgari':'Brüt = Asgari'}</button>
+          </div>
+        </div>
+        <div class="field"><label>SSK İşçi Kesintisi</label>
+          <input class="mono" type="number" step="any" id="bd-sskIsci" value="${esc(bordroForm.sskIsci)}" placeholder="0">
+        </div>
+        <div class="field"><label>SSK İşveren (firma)</label>
+          <input class="mono" type="number" step="any" id="bd-sskIsveren" value="${esc(bordroForm.sskIsveren)}" placeholder="0">
+        </div>
+        <div class="field"><label>Gelir Vergisi</label>
+          <input class="mono" type="number" step="any" id="bd-gelirVergisi" value="${esc(bordroForm.gelirVergisi)}" placeholder="0">
+        </div>
+        <div class="field"><label>Damga Vergisi</label>
+          <input class="mono" type="number" step="any" id="bd-damgaVergisi" value="${esc(bordroForm.damgaVergisi)}" placeholder="0">
+        </div>
+        <div class="field"><label>Diğer Kesinti</label>
+          <input class="mono" type="number" step="any" id="bd-digerKesinti" value="${esc(bordroForm.digerKesinti)}" placeholder="0">
+        </div>
+        <div class="field"><label>Resmi Net (bordro hesabı)</label>
+          <div class="field-actions">
+            <input class="mono" type="number" step="any" id="bd-net" value="${esc(bordroForm.netManuel ? bordroForm.net : (bordroForm.net || String(netOto)))}" placeholder="${esc(String(netOto))}">
+            <button type="button" class="btn btn-ghost" id="btnNettenHesapla" title="Yazdığınız nete göre brüt ve SSK/GV/damga hesaplar">Netten Hesapla</button>
+          </div>
+        </div>
+      </div>
+
+      <h3 style="margin:16px 0 8px;font-size:0.95rem;">Ödeme Dağılımı (Toplam → Asgari yatan → Avans → Kalan elden)</h3>
+      <p class="hint" style="margin-top:0;">Toplam puantajdan · Avans “Avans/Zimmet” kayıtlarından · Kalan otomatik. Puantaj önerisi: <b>${fmtMoney(puantajToplamOneri)}</b> · Dönem avansı: <b>${fmtMoney(avansOneri)}</b></p>
+      <div class="field-grid">
+        <div class="field"><label>1) Toplam Maaş ${bordroForm.toplamManuel?'(manuel)':'(puantajdan)'}</label>
+          <div class="field-actions">
+            <input class="mono" type="number" step="any" id="bd-toplamMaas" value="${esc(bordroForm.toplamMaas)}" placeholder="Puantaj hakedişi">
+            <button type="button" class="btn btn-ghost" id="btnToplamPuantajdan" title="Personel puantajından yeniden çek">Puantajdan Al</button>
+          </div>
+        </div>
+        <div class="field"><label>2) Yatan Asgari (banka)</label>
+          <input class="mono" type="number" step="any" id="bd-yatanAsgari" value="${esc(bordroForm.yatanAsgari)}" placeholder="Asgari net / bankaya yatan">
+        </div>
+        <div class="field"><label>3) Verilen Avans ${bordroForm.avansManuel?'(manuel)':'(avans kayıtlarından)'}</label>
+          <div class="field-actions">
+            <input class="mono" type="number" step="any" id="bd-avansKesinti" value="${esc(bordroForm.avansKesinti)}" placeholder="Personel avans toplamı">
+            <button type="button" class="btn btn-ghost" id="btnAvansKayitlardan" title="Avans/Zimmet sekmesindeki dönem avanslarını çek">Avanslardan Al</button>
+          </div>
+        </div>
+        <div class="field"><label>4) Kalan Elden (otomatik)</label>
+          <input class="mono" type="number" step="any" id="bd-kalanElden" value="${esc(bordroForm.kalanElden)}" readonly style="background:rgba(0,0,0,0.04);font-weight:700;" title="Toplam − Yatan asgari − Avans">
+        </div>
+      </div>
+      <div class="totals-strip" style="margin-top:8px;">
+        <div class="total-chip"><span class="lbl">Toplam maaş</span><span class="val">${fmtMoney(dagilim.toplam)}</span></div>
+        <div class="total-chip"><span class="lbl">Yatan asgari</span><span class="val">${fmtMoney(dagilim.yatan)}</span></div>
+        <div class="total-chip"><span class="lbl">Avans</span><span class="val">${fmtMoney(dagilim.avans)}</span></div>
+        <div class="total-chip"><span class="lbl">Kalan elden</span><span class="val" style="color:var(--aqua-dim);">${fmtMoney(dagilim.kalan)}</span></div>
+        <div class="total-chip"><span class="lbl">SSK İşveren</span><span class="val">${fmtMoney(parseFloat(bordroForm.sskIsveren)||0)}</span></div>
+      </div>
+      <div class="field-grid" style="margin-top:8px;">
+        <div class="field"><label>Para Birimi</label>
+          <select id="bd-paraBirimi">
+            ${Object.keys(CURRENCY_INFO).map(code=>`<option value="${code}" ${seciliPara===code?'selected':''}>${esc(CURRENCY_INFO[code].name)}</option>`).join('')}
+          </select>
+        </div>
+        ${kurGerekli?`
+        <div class="field"><label>Satış Kuru (1 ${esc(CURRENCY_INFO[seciliPara].label)} = ? TL)</label>
+          <input class="mono" type="number" step="any" min="0" id="bd-kur" value="${esc(kurOneri)}" placeholder="Örn: 34.20">
+        </div>`:''}
+        <div class="field" style="grid-column:span 2;"><label>Açıklama</label>
+          <input type="text" id="bd-aciklama" value="${esc(bordroForm.aciklama)}" placeholder="Örn: Mart 2026 — asgari banka + kalan elden">
+        </div>
+      </div>
+      <div class="btn-row" style="margin-top:10px;">
+        <button class="btn btn-ghost" id="btnBordroOneri">Puantajdan Öner</button>
+        <button class="btn btn-ghost" id="btnBordroKesintiHesapla" title="SSK / GV / damga hesapla">Kesintileri Hesapla</button>
+        <button class="btn btn-ghost" id="btnDagilimHesapla">Dağılımı Hesapla</button>
+        <button class="btn btn-primary" id="btnSaveBordro">${bordroForm.id?'Bordroyu Güncelle':'Bordro Kaydet'}</button>
+        <button class="btn btn-ghost" id="btnClearBordro">Formu Temizle</button>
+      </div>
+    </div>
+
+    <div class="card glass">
+      <h2>Toplu Aylık Bordro</h2>
+      <p class="hint">Seçilen ay için <b>aktif</b> tüm personele bordro oluşturur. Asgari ücretlilerde brüt = günlük asgari × gün; personelde <b>aylık maaş</b> varsa yatan asgari + avans + kalan elden otomatik ayrılır. Aynı dönem+personel varsa atlanır.</p>
+      <div class="field-grid" style="grid-template-columns:1fr 1fr auto;align-items:end;">
+        <div class="field"><label>Dönem</label>
+          <input type="month" id="bd-topluDonem" value="${esc(ui.bordroTopluDonem || currentYm())}">
+        </div>
+        <div class="field"><label>Ödeme Tarihi</label>
+          <input type="date" id="bd-topluOdeme" value="${esc(ui.bordroTopluOdeme || isoToday())}">
+        </div>
+        <button class="btn btn-primary" id="btnTopluBordro" style="margin-bottom:2px;">Tüm Personele Bordro Oluştur</button>
+      </div>
+    </div>
+
+    <div class="card glass">
+      <h2>Bordro Listesi</h2>
+      <div class="filter-bar" style="margin-bottom:10px;">
+        <select id="bd-filterPersonel">${personelOptionsHtml(personelList, ui.bordroFilterId, 'Personel: Tümü')}</select>
+        <button class="btn btn-ghost btn-sm" id="btnClearBordroFilter" style="align-self:end;">Filtreyi Temizle</button>
+      </div>
+      <div class="table-scroll" id="bordroTableWrap"></div>
+      <div id="bordroTotals" style="margin-top:10px;"></div>
+      <div class="btn-row" style="margin-top:10px;">
+        <button class="btn btn-ghost" id="btnBordroPdf">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg>
+          Bordro Listesi PDF
+        </button>
+      </div>
+    </div>
+  `;
+
+  const syncField = (k, el)=>{
+    if(!el) return;
+    el.addEventListener('input', ()=>{
+      bordroForm[k] = el.value;
+      if(['sskIsci','gelirVergisi','damgaVergisi','sskIsveren'].includes(k)) bordroForm.kesintiManuel = true;
+      if(k==='yatanAsgari') bordroForm.yatanManuel = true;
+      if(k==='toplamMaas') bordroForm.toplamManuel = true;
+      if(k==='avansKesinti') bordroForm.avansManuel = true;
+      if(['brut','sskIsci','gelirVergisi','damgaVergisi','avansKesinti','digerKesinti'].includes(k) && !bordroForm.netManuel){
+        if(k==='brut' && !bordroForm.kesintiManuel){
+          applyBordroOtomatikKesinti();
+          ['sskIsci','sskIsveren','gelirVergisi','damgaVergisi','asgariUcret','yatanAsgari','kalanElden'].forEach(fk=>{
+            const fel = document.getElementById('bd-'+fk);
+            if(fel && document.activeElement !== fel) fel.value = bordroForm[fk]||'';
+          });
+        }
+        bordroForm.net = String(bordroNetHesapla(bordroForm));
+        const netEl = document.getElementById('bd-net');
+        if(netEl && document.activeElement !== netEl) netEl.value = bordroForm.net;
+      }
+      if(['toplamMaas','yatanAsgari','avansKesinti'].includes(k)){
+        const d = syncBordroKalanElden();
+        const kel = document.getElementById('bd-kalanElden');
+        if(kel && document.activeElement !== kel) kel.value = bordroForm.kalanElden||'';
+        // canlı chip güncellemesi için basit — ağır re-render yok
+        void d;
+      }
+      if(k==='net') bordroForm.netManuel = true;
+    });
+  };
+  ['personelId','donem','odemeTarihi','odemeSekli','asgariUcret','brut','sskIsci','sskIsveren','gelirVergisi','damgaVergisi','avansKesinti','digerKesinti','net','aciklama','kur','toplamMaas','yatanAsgari'].forEach(k=>{
+    syncField(k, document.getElementById('bd-'+k));
+  });
+  document.getElementById('bd-personelId').addEventListener('change', ()=>{
+    bordroForm.personelId = document.getElementById('bd-personelId').value;
+    bordroForm.brut = '';
+    bordroForm.avansKesinti = '';
+    bordroForm.toplamMaas = '';
+    bordroForm.yatanAsgari = '';
+    bordroForm.kalanElden = '';
+    bordroForm.netManuel = false;
+    bordroForm.kesintiManuel = false;
+    bordroForm.yatanManuel = false;
+    bordroForm.toplamManuel = false;
+    bordroForm.avansManuel = false;
+    syncBordroOneri(proj);
+    renderBordroTab(main, proj);
+  });
+  document.getElementById('bd-donem').addEventListener('change', ()=>{
+    bordroForm.donem = document.getElementById('bd-donem').value;
+    bordroForm.brut = '';
+    bordroForm.avansKesinti = '';
+    bordroForm.toplamMaas = '';
+    bordroForm.yatanAsgari = '';
+    bordroForm.kalanElden = '';
+    bordroForm.netManuel = false;
+    bordroForm.kesintiManuel = false;
+    bordroForm.yatanManuel = false;
+    bordroForm.toplamManuel = false;
+    bordroForm.avansManuel = false;
+    syncBordroOneri(proj);
+    renderBordroTab(main, proj);
+  });
+  const paraSel = document.getElementById('bd-paraBirimi');
+  if(paraSel) paraSel.addEventListener('change', ()=>{
+    bordroForm.paraBirimi = paraSel.value;
+    bordroForm.kur = '';
+    renderBordroTab(main, proj);
+  });
+  document.getElementById('btnBordroOneri').onclick = ()=>{
+    if(!bordroForm.personelId){ showToast('Önce personel seçin.'); return; }
+    bordroForm.brut = '';
+    bordroForm.avansKesinti = '';
+    bordroForm.toplamMaas = '';
+    bordroForm.yatanAsgari = '';
+    bordroForm.kalanElden = '';
+    bordroForm.netManuel = false;
+    bordroForm.kesintiManuel = false;
+    bordroForm.yatanManuel = false;
+    bordroForm.toplamManuel = false;
+    bordroForm.avansManuel = false;
+    syncBordroOneri(proj);
+    renderBordroTab(main, proj);
+    showToast('Puantaj toplamı, avans kayıtları ve kalan elden önerildi.');
+  };
+  document.getElementById('btnBordroKesintiHesapla').onclick = ()=>{
+    if(!(parseFloat(bordroForm.brut)>0)){ showToast('Önce brüt tutar girin veya Puantajdan Öner / Gün×Asgari Yap’a basın.'); return; }
+    applyBordroOtomatikKesinti();
+    renderBordroTab(main, proj);
+    showToast('SSK / GV / damga oranlara göre hesaplandı.');
+  };
+  const runNettenHesapla = ()=>{
+    const netEl = document.getElementById('bd-net');
+    if(netEl) bordroForm.net = netEl.value;
+    const hedef = parseFloat(bordroForm.net)||0;
+    if(!(hedef>0)){ showToast('Önce resmi net kutusuna tutarı yazın.'); return; }
+    if(!applyBordroFromHedefNet()){ showToast('Netten brüt hesaplanamadı.'); return; }
+    renderBordroTab(main, proj);
+    showToast('Net ' + fmtMoney(hedef) + ' için brüt ve kesintiler hesaplandı.');
+  };
+  const btnNet1 = document.getElementById('btnNettenHesapla');
+  if(btnNet1) btnNet1.onclick = runNettenHesapla;
+  const btnDagilim = document.getElementById('btnDagilimHesapla');
+  if(btnDagilim) btnDagilim.onclick = ()=>{
+    if(!bordroForm.personelId || !bordroForm.donem){ showToast('Personel ve dönem seçin.'); return; }
+    const p = (proj.personel||[]).find(x=>x.id===bordroForm.personelId);
+    bordroForm.toplamManuel = false;
+    bordroForm.avansManuel = false;
+    bordroForm.yatanManuel = false;
+    const tm = personelDonemToplamMaas(p, bordroForm.donem);
+    const av = personelDonemAvansToplam(proj, bordroForm.personelId, bordroForm.donem);
+    bordroForm.toplamMaas = tm>0 ? String(tm) : '';
+    bordroForm.avansKesinti = av>0 ? String(Math.round(av*100)/100) : '';
+    if(!(parseFloat(bordroForm.yatanAsgari)>0)){
+      const y = bordroNetAvansiz(bordroForm.brut, bordroForm.asgariUcret);
+      if(y>0) bordroForm.yatanAsgari = String(y);
+    }
+    const d = syncBordroKalanElden();
+    renderBordroTab(main, proj);
+    showToast(`Puantaj ${fmtMoney(d.toplam)} − yatan ${fmtMoney(d.yatan)} − avans ${fmtMoney(d.avans)} = elden ${fmtMoney(d.kalan)}`);
+  };
+  const btnToplamP = document.getElementById('btnToplamPuantajdan');
+  if(btnToplamP) btnToplamP.onclick = ()=>{
+    if(!bordroForm.personelId || !bordroForm.donem){ showToast('Personel ve dönem seçin.'); return; }
+    const p = (proj.personel||[]).find(x=>x.id===bordroForm.personelId);
+    const tm = personelDonemToplamMaas(p, bordroForm.donem);
+    if(!(tm>0)){ showToast('Bu dönemde puantaj/hakediş bulunamadı. Önce puantaj girin veya personelde aylık maaş/yevmiye tanımlayın.'); return; }
+    bordroForm.toplamMaas = String(tm);
+    bordroForm.toplamManuel = false;
+    syncBordroKalanElden();
+    renderBordroTab(main, proj);
+    showToast('Toplam maaş puantajdan alındı: '+fmtMoney(tm));
+  };
+  const btnAvansK = document.getElementById('btnAvansKayitlardan');
+  if(btnAvansK) btnAvansK.onclick = ()=>{
+    if(!bordroForm.personelId || !bordroForm.donem){ showToast('Personel ve dönem seçin.'); return; }
+    const av = personelDonemAvansToplam(proj, bordroForm.personelId, bordroForm.donem);
+    bordroForm.avansKesinti = av>0 ? String(Math.round(av*100)/100) : '';
+    bordroForm.avansManuel = false;
+    syncBordroKalanElden();
+    renderBordroTab(main, proj);
+    showToast(av>0 ? ('Dönem avansı kayıtlardan alındı: '+fmtMoney(av)) : 'Bu dönemde avans kaydı yok.');
+  };
+  const netInput = document.getElementById('bd-net');
+  if(netInput){
+    netInput.addEventListener('change', ()=>{
+      bordroForm.net = netInput.value;
+      bordroForm.netManuel = true;
+      const hedef = parseFloat(bordroForm.net)||0;
+      if(hedef>0 && applyBordroFromHedefNet()){
+        renderBordroTab(main, proj);
+        showToast('Netten otomatik brüt/kesinti hesaplandı.');
+      }
+    });
+  }
+  const btnAsgariAy = document.getElementById('btnAsgariAyarlardan');
+  if(btnAsgariAy) btnAsgariAy.onclick = ()=>{
+    migrateBordroOranlariAsgari();
+    const o = getBordroOranlari();
+    const d = defaultBordroOranlari();
+    // Ayarlarda hâlâ eskiyse doğrudan 2026 yaz
+    const asg = (parseFloat(o.asgariUcret)>0 && !ESKI_ASGARI_BRUT.some(v=>Math.abs(o.asgariUcret-v)<0.05))
+      ? o.asgariUcret : d.asgariUcret;
+    if(Math.abs(asg - d.asgariUcret) < 0.5 && (!state.bordroOranlari || Math.abs((parseFloat(state.bordroOranlari.asgariUcret)||0)-d.asgariUcret)>0.5)){
+      state.bordroOranlari = Object.assign({}, o, { asgariUcret: d.asgariUcret, asgariUcretYil: d.asgariUcretYil });
+      saveState();
+    }
+    bordroForm.asgariUcret = String(asg);
+    const el = document.getElementById('bd-asgariUcret');
+    if(el) el.value = bordroForm.asgariUcret;
+    showToast('Asgari ücret (2026 brüt): '+fmtMoney(asg)+' · net ≈ '+fmtMoney(d.asgariUcretNet));
+  };
+  const btnBrutAsgari = document.getElementById('btnBrutAsgari');
+  if(btnBrutAsgari) btnBrutAsgari.onclick = ()=>{
+    const o = getBordroOranlari();
+    const asg = parseFloat(bordroForm.asgariUcret)||o.asgariUcret;
+    if(!(asg>0)){ showToast('Önce Ayarlar’da asgari ücreti kaydedin veya Ayarlardan Al’a basın.'); return; }
+    bordroForm.asgariUcret = String(asg);
+    const p = (proj.personel||[]).find(x=>x.id===bordroForm.personelId);
+    if(personelAsgariUcretli(p) && bordroForm.donem){
+      const brutGun = personelDonemAsgariBrut(p, bordroForm.donem, asg);
+      const gun = personelPuantajToplam(p, bordroForm.donem);
+      if(!(brutGun>0)){ showToast('Bu dönemde puantaj günü yok. Önce puantaj girin veya brütü elle yazın.'); return; }
+      bordroForm.brut = String(brutGun);
+      bordroForm.kesintiManuel = false;
+      bordroForm.netManuel = false;
+      applyBordroOtomatikKesinti();
+      renderBordroTab(main, proj);
+      showToast(`${fmtNum(gun)} gün × günlük asgari = ${fmtMoney(brutGun)}`);
+    } else {
+      bordroForm.brut = String(asg);
+      bordroForm.kesintiManuel = false;
+      bordroForm.netManuel = false;
+      applyBordroOtomatikKesinti();
+      renderBordroTab(main, proj);
+      showToast('Brüt aylık asgari ücrete eşitlendi; kesintiler hesaplandı.');
+    }
+  };
+  document.getElementById('btnSaveBordro').onclick = ()=>saveBordroRow(proj);
+  document.getElementById('btnClearBordro').onclick = ()=>{ bordroForm = emptyBordroForm(); renderMain(); };
+  document.getElementById('bd-filterPersonel').addEventListener('change',(e)=>{ ui.bordroFilterId = e.target.value; renderBordroTable(proj); });
+  document.getElementById('btnClearBordroFilter').onclick = ()=>{ ui.bordroFilterId=''; renderMain(); };
+  document.getElementById('btnBordroPdf').onclick = ()=>exportBordroPdf(proj);
+  const topluDonemEl = document.getElementById('bd-topluDonem');
+  const topluOdemeEl = document.getElementById('bd-topluOdeme');
+  if(topluDonemEl) topluDonemEl.addEventListener('change', ()=>{ ui.bordroTopluDonem = topluDonemEl.value; });
+  if(topluOdemeEl) topluOdemeEl.addEventListener('change', ()=>{ ui.bordroTopluOdeme = topluOdemeEl.value; });
+  document.getElementById('btnTopluBordro').onclick = ()=>topluAylikBordroOlustur(proj);
+  renderBordroTable(proj);
+}
+
+function topluAylikBordroOlustur(proj){
+  if(!Array.isArray(proj.bordrolar)) proj.bordrolar = [];
+  const donem = ui.bordroTopluDonem || currentYm();
+  const odemeTarihi = ui.bordroTopluOdeme || isoToday();
+  if(!donem){ showToast('Dönem seçin.'); return; }
+  const aktifler = (proj.personel||[]).filter(p=>personelStatus(p).cls==='aktif');
+  if(!aktifler.length){ showToast('Aktif personel yok.'); return; }
+  let eklendi = 0, atlandi = 0, sifir = 0;
+  aktifler.forEach(p=>{
+    const exists = (proj.bordrolar||[]).some(b=>b.personelId===p.id && b.donem===donem);
+    if(exists){ atlandi++; return; }
+    const row = buildBordroRowFromPersonel(proj, p, donem, odemeTarihi);
+    if(!(row.brut>0)){ sifir++; return; }
+    proj.bordrolar.push(row);
+    eklendi++;
+  });
+  if(eklendi>0) saveState();
+  renderMain();
+  showToast(`${eklendi} bordro eklendi` + (atlandi?`, ${atlandi} zaten vardı`:'' ) + (sifir?`, ${sifir} sıfır hakediş atlandı`:'' ) + '.');
+}
+
+function saveBordroRow(proj){
+  if(!Array.isArray(proj.bordrolar)) proj.bordrolar = [];
+  if(!bordroForm.personelId){ showToast('Lütfen personel seçin.'); return; }
+  if(!bordroForm.donem){ showToast('Lütfen dönem seçin.'); return; }
+  if(!bordroForm.odemeTarihi){ showToast('Lütfen ödeme tarihini girin.'); return; }
+  const brut = parseFloat(bordroForm.brut)||0;
+  if(brut<=0){ showToast('Lütfen geçerli bir brüt tutar girin (SGK bildirimi için asgari brüt).'); return; }
+  const p = proj.personel.find(x=>x.id===bordroForm.personelId);
+  const paraBirimi = (bordroForm.paraBirimi && CURRENCY_INFO[bordroForm.paraBirimi]) ? bordroForm.paraBirimi : projectCurrency(proj);
+  const kur = paraBirimi!=='TRY'
+    ? (parseFloat(bordroForm.kur) || parseFloat(kurFieldValue(paraBirimi, 'satis')) || null)
+    : null;
+  const net = bordroForm.netManuel
+    ? (parseFloat(bordroForm.net)||0)
+    : bordroNetHesapla(bordroForm);
+  const calGun = p && bordroForm.donem ? personelPuantajToplam(p, bordroForm.donem) : 0;
+  if(!(parseFloat(bordroForm.yatanAsgari)>0)){
+    bordroForm.yatanAsgari = String(bordroNetAvansiz(brut, bordroForm.asgariUcret));
+  }
+  if(!bordroForm.toplamManuel && p && bordroForm.donem){
+    const tm = personelDonemToplamMaas(p, bordroForm.donem);
+    if(tm>0) bordroForm.toplamMaas = String(tm);
+  }
+  if(!bordroForm.avansManuel && p && bordroForm.donem){
+    const av = personelDonemAvansToplam(proj, p.id, bordroForm.donem);
+    bordroForm.avansKesinti = av>0 ? String(Math.round(av*100)/100) : (bordroForm.avansKesinti||'');
+  }
+  const dag = syncBordroKalanElden();
+  const row = {
+    id: bordroForm.id || uid(),
+    personelId: bordroForm.personelId,
+    adSoyad: p ? p.adSoyad : '(silinmiş personel)',
+    donem: bordroForm.donem,
+    odemeTarihi: bordroForm.odemeTarihi,
+    odemeSekli: bordroForm.odemeSekli,
+    brut,
+    asgariUcret: parseFloat(bordroForm.asgariUcret)||0,
+    sskIsci: parseFloat(bordroForm.sskIsci)||0,
+    sskIsveren: parseFloat(bordroForm.sskIsveren)||0,
+    gelirVergisi: parseFloat(bordroForm.gelirVergisi)||0,
+    damgaVergisi: parseFloat(bordroForm.damgaVergisi)||0,
+    avansKesinti: dag.avans,
+    digerKesinti: parseFloat(bordroForm.digerKesinti)||0,
+    net: Math.round(net*100)/100,
+    toplamMaas: dag.toplam,
+    yatanAsgari: dag.yatan,
+    kalanElden: dag.kalan,
+    aciklama: (bordroForm.aciklama||'').trim(),
+    paraBirimi,
+    kur,
+    asgariUcretli: personelAsgariUcretli(p),
+    calisilanGun: calGun
+  };
+  if(bordroForm.id){
+    const idx = proj.bordrolar.findIndex(r=>r.id===row.id);
+    if(idx>-1) proj.bordrolar[idx]=row;
+  } else {
+    proj.bordrolar.push(row);
+  }
+  saveState();
+  bordroForm = emptyBordroForm();
+  renderMain();
+  showToast('Maaş bordrosu kaydedildi.');
+}
+
+function filteredBordro(proj){
+  return (proj.bordrolar||[]).filter(a=> !ui.bordroFilterId || a.personelId===ui.bordroFilterId)
+    .slice().sort((a,b)=> (b.donem||'').localeCompare(a.donem||'') || (b.odemeTarihi||'').localeCompare(a.odemeTarihi||''));
+}
+
+function renderBordroTable(proj){
+  const wrap = document.getElementById('bordroTableWrap');
+  const totalsEl = document.getElementById('bordroTotals');
+  if(!wrap) return;
+  const rows = filteredBordro(proj);
+  if(rows.length===0){
+    wrap.innerHTML = `<div class="empty-state">Kayıtlı bordro bulunamadı.</div>`;
+    if(totalsEl) totalsEl.innerHTML = '';
+    return;
+  }
+  const sumNet = rows.reduce((s,r)=>s+bordroPersoneleOdenen(r),0);
+  const sumSskIv = rows.reduce((s,r)=>s+(parseFloat(r.sskIsveren)||0),0);
+  const sumKalan = rows.reduce((s,r)=>s+(parseFloat(r.kalanElden)||0),0);
+  const sumYatan = rows.reduce((s,r)=>s+(parseFloat(r.yatanAsgari)||0),0);
+  wrap.innerHTML = `
+    <table>
+      <thead><tr>
+        <th>Personel</th><th>Dönem</th><th>Ödeme</th>
+        <th class="num">Toplam</th><th class="num">Yatan</th><th class="num">Avans</th><th class="num">Elden</th>
+        <th class="num">Brüt</th><th class="num">Net</th><th></th>
+      </tr></thead>
+      <tbody>
+        ${rows.map(r=>{
+          const cur = (r.paraBirimi && CURRENCY_INFO[r.paraBirimi]) ? r.paraBirimi : projectCurrency(proj);
+          const toplam = parseFloat(r.toplamMaas)||0;
+          return `<tr data-id="${r.id}">
+            <td>${esc(r.adSoyad)}</td>
+            <td>${esc(fmtYmLabel(r.donem))}</td>
+            <td>${fmtDateStr(r.odemeTarihi)}</td>
+            <td class="num">${toplam>0?fmtMoney(toplam, cur):'—'}</td>
+            <td class="num">${(parseFloat(r.yatanAsgari)||0)>0?fmtMoney(r.yatanAsgari, cur):'—'}</td>
+            <td class="num">${fmtMoney(r.avansKesinti, cur)}</td>
+            <td class="num" style="font-weight:700;">${toplam>0?fmtMoney(r.kalanElden, cur):'—'}</td>
+            <td class="num">${fmtMoney(r.brut, cur)}</td>
+            <td class="num">${fmtMoney(r.net, cur)}</td>
+            <td>
+              <div class="row-actions">
+                <button class="icon-btn" data-act="pdf" title="Resmi Bordro PDF"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M9 15h6M9 11h2"/></svg></button>
+                <button class="icon-btn" data-act="edit" title="Düzenle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg></button>
+                <button class="icon-btn danger" data-act="delete" title="Sil"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0l-1 14a2 2 0 01-2 2H7a2 2 0 01-2-2L4 6h16z"/></svg></button>
+              </div>
+            </td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>`;
+  if(totalsEl){
+    totalsEl.innerHTML = `<div class="totals-strip">
+      <div class="total-chip"><span class="lbl">Yatan asgari</span><span class="val">${fmtMoney(sumYatan)}</span></div>
+      <div class="total-chip"><span class="lbl">Kalan elden</span><span class="val">${fmtMoney(sumKalan)}</span></div>
+      <div class="total-chip"><span class="lbl">Banka+Elden</span><span class="val">${fmtMoney(sumNet)}</span></div>
+      <div class="total-chip"><span class="lbl">SSK İşveren</span><span class="val">${fmtMoney(sumSskIv)}</span></div>
+    </div>`;
+  }
+  wrap.querySelectorAll('tr[data-id]').forEach(tr=>{
+    tr.addEventListener('click',(e)=>{
+      const act = e.target.closest('[data-act]')?.dataset.act;
+      if(!act) return;
+      const r = (proj.bordrolar||[]).find(x=>x.id===tr.dataset.id);
+      if(!r) return;
+      if(act==='edit'){
+        bordroForm = {
+          id:r.id, personelId:r.personelId, donem:r.donem||currentYm(), odemeTarihi:r.odemeTarihi||isoToday(),
+          odemeSekli:r.odemeSekli||'Banka Havalesi',
+          brut:String(r.brut??''), asgariUcret:String(r.asgariUcret??''),
+          sskIsci:String(r.sskIsci??''), sskIsveren:String(r.sskIsveren??''),
+          gelirVergisi:String(r.gelirVergisi??''), damgaVergisi:String(r.damgaVergisi??''),
+          avansKesinti:String(r.avansKesinti??''), digerKesinti:String(r.digerKesinti??''),
+          net:String(r.net??''), aciklama:r.aciklama||'', paraBirimi:r.paraBirimi||'', kur:r.kur!=null?String(r.kur):'',
+          toplamMaas:String(r.toplamMaas??''), yatanAsgari:String(r.yatanAsgari??''), kalanElden:String(r.kalanElden??''),
+          netManuel:true, kesintiManuel:true, yatanManuel:!!(parseFloat(r.yatanAsgari)>0),
+          toplamManuel:true, avansManuel:true
+        };
+        renderMain(); window.scrollTo({top:0, behavior:'smooth'});
+      } else if(act==='pdf'){
+        exportResmiBordroPdf(proj, r);
+      } else if(act==='delete'){
+        confirmModal(`${r.adSoyad} — ${fmtYmLabel(r.donem)} bordrosunu silmek istediğinize emin misiniz?`, ()=>{
+          proj.bordrolar = (proj.bordrolar||[]).filter(x=>x.id!==r.id);
+          saveState(); renderMain();
+          showToast('Bordro silindi.');
+        });
+      }
+    });
+  });
+}
+
+async function exportBordroPdf(proj){
+  showToast('PDF hazırlanıyor…');
+  const rows = filteredBordro(proj);
+  if(rows.length===0){ showToast('Listelenecek bordro yok.'); return; }
+  const cellStyle = 'border:1px solid #E4EFEF;padding:5px 6px;text-align:left;word-break:break-word;';
+  const numStyle = cellStyle + 'text-align:right;';
+  const html = `
+    ${pdfHeaderHtml(proj, 'Maaş Bordro Listesi')}
+    <table style="width:100%;border-collapse:collapse;font-size:9px;table-layout:fixed;">
+      <thead><tr style="background:#EAF6F5;">
+        <th style="${cellStyle}">Personel</th><th style="${cellStyle}">Dönem</th><th style="${cellStyle}">Ödeme</th>
+        <th style="${numStyle}">Brüt</th><th style="${numStyle}">SSK İşçi</th><th style="${numStyle}">SSK İşv.</th>
+        <th style="${numStyle}">GV</th><th style="${numStyle}">Avans</th><th style="${numStyle}">Net</th>
+      </tr></thead>
+      <tbody>
+        ${rows.map(r=>{
+          const cur = (r.paraBirimi && CURRENCY_INFO[r.paraBirimi]) ? r.paraBirimi : projectCurrency(proj);
+          return `<tr>
+            <td style="${cellStyle}">${esc(r.adSoyad)}</td>
+            <td style="${cellStyle}">${esc(fmtYmLabel(r.donem))}</td>
+            <td style="${cellStyle}">${fmtDateStr(r.odemeTarihi)}</td>
+            <td style="${numStyle}">${fmtMoney(r.brut, cur)}</td>
+            <td style="${numStyle}">${fmtMoney(r.sskIsci, cur)}</td>
+            <td style="${numStyle}">${fmtMoney(r.sskIsveren, cur)}</td>
+            <td style="${numStyle}">${fmtMoney(r.gelirVergisi, cur)}</td>
+            <td style="${numStyle}">${fmtMoney(r.avansKesinti, cur)}</td>
+            <td style="${numStyle}">${fmtMoney(r.net, cur)}</td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>
+    <div style="margin-top:36px;font-size:9px;color:#8096A3;">DNZ Metraj &amp; Teklif Yönetimi ile oluşturulmuştur.</div>
+  `;
+  showPdfPreview(html, `maas-bordro-${proj.name.replace(/[^a-z0-9ığüşöç]+/gi,'_')}.pdf`, 'l');
+}
+
+async function exportResmiBordroPdf(proj, r){
+  showToast('Ücret bordrosu hazırlanıyor…');
+  const p = (proj.personel||[]).find(x=>x.id===r.personelId) || {};
+  const cur = (r.paraBirimi && CURRENCY_INFO[r.paraBirimi]) ? r.paraBirimi : projectCurrency(proj);
+  const gun = (r.calisilanGun!=null && r.calisilanGun!=='') ? (parseFloat(r.calisilanGun)||0) : personelPuantajToplam(p, r.donem);
+  const mesai = personelMesaiToplam(p, r.donem);
+  const asgariMi = !!(r.asgariUcretli || personelAsgariUcretli(p));
+  const asgRef = parseFloat(r.asgariUcret)||getBordroOranlari().asgariUcret;
+  const gunlukAsgari = asgariGunlukBrut(asgRef);
+  const yevmiye = asgariMi ? gunlukAsgari : (parseFloat(p.yevmiye)||0);
+  const normalUcret = Math.round((gun * yevmiye)*100)/100;
+  const mesaiUcret = Math.round((mesai * (yevmiye/8))*100)/100;
+  const brut = parseFloat(r.brut)||0;
+  const kesinti = bordroKesintiToplam(r);
+  const firma = state.company || {};
+  const money = (n)=> fmtMoney(n, cur);
+  const tdL = 'border:1px solid #000;padding:5px 6px;font-size:10px;';
+  const tdR = tdL + 'text-align:right;';
+  const th = 'border:1px solid #000;padding:5px 6px;font-size:10px;background:#f0f0f0;font-weight:700;text-align:left;';
+  const thC = th + 'text-align:center;';
+  const html = `
+  <div style="font-family:'Times New Roman',Times,serif;color:#000;max-width:780px;margin:0 auto;">
+    <div style="text-align:center;border-bottom:2px solid #000;padding-bottom:8px;margin-bottom:10px;">
+      <div style="font-size:16px;font-weight:700;letter-spacing:1px;">ÜCRET BORDROSU</div>
+      <div style="font-size:11px;margin-top:4px;">${esc(fmtYmLabel(r.donem))} Dönemi</div>
+      <div style="font-size:10px;margin-top:2px;">Düzenleme Tarihi: ${fmtDateStr(r.odemeTarihi||isoToday())}</div>
+    </div>
+
+    <table style="width:100%;border-collapse:collapse;margin-bottom:10px;">
+      <tr>
+        <td style="${tdL}width:50%;vertical-align:top;">
+          <div style="font-weight:700;margin-bottom:4px;text-decoration:underline;">İŞVEREN</div>
+          <div><b>Ünvan:</b> ${esc(firma.name||'—')}</div>
+          <div><b>Vergi Dairesi:</b> ${esc(firma.vergiDairesi||'—')}</div>
+          <div><b>Vergi No:</b> ${esc(firma.vergiNo||'—')}</div>
+          <div><b>Adres:</b> ${esc(firma.adres||'—')}</div>
+          <div><b>Telefon:</b> ${esc(firma.telefon||'—')}</div>
+          <div><b>Proje / İşyeri:</b> ${esc(proj.name||'—')}</div>
+        </td>
+        <td style="${tdL}width:50%;vertical-align:top;">
+          <div style="font-weight:700;margin-bottom:4px;text-decoration:underline;">İŞÇİ / ÇALIŞAN</div>
+          <div><b>Adı Soyadı:</b> ${esc(r.adSoyad||'—')}</div>
+          <div><b>T.C. Kimlik No:</b> ${esc(p.kimlikNo||'—')}</div>
+          <div><b>Baba Adı:</b> ${esc(p.babaAdi||'—')}</div>
+          <div><b>Görevi:</b> ${esc(p.pozisyon||'—')}</div>
+          <div><b>İşe Giriş:</b> ${fmtDateStr(p.girisTarihi)}</div>
+          <div><b>IBAN:</b> ${esc(p.banka||'—')}</div>
+          <div><b>Ücret Tipi:</b> ${asgariMi?'Asgari ücret (günlük)':'Yevmiye / hakediş'}</div>
+        </td>
+      </tr>
+    </table>
+
+    <table style="width:100%;border-collapse:collapse;margin-bottom:8px;">
+      <tr>
+        <td style="${tdL}"><b>Bordro Dönemi</b></td>
+        <td style="${tdL}">${esc(fmtYmLabel(r.donem))}</td>
+        <td style="${tdL}"><b>Ödeme Tarihi</b></td>
+        <td style="${tdL}">${fmtDateStr(r.odemeTarihi)}</td>
+      </tr>
+      <tr>
+        <td style="${tdL}"><b>Ödeme Şekli</b></td>
+        <td style="${tdL}">${esc(r.odemeSekli||'—')}</td>
+        <td style="${tdL}"><b>Asgari Ücret (aylık ref.)</b></td>
+        <td style="${tdL}">${money(asgRef)}</td>
+      </tr>
+      <tr>
+        <td style="${tdL}"><b>Çalışılan Gün</b></td>
+        <td style="${tdL}">${fmtNum(gun)}</td>
+        <td style="${tdL}"><b>${asgariMi?'Günlük Asgari':'Yevmiye'} / Mesai</b></td>
+        <td style="${tdL}">${money(yevmiye)} · ${fmtNum(mesai)} saat</td>
+      </tr>
+    </table>
+
+    <table style="width:100%;border-collapse:collapse;margin-bottom:10px;">
+      <tr>
+        <th style="${thC}width:50%;">KAZANÇLAR</th>
+        <th style="${thC}width:50%;">KESİNTİLER</th>
+      </tr>
+      <tr>
+        <td style="padding:0;vertical-align:top;width:50%;">
+          <table style="width:100%;border-collapse:collapse;">
+            <tr><td style="${tdL}">${asgariMi?`Normal Çalışma (${fmtNum(gun)} gün × ${money(gunlukAsgari)})`:'Normal Çalışma Ücreti'}</td><td style="${tdR}">${money(normalUcret||brut)}</td></tr>
+            <tr><td style="${tdL}">Mesai Ücreti</td><td style="${tdR}">${money(mesaiUcret)}</td></tr>
+            <tr><td style="${tdL}">Diğer Kazanç / Fark</td><td style="${tdR}">${money(Math.max(0, Math.round((brut - normalUcret - mesaiUcret)*100)/100))}</td></tr>
+            <tr><td style="${tdL}"><b>TOPLAM KAZANÇ (BRÜT)</b></td><td style="${tdR}"><b>${money(brut)}</b></td></tr>
+          </table>
+        </td>
+        <td style="padding:0;vertical-align:top;width:50%;">
+          <table style="width:100%;border-collapse:collapse;">
+            <tr><td style="${tdL}">SGK İşçi Primi (+ İşsizlik)</td><td style="${tdR}">${money(r.sskIsci)}</td></tr>
+            <tr><td style="${tdL}">Gelir Vergisi</td><td style="${tdR}">${money(r.gelirVergisi)}</td></tr>
+            <tr><td style="${tdL}">Damga Vergisi</td><td style="${tdR}">${money(r.damgaVergisi)}</td></tr>
+            <tr><td style="${tdL}">Avans Mahsubu</td><td style="${tdR}">${money(r.avansKesinti)}</td></tr>
+            <tr><td style="${tdL}">Diğer Kesintiler</td><td style="${tdR}">${money(r.digerKesinti)}</td></tr>
+            <tr><td style="${tdL}"><b>TOPLAM KESİNTİ</b></td><td style="${tdR}"><b>${money(kesinti)}</b></td></tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+
+    <table style="width:100%;border-collapse:collapse;margin-bottom:10px;">
+      <tr>
+        <td style="${tdL}width:50%;background:#f5f5f5;"><b>ÖDENECEK NET ÜCRET (resmi bordro)</b></td>
+        <td style="${tdR}width:50%;background:#f5f5f5;font-size:13px;"><b>${money(r.net)}</b></td>
+      </tr>
+      <tr>
+        <td style="${tdL}">SGK İşveren Payı (işveren maliyeti — nete dahil değildir)</td>
+        <td style="${tdR}">${money(r.sskIsveren)}</td>
+      </tr>
+    </table>
+
+    ${(parseFloat(r.toplamMaas)||0)>0 ? `
+    <table style="width:100%;border-collapse:collapse;margin-bottom:10px;">
+      <tr><th style="${thC}" colspan="2">ÖDEME DAĞILIMI (Toplam maaş → asgari yatan → avans → kalan elden)</th></tr>
+      <tr><td style="${tdL}">1) Toplam Maaş (puantaj)</td><td style="${tdR}"><b>${money(r.toplamMaas)}</b></td></tr>
+      <tr><td style="${tdL}">2) Yatan Asgari (banka / SGK net)</td><td style="${tdR}">${money(r.yatanAsgari)}</td></tr>
+      <tr><td style="${tdL}">3) Verilen Avans (avans kayıtları)</td><td style="${tdR}">${money(r.avansKesinti)}</td></tr>
+      <tr><td style="${tdL}background:#f5f5f5;"><b>4) Kalan Elden</b></td><td style="${tdR}background:#f5f5f5;font-size:13px;"><b>${money(r.kalanElden)}</b></td></tr>
+    </table>` : ''}
+
+    ${r.aciklama? `<div style="font-size:10px;border:1px solid #000;padding:6px;margin-bottom:10px;"><b>Açıklama:</b> ${esc(r.aciklama)}</div>`:''}
+
+    <div style="font-size:8px;margin:8px 0 16px;line-height:1.35;">
+      Bu ücret bordrosu, kayıtlı puantaj/mesai ve uygulama ayarlarındaki oranlara göre düzenlenmiştir.
+      ${asgariMi?`Asgari ücretli çalışanda brüt, aylık asgari / 30 × çalışılan gün formülüyle hesaplanmıştır. `:''}
+      Resmî e-Bildirge / mali müşavir onaylı yasal bildirim yerine geçmez.
+    </div>
+
+    <table style="width:100%;border-collapse:collapse;margin-top:24px;">
+      <tr>
+        <td style="width:33%;text-align:center;vertical-align:bottom;padding:8px;">
+          <div style="height:48px;"></div>
+          <div style="border-top:1px solid #000;padding-top:4px;font-size:10px;"><b>Düzenleyen</b><br>Muhasebe</div>
+        </td>
+        <td style="width:33%;text-align:center;vertical-align:bottom;padding:8px;">
+          <div style="height:48px;"></div>
+          <div style="border-top:1px solid #000;padding-top:4px;font-size:10px;"><b>Onaylayan</b><br>${esc(firma.name||'İşveren')}</div>
+        </td>
+        <td style="width:33%;text-align:center;vertical-align:bottom;padding:8px;">
+          <div style="height:48px;"></div>
+          <div style="border-top:1px solid #000;padding-top:4px;font-size:10px;"><b>Teslim Alan</b><br>${esc(r.adSoyad||'Çalışan')}<br><span style="font-size:8px;">Okudum, ücretimi aldım</span></div>
+        </td>
+      </tr>
+    </table>
+  </div>`;
+  showPdfPreview(html, `ucret-bordrosu-${(r.adSoyad||'personel').replace(/[^a-z0-9ığüşöç]+/gi,'_')}-${r.donem||''}.pdf`, 'p');
+}
+
+/* ======================= PERSONEL GİDER ======================= */
+function renderPersonelGiderTab(main, proj){
+  if(!Array.isArray(proj.personelGiderler)) proj.personelGiderler = [];
+  const personelList = (proj.personel||[]).slice().sort((a,b)=>a.adSoyad.localeCompare(b.adSoyad,'tr'));
+  const seciliPara = (personelGiderForm.paraBirimi && CURRENCY_INFO[personelGiderForm.paraBirimi]) ? personelGiderForm.paraBirimi : projectCurrency(proj);
+  const kurGerekli = seciliPara !== 'TRY';
+  const kurOneri = personelGiderForm.kur || kurFieldValue(seciliPara, 'satis') || '';
+  main.innerHTML = `
+    <div class="card glass">
+      <h2>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M12 1v22"/></svg>
+        Personel Gider — <span style="color:var(--aqua-dim)">${esc(proj.name)}</span>
+      </h2>
+      <p class="hint">Personele bağlı giderler: yol, konaklama, SSK ödemesi, asgari ücret farkı vb. Firma maliyeti olarak kâr özetine yansır.</p>
+      <div class="field-grid">
+        <div class="field" style="grid-column:span 2;"><label>Personel</label>
+          <select id="pg-personelId">${personelOptionsHtml(personelList, personelGiderForm.personelId, '— Personel Seçin —')}</select>
+        </div>
+        <div class="field"><label>Tarih</label>
+          <input type="date" id="pg-tarih" value="${esc(personelGiderForm.tarih)}">
+        </div>
+        <div class="field"><label>Gider Türü</label>
+          <select id="pg-giderTuru">
+            ${PERSONEL_GIDER_TURLERI.map(t=>`<option value="${t}" ${personelGiderForm.giderTuru===t?'selected':''}>${t}</option>`).join('')}
+          </select>
+        </div>
+        <div class="field" style="grid-column:span 2;"><label>Açıklama</label>
+          <input type="text" id="pg-aciklama" value="${esc(personelGiderForm.aciklama)}" placeholder="Örn: Mart SSK primi">
+        </div>
+        <div class="field"><label>Tutar</label>
+          <input class="mono" type="number" step="any" id="pg-tutar" value="${esc(personelGiderForm.tutar)}">
+        </div>
+        <div class="field"><label>Para Birimi</label>
+          <select id="pg-paraBirimi">
+            ${Object.keys(CURRENCY_INFO).map(code=>`<option value="${code}" ${seciliPara===code?'selected':''}>${esc(CURRENCY_INFO[code].name)}</option>`).join('')}
+          </select>
+        </div>
+        ${kurGerekli?`
+        <div class="field"><label>Satış Kuru</label>
+          <input class="mono" type="number" step="any" min="0" id="pg-kur" value="${esc(kurOneri)}">
+        </div>`:''}
+        <div class="field" style="grid-column:span 2;"><label>Fiş / Belge (isteğe bağlı)</label>
+          <div class="file-attach-row">
+            <input type="file" id="pg-dosya" accept="image/*,application/pdf" style="font-size:0.75rem;max-width:220px;">
+            <span id="pg-dosyaChip"></span>
+          </div>
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary" id="btnSavePersonelGider">${personelGiderForm.id?'Gideri Güncelle':'Gider Kaydet'}</button>
+        <button class="btn btn-ghost" id="btnClearPersonelGider">Formu Temizle</button>
+      </div>
+    </div>
+
+    <div class="card glass">
+      <h2>Personel Gider Listesi</h2>
+      <div class="filter-bar" style="margin-bottom:10px;">
+        <select id="pg-filterPersonel">${personelOptionsHtml(personelList, ui.personelGiderFilterId, 'Personel: Tümü')}</select>
+        <button class="btn btn-ghost btn-sm" id="btnClearPersonelGiderFilter" style="align-self:end;">Filtreyi Temizle</button>
+      </div>
+      <div class="table-scroll" id="personelGiderTableWrap"></div>
+      <div id="personelGiderTotals" style="margin-top:10px;"></div>
+    </div>
+  `;
+  ['personelId','tarih','giderTuru','aciklama','tutar','kur'].forEach(k=>{
+    const el = document.getElementById('pg-'+k);
+    if(el) el.addEventListener('input', ()=>{ personelGiderForm[k]=el.value; });
+  });
+  const paraSel = document.getElementById('pg-paraBirimi');
+  if(paraSel) paraSel.addEventListener('change', ()=>{
+    personelGiderForm.paraBirimi = paraSel.value;
+    personelGiderForm.kur = '';
+    renderPersonelGiderTab(main, proj);
+  });
+  document.getElementById('btnSavePersonelGider').onclick = ()=>savePersonelGiderRow(proj);
+  document.getElementById('btnClearPersonelGider').onclick = ()=>{ personelGiderForm = emptyPersonelGiderForm(); renderMain(); };
+  document.getElementById('pg-filterPersonel').addEventListener('change',(e)=>{ ui.personelGiderFilterId = e.target.value; renderPersonelGiderTable(proj); });
+  document.getElementById('btnClearPersonelGiderFilter').onclick = ()=>{ ui.personelGiderFilterId=''; renderMain(); };
+  if(typeof wireAttachmentInput==='function'){
+    wireAttachmentInput({inputId:'pg-dosya', chipWrapId:'pg-dosyaChip', getForm:()=>personelGiderForm});
+  }
+  renderPersonelGiderTable(proj);
+}
+
+function savePersonelGiderRow(proj){
+  if(!Array.isArray(proj.personelGiderler)) proj.personelGiderler = [];
+  if(!personelGiderForm.personelId){ showToast('Lütfen personel seçin.'); return; }
+  if(!personelGiderForm.tarih){ showToast('Lütfen tarih girin.'); return; }
+  const tutar = parseFloat(personelGiderForm.tutar)||0;
+  if(tutar<=0){ showToast('Lütfen geçerli bir tutar girin.'); return; }
+  const p = proj.personel.find(x=>x.id===personelGiderForm.personelId);
+  const paraBirimi = (personelGiderForm.paraBirimi && CURRENCY_INFO[personelGiderForm.paraBirimi]) ? personelGiderForm.paraBirimi : projectCurrency(proj);
+  const kur = paraBirimi!=='TRY'
+    ? (parseFloat(personelGiderForm.kur) || parseFloat(kurFieldValue(paraBirimi, 'satis')) || null)
+    : null;
+  const row = {
+    id: personelGiderForm.id || uid(),
+    personelId: personelGiderForm.personelId,
+    adSoyad: p ? p.adSoyad : '(silinmiş personel)',
+    tarih: personelGiderForm.tarih,
+    giderTuru: personelGiderForm.giderTuru || 'Diğer',
+    aciklama: (personelGiderForm.aciklama||'').trim(),
+    tutar,
+    paraBirimi,
+    kur,
+    dosya: personelGiderForm.dosya || null
+  };
+  if(personelGiderForm.id){
+    const idx = proj.personelGiderler.findIndex(r=>r.id===row.id);
+    if(idx>-1) proj.personelGiderler[idx]=row;
+  } else {
+    proj.personelGiderler.push(row);
+  }
+  saveState();
+  personelGiderForm = emptyPersonelGiderForm();
+  renderMain();
+  showToast('Personel gideri kaydedildi.');
+}
+
+function filteredPersonelGider(proj){
+  return (proj.personelGiderler||[]).filter(a=> !ui.personelGiderFilterId || a.personelId===ui.personelGiderFilterId)
+    .slice().sort((a,b)=> (b.tarih||'').localeCompare(a.tarih||''));
+}
+
+function renderPersonelGiderTable(proj){
+  const wrap = document.getElementById('personelGiderTableWrap');
+  const totalsEl = document.getElementById('personelGiderTotals');
+  if(!wrap) return;
+  const rows = filteredPersonelGider(proj);
+  if(rows.length===0){
+    wrap.innerHTML = `<div class="empty-state">Kayıtlı personel gideri yok.</div>`;
+    if(totalsEl) totalsEl.innerHTML = '';
+    return;
+  }
+  const sum = rows.reduce((s,r)=>s+(parseFloat(r.tutar)||0),0);
+  wrap.innerHTML = `
+    <table>
+      <thead><tr><th>Personel</th><th>Tarih</th><th>Tür</th><th>Açıklama</th><th class="num">Tutar</th><th></th></tr></thead>
+      <tbody>
+        ${rows.map(r=>{
+          const cur = (r.paraBirimi && CURRENCY_INFO[r.paraBirimi]) ? r.paraBirimi : projectCurrency(proj);
+          return `<tr data-id="${r.id}">
+            <td>${esc(r.adSoyad)}</td>
+            <td>${fmtDateStr(r.tarih)}</td>
+            <td>${esc(r.giderTuru)||'—'}</td>
+            <td>${esc(r.aciklama)||'—'}</td>
+            <td class="num">${fmtMoney(r.tutar, cur)}</td>
+            <td>
+              <div class="row-actions">
+                ${r.dosya ? `<button class="icon-btn attach-active" data-act="dosya" title="Belge">${attachmentIconSvg(r.dosya)}</button>` : ''}
+                <button class="icon-btn" data-act="edit" title="Düzenle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg></button>
+                <button class="icon-btn danger" data-act="delete" title="Sil"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0l-1 14a2 2 0 01-2 2H7a2 2 0 01-2-2L4 6h16z"/></svg></button>
+              </div>
+            </td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>`;
+  if(totalsEl){
+    totalsEl.innerHTML = `<div class="totals-strip"><div class="total-chip"><span class="lbl">Toplam Gider</span><span class="val">${fmtMoney(sum)}</span></div></div>`;
+  }
+  wrap.querySelectorAll('tr[data-id]').forEach(tr=>{
+    tr.addEventListener('click',(e)=>{
+      const act = e.target.closest('[data-act]')?.dataset.act;
+      if(!act) return;
+      const r = (proj.personelGiderler||[]).find(x=>x.id===tr.dataset.id);
+      if(!r) return;
+      if(act==='edit'){
+        personelGiderForm = {
+          id:r.id, personelId:r.personelId, tarih:r.tarih||isoToday(), giderTuru:r.giderTuru||'Diğer',
+          aciklama:r.aciklama||'', tutar:String(r.tutar??''), paraBirimi:r.paraBirimi||'', kur:r.kur!=null?String(r.kur):'',
+          dosya:r.dosya||null
+        };
+        renderMain(); window.scrollTo({top:0, behavior:'smooth'});
+      } else if(act==='delete'){
+        confirmModal(`Bu personel giderini silmek istediğinize emin misiniz?`, ()=>{
+          proj.personelGiderler = (proj.personelGiderler||[]).filter(x=>x.id!==r.id);
+          saveState(); renderMain();
+          showToast('Personel gideri silindi.');
+        });
+      } else if(act==='dosya'){
+        openAttachment(r.dosya);
+      }
+    });
+  });
+}
+
+function projeBordroNetToplam(proj){
+  return (proj.bordrolar||[]).reduce((s,r)=>s+bordroPersoneleOdenen(r),0);
+}
+function projeBordroSskIsverenToplam(proj){
+  return (proj.bordrolar||[]).reduce((s,r)=>s+(parseFloat(r.sskIsveren)||0),0);
+}
+function projePersonelGiderToplam(proj){
+  return (proj.personelGiderler||[]).reduce((s,r)=>s+(parseFloat(r.tutar)||0),0);
+}
+
 /* ======================= TOPLU İCMAL TAB ======================= */
 function personelToplamGunTumZaman(p){
   if(!p.puantaj) return 0;
@@ -12790,9 +14119,6 @@ function personelToplamGunTumZaman(p){
 function personelToplamMesaiTumZaman(p){
   if(!p.mesai) return 0;
   return Object.values(p.mesai).reduce((s,v)=> s + (parseFloat(v)||0), 0);
-}
-function personelToplamAvans(proj, personelId){
-  return (proj.avanslar||[]).filter(a=>a.personelId===personelId).reduce((s,a)=>s+(parseFloat(a.tutar)||0),0);
 }
 function projeCalisanaOdenecekToplam(proj){
   return (proj.personel||[]).reduce((s,p)=>{
@@ -12803,7 +14129,8 @@ function projeCalisanaOdenecekToplam(proj){
   }, 0);
 }
 function projeCalisanaOdenenToplam(proj){
-  return (proj.avanslar||[]).reduce((s,a)=>s+(parseFloat(a.tutar)||0),0);
+  const avans = (proj.avanslar||[]).reduce((s,a)=>s+(parseFloat(a.tutar)||0),0);
+  return avans + projeBordroNetToplam(proj);
 }
 
 function renderTopluIcmalTab(main, proj){
@@ -14744,6 +16071,52 @@ function renderAyarlarTab(main){
 
     <div class="card glass">
       <h2>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h5"/></svg>
+        Bordro Oranları (SSK / Asgari / GV)
+      </h2>
+      <p class="hint">Maaş Bordro’daki otomatik kesinti bu oranları kullanır. <b>2026 güncel:</b> brüt <b>33.030 TL</b> · net <b>28.075,50 TL</b> · günlük brüt <b>1.101 TL</b>. Eski tutar kayıtlıysa “2026 Güncel Asgari” veya “Varsayılana Dön” ile güncelleyin.</p>
+      ${(()=>{ const o=getBordroOranlari(); const d=defaultBordroOranlari(); const eski=Math.abs((parseFloat(o.asgariUcret)||0)-d.asgariUcret)>0.5; return `
+      ${eski?`<p class="hint" style="color:#c77700;font-weight:700;">Kayıtlı asgari ücret güncel değil (${fmtMoney(o.asgariUcret)}). 2026 tutarı: ${fmtMoney(d.asgariUcret)}.</p>`:''}
+      <div class="field-grid">
+        <div class="field"><label>Aylık Asgari Ücret (TL, brüt) — 2026: 33.030</label>
+          <div style="display:flex;gap:6px;align-items:center;">
+            <input class="mono" type="number" step="any" id="s-br-asgariUcret" value="${esc(o.asgariUcret)}" style="flex:1;min-width:0;">
+            <button type="button" class="btn btn-ghost btn-sm" id="btnAsgari2026" title="2026 resmi brüt asgari ücreti yaz">2026 Güncel Asgari</button>
+          </div>
+        </div>
+        <div class="field"><label>SSK İşçi %</label>
+          <input class="mono" type="number" step="any" id="s-br-sskIsciOran" value="${esc(o.sskIsciOran)}">
+        </div>
+        <div class="field"><label>İşsizlik İşçi %</label>
+          <input class="mono" type="number" step="any" id="s-br-issizlikIsciOran" value="${esc(o.issizlikIsciOran)}">
+        </div>
+        <div class="field"><label>SSK İşveren %</label>
+          <input class="mono" type="number" step="any" id="s-br-sskIsverenOran" value="${esc(o.sskIsverenOran)}">
+        </div>
+        <div class="field"><label>İşsizlik İşveren %</label>
+          <input class="mono" type="number" step="any" id="s-br-issizlikIsverenOran" value="${esc(o.issizlikIsverenOran)}">
+        </div>
+        <div class="field"><label>Damga Vergisi %</label>
+          <input class="mono" type="number" step="any" id="s-br-damgaOran" value="${esc(o.damgaOran)}">
+        </div>
+        <div class="field"><label>Gelir Vergisi % (basit)</label>
+          <input class="mono" type="number" step="any" id="s-br-gvOran" value="${esc(o.gvOran)}">
+        </div>
+        <div class="field" style="grid-column:span 2;">
+          <label style="display:inline-flex;align-items:center;gap:8px;cursor:pointer;">
+            <input type="checkbox" id="s-br-gvAsgariIstisna" ${o.gvAsgariIstisna?'checked':''}>
+            Asgari ücret istisnası (asgari seviyesine kadar GV + damga ≈ 0)
+          </label>
+        </div>
+      </div>`; })()}
+      <div class="btn-row">
+        <button class="btn btn-primary" id="btnSaveBordroOran">Oranları Kaydet</button>
+        <button class="btn btn-ghost" id="btnResetBordroOran">Varsayılana Dön (2026)</button>
+      </div>
+    </div>
+
+    <div class="card glass">
+      <h2>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
         Döviz Kurları
       </h2>
@@ -14952,6 +16325,40 @@ function renderAyarlarTab(main){
     state.company.adres = document.getElementById('s-companyAdres').value.trim();
     state.company.telefon = document.getElementById('s-companyTelefon').value.trim();
     saveState(); showToast('Firma bilgileri kaydedildi.');
+    renderMain();
+  };
+  const btnSaveBordroOran = document.getElementById('btnSaveBordroOran');
+  if(btnSaveBordroOran) btnSaveBordroOran.onclick = ()=>{
+    const num = (id, def)=>{
+      const n = parseFloat(document.getElementById(id)?.value);
+      return isFinite(n) ? n : def;
+    };
+    const d = defaultBordroOranlari();
+    state.bordroOranlari = {
+      asgariUcret: num('s-br-asgariUcret', d.asgariUcret),
+      asgariUcretYil: Math.abs(num('s-br-asgariUcret', d.asgariUcret) - d.asgariUcret) < 0.5 ? d.asgariUcretYil : (new Date().getFullYear()),
+      sskIsciOran: num('s-br-sskIsciOran', d.sskIsciOran),
+      issizlikIsciOran: num('s-br-issizlikIsciOran', d.issizlikIsciOran),
+      sskIsverenOran: num('s-br-sskIsverenOran', d.sskIsverenOran),
+      issizlikIsverenOran: num('s-br-issizlikIsverenOran', d.issizlikIsverenOran),
+      damgaOran: num('s-br-damgaOran', d.damgaOran),
+      gvOran: num('s-br-gvOran', d.gvOran),
+      gvAsgariIstisna: !!document.getElementById('s-br-gvAsgariIstisna')?.checked
+    };
+    saveState(); showToast('Bordro oranları kaydedildi. Asgari: '+fmtMoney(state.bordroOranlari.asgariUcret));
+    renderMain();
+  };
+  const btnAsgari2026 = document.getElementById('btnAsgari2026');
+  if(btnAsgari2026) btnAsgari2026.onclick = ()=>{
+    const d = defaultBordroOranlari();
+    const el = document.getElementById('s-br-asgariUcret');
+    if(el) el.value = String(d.asgariUcret);
+    showToast('2026 brüt asgari yazıldı: '+fmtMoney(d.asgariUcret)+' (Kaydet’e basın)');
+  };
+  const btnResetBordroOran = document.getElementById('btnResetBordroOran');
+  if(btnResetBordroOran) btnResetBordroOran.onclick = ()=>{
+    state.bordroOranlari = defaultBordroOranlari();
+    saveState(); showToast('2026 varsayılanı: brüt '+fmtMoney(33030)+' / net '+fmtMoney(28075.50));
     renderMain();
   };
   document.getElementById('btnSaveKur').onclick = ()=>{
@@ -15651,16 +17058,6 @@ async function sharePreparedPdf(prepared, shareOpts){
   return file ? 'share_failed' : 'unavailable';
 }
 
-// Eski API — hazırla + paylaş (jest kaybı riski var; mümkünse prepare+sharePrepared kullanın).
-async function sharePdf(html, filename, orientation, opts){
-  const prepared = await preparePdfFile(html, filename, orientation, opts);
-  return sharePreparedPdf(prepared, {
-    title: opts && opts.shareTitle,
-    text: opts && opts.shareText,
-    allowDownloadFallback: !(opts && opts.noDownloadFallback) && !isLikelyMobileDevice()
-  });
-}
-
 function openExternalUrl(url){
   // Mobilde window.open sıkça engellenir; <a> tıklaması daha güvenilir.
   try{
@@ -16248,7 +17645,6 @@ function doExportSemaPdf(cfg){
   const fname = `sema-${paperSize}-${orientation}-${sistem.ad.replace(/[^a-z0-9ığüşöç]+/gi,'_')}.pdf`;
   showPdfPreview(html, fname, orientation, { fitOnePage: true, marginMm: paperSize==='a5'?6:8, paperSize });
 }
-function exportSemaA4Pdf(){ exportSemaPdf(); }
 
 // Hesaplama Paneli / Malzeme Sonuç Paneli'nden, müşteriye gösterilebilecek sade bir
 // "Teklif Analizi" çıktısı üretir. Ekrandaki panelden farklı olarak burada sarfiyat,
@@ -16422,6 +17818,12 @@ window.__dnzInitApp = async function init(){
   else ensureDovizKurlariShape();
   if(state.dovizKurGuncellenme===undefined) state.dovizKurGuncellenme = null;
   let imalatCinsiMigrated = false;
+  if(!state.bordroOranlari || typeof state.bordroOranlari !== 'object'){
+    state.bordroOranlari = defaultBordroOranlari();
+    imalatCinsiMigrated = true;
+  } else if(migrateBordroOranlariAsgari()){
+    imalatCinsiMigrated = true;
+  }
   Object.values(state.projects).forEach(p=>{
     if(!p.personel) p.personel = [];
     p.personel.forEach(emp=>{
@@ -16430,6 +17832,8 @@ window.__dnzInitApp = async function init(){
     });
     if(!p.avanslar) p.avanslar = [];
     if(!p.zimmetler) p.zimmetler = [];
+    if(!p.bordrolar) p.bordrolar = [];
+    if(!p.personelGiderler) p.personelGiderler = [];
     if(!p.tahsilatlar) p.tahsilatlar = [];
     if(p.manuelIsverenAlacak===undefined || p.manuelIsverenAlacak===null) p.manuelIsverenAlacak = '';
     if(p.teklifOnaylandi===undefined || p.teklifOnaylandi===null) p.teklifOnaylandi = true;
@@ -16452,7 +17856,7 @@ window.__dnzInitApp = async function init(){
         p.aktifTeklifId = null;
       }
     }
-    // loadAktifTeklifToProj artık global listeden okur; ayna alanları isteğe bağlı.
+    // Eski proje ayna alanları (teklifRows) isteğe bağlı; aktif teklif global listeden okunur.
     if(!p.masraflar) p.masraflar = [];
     if(!p.currency || !CURRENCY_INFO[p.currency]) p.currency = 'TRY';
     if(p.baslangicTarihi===undefined || p.baslangicTarihi===null) p.baslangicTarihi = '';
