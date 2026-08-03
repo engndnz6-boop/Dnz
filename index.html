@@ -1193,6 +1193,14 @@ td.num,th.num{font-family:var(--font-mono);text-align:right;}
 }
 .hesap-mahal-row{margin-bottom:0;}
 .hesap-mahal-list{display:flex;flex-direction:column;gap:10px;}
+.hesap-mahal-adet{
+  width:64px;flex-shrink:0;text-align:center;padding:9px 6px;
+  border-radius:10px;border:1px solid rgba(11,36,54,0.15);background:rgba(255,255,255,0.6);
+}
+.hesap-mahal-adet-lbl{
+  font-size:0.65rem;font-weight:700;color:var(--ink-soft);text-transform:uppercase;
+  letter-spacing:0.04em;display:block;margin-bottom:2px;text-align:center;
+}
 .imalat-sema-zoom-bar{
   display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;
   margin:0 0 10px;padding:8px 10px;border-radius:12px;
@@ -3199,7 +3207,7 @@ let ui = {
   imalatTanimFilterTip:'all', // 'all' | 'tavan' | 'duvar' | 'zemin'
   imalatCalcSistemId:null,
   imalatCalcInput:'',
-  imalatCalcMahaller:[{ id:'m1', ad:'1. Mahaller', input:'' }],
+  imalatCalcMahaller:[{ id:'m1', ad:'1. Mahaller', input:'', adet:'1' }],
   imalatCalcUnit:'m2',
   imalatCalcMode:'tek', // 'tek' | 'kenar' | 'poligon'
   imalatSemaZoom:1,
@@ -7445,7 +7453,32 @@ function getTasiyiciHatLengthsForAyar(a, W, L, kind, polyPts, uygulamaTipi){
 }
 // Hesaplama girdisinden oda ölçüsü (W×L) veya tek hat uzunluğu çıkarır — şema ile aynı kaynak.
 function emptyImalatMahal(idx){
-  return { id: uid(), ad: (idx||1)+'. Mahaller', input:'', poligon: defaultPoligonKenarlar() };
+  return { id: uid(), ad: (idx||1)+'. Mahaller', input:'', adet:'1', poligon: defaultPoligonKenarlar() };
+}
+/** Aynı mahalden birden fazla varsa çarpan. Örn: 5 × (5,8×3,5). */
+function getMahalAdet(mahal){
+  const n = Math.round(parseFloat(String(mahal && mahal.adet != null ? mahal.adet : '1').replace(',','.')));
+  return (isFinite(n) && n > 0) ? n : 1;
+}
+/**
+ * Ölçü alanında "5*(5,8×3,5)" / "5×(5.8x3.5)" yazılabilsin.
+ * Adet kutusu ayrıca çarpar (formülde çarpan varken Adet'i 1 bırakın).
+ */
+function parseMahalCarpanIfade(str){
+  const raw = (str==null?'':String(str)).trim();
+  if(!raw) return { carpan:1, olcu:'' };
+  const s = raw.toLowerCase().replace(/,/g,'.');
+  let m = s.match(/^(\d+(?:\.\d+)?)\s*[x×*]\s*\(\s*(\d+(?:\.\d+)?)\s*[x×*]\s*(\d+(?:\.\d+)?)\s*\)$/);
+  if(m) return { carpan: parseFloat(m[1]), olcu: m[2]+'x'+m[3] };
+  m = s.match(/^(\d+(?:\.\d+)?)\s*[x×*]\s*\(\s*(\d+(?:\.\d+)?)\s*\)$/);
+  if(m) return { carpan: parseFloat(m[1]), olcu: m[2] };
+  return { carpan:1, olcu: raw };
+}
+function formatMahalHesapIfade(adet, olcuInput, rawInput){
+  const a = Math.max(1, Math.round(adet||1));
+  const olcu = (olcuInput||rawInput||'').trim();
+  if(a <= 1) return olcu;
+  return a + '×(' + olcu + ')';
 }
 function defaultPoligonKenarlar(){
   return [
@@ -7475,6 +7508,7 @@ function ensureImalatCalcMahaller(){
       id: uid(),
       ad:'1. Mahaller',
       input: (ui.imalatCalcInput||'').trim(),
+      adet:'1',
       poligon: (Array.isArray(ui.imalatCalcPoligon) && ui.imalatCalcPoligon.length)
         ? ui.imalatCalcPoligon.map(e=>({ uzunluk: e.uzunluk||'', aci: e.aci!=null ? e.aci : 0 }))
         : defaultPoligonKenarlar()
@@ -7485,6 +7519,7 @@ function ensureImalatCalcMahaller(){
     if(!m.id) m.id = uid();
     if(!m.ad || !String(m.ad).trim()) m.ad = (i+1)+'. Mahaller';
     if(m.input==null) m.input = '';
+    if(m.adet==null || m.adet==='') m.adet = '1';
     getMahalPoligon(m);
   });
   ui.imalatCalcInput = ui.imalatCalcMahaller[0] ? (ui.imalatCalcMahaller[0].input||'') : '';
@@ -7495,7 +7530,9 @@ function findMahalById(id){
 }
 function getImalatRoomSizeFromInput(input, sistem, unit){
   const uygulamaTipi = getSistemUygulamaTipi(sistem);
-  const s = (input||'').trim().toLowerCase().replace(/,/g,'.');
+  // Şema tek mahal ölçüsüne göre çizilir; 5*(5.8x3.5) → oda 5.8×3.5
+  const olcu = parseMahalCarpanIfade(input).olcu || input;
+  const s = (olcu||'').trim().toLowerCase().replace(/,/g,'.');
   const m = s.match(/^(\d+(?:\.\d+)?)\s*[x×*]\s*(\d+(?:\.\d+)?)$/);
   if(m){
     let W = parseFloat(m[1]), L = parseFloat(m[2]);
@@ -7506,7 +7543,7 @@ function getImalatRoomSizeFromInput(input, sistem, unit){
     return { W, L, kind:'rect', uygulamaTipi };
   }
   const u = unit || ui.imalatCalcUnit || 'm2';
-  const p = parseAlanInput(input, u);
+  const p = parseAlanInput(olcu, u);
   if(p.value!=null && p.unit==='mt') return { W:p.value, L:0, kind:'length', uygulamaTipi };
   if(p.value!=null && p.unit==='m2' && p.value>0){
     const side = Math.sqrt(p.value);
@@ -9289,7 +9326,7 @@ function computeMalzemeSonuc(malzeme, deger, opts){
     baseAdetNote = b.adetNote;
     if(b.kgNote!=null) baseKgNote = b.kgNote;
   }
-  if(ekstra>0){
+  if(ekstra){
     const applied = applyEkstraAdet(malzeme, miktar, adetNote, ekstra);
     miktar = applied.miktar;
     adetNote = applied.adetNote;
@@ -9635,12 +9672,16 @@ function renderImalatHesapSection(sub){
       </div>
 
       ${mode==='tek' || isDuvar ? `
-      <p class="hint">Birden fazla mahal/oda hesaplamak için <b>+ Mahal Ekle</b> kullanın. Her satıra ölçü girin (ör. 3×5, 4×6); malzeme sonuçları ve şemalar toplam olarak gösterilir.</p>
+      <p class="hint">Birden fazla mahal/oda hesaplamak için <b>+ Mahal Ekle</b> kullanın. Aynı ölçüden birden fazla varsa <b>Adet</b> girin (örn. Adet <b>5</b> · Ölçü <b>5,8×3,5</b> → <b>5×(5,8×3,5)</b>). İsterseniz ölçüye doğrudan <b>5*(5,8×3,5)</b> de yazabilirsiniz.</p>
       <div class="hesap-mahal-list" id="hesapMahalList">
         ${ui.imalatCalcMahaller.map((mahal,i)=>`
           <div class="field hesap-mahal-row">
             <label>${esc(mahal.ad || ((i+1)+'. Mahaller'))}</label>
-            <div style="display:flex;gap:6px;align-items:center;">
+            <div style="display:flex;gap:6px;align-items:flex-end;">
+              <div style="flex-shrink:0;">
+                <span class="hesap-mahal-adet-lbl">Adet</span>
+                <input type="number" class="mono hesap-mahal-adet" min="1" step="1" data-mahal-adet="${mahal.id}" value="${esc(mahal.adet!=null && mahal.adet!=='' ? mahal.adet : '1')}" title="Aynı mahal adedi">
+              </div>
               <input type="text" class="mono" data-mahal-input="${mahal.id}" value="${esc(mahal.input||'')}" placeholder="${esc(olcu.placeholder)}" style="flex:1;min-width:0;">
               <button type="button" class="btn btn-ghost" data-mahal-del="${mahal.id}" style="padding:8px 10px;flex-shrink:0;" title="Bu mahali sil" ${ui.imalatCalcMahaller.length<=1?'disabled':''}>✕</button>
             </div>
@@ -9672,15 +9713,21 @@ function renderImalatHesapSection(sub){
       ` : ''}
 
       ${!isDuvar && mode==='poligon' ? `
-      <p class="hint">Birden fazla köşeli oda/mekân için <b>+ Mahal Ekle</b> kullanın. Her mahalde kenar uzunluğu + açı girin veya şemada köşeleri sürükleyin. Birim <b>m²</b>: kapalı şeklin alanı. Birim <b>mt</b>: kenar uzunlukları toplamı.</p>
+      <p class="hint">Birden fazla köşeli oda/mekân için <b>+ Mahal Ekle</b> kullanın. Aynı poligon mahalinden birden fazla varsa <b>Adet</b> girin. Her mahalde kenar uzunluğu + açı girin veya şemada köşeleri sürükleyin. Birim <b>m²</b>: kapalı şeklin alanı. Birim <b>mt</b>: kenar uzunlukları toplamı.</p>
       <div class="hesap-mahal-list" id="hesapPoligonMahalList">
         ${ui.imalatCalcMahaller.map((mahal,i)=>{
           const pol = getMahalPoligon(mahal);
           return `
           <div class="hesap-mahal-poligon-block" data-mahal-block="${mahal.id}" style="padding:12px;border:1px solid rgba(11,36,54,0.1);border-radius:12px;background:rgba(255,255,255,0.35);margin-bottom:10px;">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:8px;flex-wrap:wrap;">
               <label style="margin:0;font-weight:700;">${esc(mahal.ad || ((i+1)+'. Mahaller'))}</label>
-              <button type="button" class="btn btn-ghost" data-mahal-del="${mahal.id}" style="padding:6px 10px;" title="Bu mahali sil" ${ui.imalatCalcMahaller.length<=1?'disabled':''}>✕</button>
+              <div style="display:flex;align-items:flex-end;gap:8px;">
+                <div style="flex-shrink:0;">
+                  <span class="hesap-mahal-adet-lbl">Adet</span>
+                  <input type="number" class="mono hesap-mahal-adet" min="1" step="1" data-mahal-adet="${mahal.id}" value="${esc(mahal.adet!=null && mahal.adet!=='' ? mahal.adet : '1')}" title="Aynı mahal adedi">
+                </div>
+                <button type="button" class="btn btn-ghost" data-mahal-del="${mahal.id}" style="padding:6px 10px;" title="Bu mahali sil" ${ui.imalatCalcMahaller.length<=1?'disabled':''}>✕</button>
+              </div>
             </div>
             <div class="hesap-poligon-kenar-list" style="display:flex;flex-direction:column;gap:6px;">
               ${pol.map((e,j)=>{
@@ -9847,6 +9894,20 @@ function renderImalatHesapSection(sub){
       promptDuvarHatSayimiIfNeeded(s);
       updateHesapPanel();
     });
+  });
+  sub.querySelectorAll('[data-mahal-adet]').forEach(inp=>{
+    const syncAdet = (el)=>{
+      const id = el.dataset.mahalAdet;
+      const m = ui.imalatCalcMahaller.find(x=>x.id===id);
+      if(!m) return;
+      let n = Math.round(parseFloat(String(el.value||'').replace(',','.')));
+      if(!isFinite(n) || n < 1) n = 1;
+      m.adet = String(n);
+      el.value = m.adet;
+      updateHesapPanel();
+    };
+    inp.addEventListener('input', e=> syncAdet(e.target));
+    inp.addEventListener('change', e=> syncAdet(e.target));
   });
   sub.querySelectorAll('[data-mahal-del]').forEach(btn=>{
     btn.addEventListener('click', e=>{
@@ -10472,18 +10533,26 @@ function getImalatMahalHesapListesi(sistem){
       const parsed = getHesapDegerForMahalPoligon(poligon, sistem);
       if(parsed.value==null) return;
       const room = getImalatRoomSizeFromPoligon(poligon, sistem);
-      list.push({ mahal, parsed, room, deger: parsed.value, polyPts: parsed.poligonPoints||null, input: '', poligon, index: i });
+      const adet = getMahalAdet(mahal);
+      const baseDeger = parsed.value;
+      const deger = Math.round(baseDeger * adet * 100)/100;
+      list.push({ mahal, parsed, room, deger, baseDeger, adet, polyPts: parsed.poligonPoints||null, input: '', poligon, index: i });
     });
     return list;
   }
   const list = [];
   ui.imalatCalcMahaller.forEach((mahal, i)=>{
-    const input = (mahal.input||'').trim();
-    if(!input) return;
-    const parsed = getHesapDegerForMahalInput(input, sistem);
+    const rawInput = (mahal.input||'').trim();
+    if(!rawInput) return;
+    const expr = parseMahalCarpanIfade(rawInput);
+    const olcuInput = (expr.olcu||rawInput).trim();
+    const adet = Math.max(1, Math.round(getMahalAdet(mahal) * (expr.carpan||1)));
+    const parsed = getHesapDegerForMahalInput(olcuInput, sistem);
     if(parsed.value==null) return;
-    const room = getImalatRoomSizeFromInput(input, sistem, parsed.unit);
-    list.push({ mahal, parsed, room, deger: parsed.value, polyPts: null, input, index: i });
+    const room = getImalatRoomSizeFromInput(olcuInput, sistem, parsed.unit);
+    const baseDeger = parsed.value;
+    const deger = Math.round(baseDeger * adet * 100)/100;
+    list.push({ mahal, parsed, room, deger, baseDeger, adet, polyPts: null, input: rawInput, olcuInput, index: i });
   });
   return list;
 }
@@ -10524,7 +10593,12 @@ function getHesapDeger(){
   const u = isDuvarSistem(sistem) ? 'm2' : (ui.imalatCalcUnit||'m2');
   if(!list.length) return { value:null, unit:u, isKenar:false, isPoligon: mode==='poligon', isMulti:false, mahaller:[] };
   if(list.length===1){
-    const base = Object.assign({}, list[0].parsed, { isMulti:false, mahaller:list, room:list[0].room });
+    const base = Object.assign({}, list[0].parsed, {
+      value: list[0].deger,
+      isMulti:false,
+      mahaller:list,
+      room:list[0].room
+    });
     if(mode==='poligon') base.isPoligon = true;
     return base;
   }
@@ -10586,7 +10660,7 @@ function finalizeMergedMalzemeSonuc(m, merged, opts){
     if(b.kgNote!=null) r.baseKgNote = b.kgNote;
   }
   const ekstra = parseFloat(opts.ekstra)||0;
-  if(ekstra>0){
+  if(ekstra){
     const applied = applyEkstraAdet(m, r.miktar, r.adetNote, ekstra);
     r.miktar = applied.miktar;
     r.adetNote = applied.adetNote;
@@ -10643,13 +10717,24 @@ function updateHesapPanel(opts){
       if(parsed.isPoligon){
         noteEl.textContent = parsed.mahaller.map((x,i)=>{
           const lbl = x.mahal.ad || ((i+1)+'. Mahaller');
-          return `${lbl}: ${fmtNum(x.deger)} ${unitLbl}`;
+          const ifade = (x.adet||1)>1 ? `${x.adet}×(${fmtNum(x.baseDeger!=null?x.baseDeger:x.deger/(x.adet||1))})` : fmtNum(x.deger);
+          return `${lbl}: ${ifade} → ${fmtNum(x.deger)} ${unitLbl}`;
         }).join(' · ') + ` · Toplam: ${fmtNum(parsed.value)} ${unitLbl}`;
       } else {
         noteEl.textContent = parsed.mahaller.map((x,i)=>{
           const lbl = x.mahal.ad || ((i+1)+'. Mahaller');
-          return `${lbl}: ${x.input} → ${fmtNum(x.deger)} ${unitLbl}`;
+          const ifade = formatMahalHesapIfade(x.adet, x.olcuInput||x.input, x.input);
+          return `${lbl}: ${ifade} → ${fmtNum(x.deger)} ${unitLbl}`;
         }).join(' · ') + ` · Toplam: ${fmtNum(parsed.value)} ${unitLbl}`;
+      }
+    } else if(parsed.mahaller && parsed.mahaller.length===1 && (parsed.mahaller[0].adet||1)>1){
+      const x = parsed.mahaller[0];
+      const unitLbl = parsed.unit==='m2'?'m²':'mt';
+      const lbl = x.mahal.ad || '1. Mahaller';
+      if(parsed.isPoligon){
+        noteEl.textContent = `${lbl}: ${x.adet}×(${fmtNum(x.baseDeger)}) → ${fmtNum(x.deger)} ${unitLbl} olarak hesaplandı.`;
+      } else {
+        noteEl.textContent = `${lbl}: ${formatMahalHesapIfade(x.adet, x.olcuInput||x.input, x.input)} → ${fmtNum(x.deger)} ${unitLbl} olarak hesaplandı.`;
       }
     } else if(parsed.isArea && parsed.value!=null){
       const tipId = normalizeUygulamaTipi(parsed.uygulamaTipi || getSistemUygulamaTipi(sistem));
@@ -10691,8 +10776,8 @@ function updateHesapPanel(opts){
         const mahalList = (parsed.mahaller && parsed.mahaller.length) ? parsed.mahaller : getImalatMahalHesapListesi(sistem);
         if(mahalList.length > 1){
           canvas.innerHTML = mahalList.map((item, i)=>{
-            const label = item.mahal.ad || ((i+1)+'. Şema');
-            const semaParsed = Object.assign({}, item.parsed, { value: item.deger });
+            const label = (item.mahal.ad || ((i+1)+'. Şema')) + ((item.adet||1)>1 ? ` ×${item.adet}` : '');
+            const semaParsed = Object.assign({}, item.parsed, { value: item.baseDeger!=null ? item.baseDeger : item.deger });
             let block = '';
             try{
               if(item.poligon || semaParsed.isPoligon || ui.imalatCalcMode==='poligon'){
@@ -10847,18 +10932,22 @@ function reconcileHedefToplamOnRows(rows){
 function collectHesapSonucRows(sistem, deger){
   const malzemeler = sistemMalzemeleriHesap(sistem);
   const mahalList = getImalatMahalHesapListesi(sistem);
-  const useMulti = mahalList.length > 1;
+  const needsPerMahal = mahalList.length > 1 || mahalList.some(x => (x.adet||1) > 1);
   const rows = malzemeler.map(m=>{
     const baseOpts = getPaketOpts(m.id);
-    if(!useMulti){
+    if(!needsPerMahal){
       const r = computeMalzemeSonuc(m, deger, baseOpts);
       return { m, opts: baseOpts, r };
     }
     let merged = null;
-    mahalList.forEach(({ deger: d, room, polyPts })=>{
-      const perOpts = Object.assign({}, baseOpts, { room, polyPts, ekstra: 0, paketTamamla: false });
-      const r = computeMalzemeSonuc(m, d, perOpts);
-      merged = mergeMalzemeSonuc(merged, r);
+    mahalList.forEach(({ deger: d, room, polyPts, adet, baseDeger })=>{
+      const times = Math.max(1, Math.round(adet||1));
+      const unitDeger = (baseDeger!=null) ? baseDeger : (times>0 ? d/times : d);
+      for(let i=0;i<times;i++){
+        const perOpts = Object.assign({}, baseOpts, { room, polyPts, ekstra: 0, paketTamamla: false });
+        const r = computeMalzemeSonuc(m, unitDeger, perOpts);
+        merged = mergeMalzemeSonuc(merged, r);
+      }
     });
     const r = finalizeMergedMalzemeSonuc(m, merged || { miktar:0, tutar:0, maliyet:0, brutTutar:0, paraBirimi:'TRY' }, baseOpts);
     return { m, opts: baseOpts, r };
@@ -10954,7 +11043,14 @@ function bindHesapSonucEvents(sistem, deger, unit){
       const m = sistem.malzemeler.find(x=>x.id===id);
       if(!m) return;
       if(!ui.imalatCalcEkstra) ui.imalatCalcEkstra = {};
-      ui.imalatCalcEkstra[id] = parseFloat(String(e.target.value).replace(',','.'))||0;
+      const raw = String(e.target.value).trim().replace(',','.');
+      // Yazım sırasında "-" tek başına NaN olmasın; boş/silince 0
+      if(raw==='' || raw==='-' || raw==='+' || raw==='.' ){
+        ui.imalatCalcEkstra[id] = 0;
+      } else {
+        const n = parseFloat(raw);
+        ui.imalatCalcEkstra[id] = isFinite(n) ? n : 0;
+      }
       const row = collectHesapSonucRows(sistem, deger).find(x=>x.m.id===id);
       const r = row ? row.r : computeMalzemeSonuc(m, deger, getPaketOpts(id));
       const baseCell = wrap.querySelector(`[data-basecell-id="${id}"]`);
@@ -11077,13 +11173,14 @@ function formatHesapMiktarPlain(m, r){
   if(p.adetTxt && p.miktarTxt) return `${p.adetTxt} · ${p.miktarTxt}`;
   return p.miktarTxt||`${fmtNum(r.miktar)} ${p.birimLabel}`;
 }
-// Ekstra Ekle: her zaman adet olarak eklenir; mt/m²/torba miktarı birim başına ölçüyle artar
+// Ekstra Ekle: adet olarak ekler (+) veya çıkarır (−); mt/m²/torba miktarı birim başına ölçüyle değişir
 function applyEkstraAdet(malzeme, miktar, adetNote, ekstra){
   const e = parseFloat(ekstra)||0;
-  if(!(e>0)) return { miktar, adetNote };
+  if(!e) return { miktar, adetNote };
   const birimL = String(getMalzemeBirim(malzeme)||'').toLowerCase();
   const baseAdet = adetNote!=null ? parseFloat(adetNote)||0 : ((birimL==='adet'||birimL==='torba') ? parseFloat(miktar)||0 : 0);
-  const newAdet = baseAdet + e;
+  const newAdet = Math.max(0, Math.round((baseAdet + e) * 100) / 100);
+  const adetDelta = newAdet - baseAdet; // negatif ekstra tabanın altına inmesin diye kırpılmış delta
   if(birimL==='adet' || birimL==='torba'){
     const tips = normalizeUrunTipleri(malzeme.urunTipi);
     let kgNote = null;
@@ -11092,11 +11189,11 @@ function applyEkstraAdet(malzeme, miktar, adetNote, ekstra){
       const pk = parseFloat((tipAy.torba||emptyTorbaAyar()).paketKg)||25;
       kgNote = Math.round(newAdet * pk * 100) / 100;
     }
-    return { miktar: (parseFloat(miktar)||0) + e, adetNote: newAdet, kgNote };
+    return { miktar: Math.max(0, Math.round(((parseFloat(miktar)||0) + adetDelta)*100)/100), adetNote: newAdet, kgNote };
   }
   if(birimL==='mt'){
     const stock = primaryProfilBoyu(malzeme) || 3;
-    return { miktar: Math.round(((parseFloat(miktar)||0) + e * stock)*100)/100, adetNote: newAdet };
+    return { miktar: Math.max(0, Math.round(((parseFloat(miktar)||0) + adetDelta * stock)*100)/100), adetNote: newAdet };
   }
   if(birimL==='m2' || birimL==='m²'){
     const tips = normalizeUrunTipleri(malzeme.urunTipi);
@@ -11106,15 +11203,15 @@ function applyEkstraAdet(malzeme, miktar, adetNote, ekstra){
       const st = plakaStokVeKesimEbat(tipAy.plaka).stok;
       per = st.en * st.boy;
     } else if(tips.includes('panel') && tipAy.panel){
-      const e = parseEbatMetreCift(tipAy.panel.en, tipAy.panel.boy, 1.2, 2.5);
-      per = e.en * e.boy;
+      const eb = parseEbatMetreCift(tipAy.panel.en, tipAy.panel.boy, 1.2, 2.5);
+      per = eb.en * eb.boy;
     } else if(tips.includes('yalitim') && tipAy.yalitim){
-      const e = parseEbatMetreCift(tipAy.yalitim.en, tipAy.yalitim.boy, 0.6, 1.2);
-      per = e.en * e.boy;
+      const eb = parseEbatMetreCift(tipAy.yalitim.en, tipAy.yalitim.boy, 0.6, 1.2);
+      per = eb.en * eb.boy;
     }
-    return { miktar: Math.round(((parseFloat(miktar)||0) + e * per)*100)/100, adetNote: newAdet };
+    return { miktar: Math.max(0, Math.round(((parseFloat(miktar)||0) + adetDelta * per)*100)/100), adetNote: newAdet };
   }
-  return { miktar: (parseFloat(miktar)||0) + e, adetNote: newAdet };
+  return { miktar: Math.max(0, Math.round(((parseFloat(miktar)||0) + adetDelta)*100)/100), adetNote: newAdet };
 }
 
 function renderHesapSonucHtml(sistem, deger, basisUnit){
@@ -11143,7 +11240,7 @@ function renderHesapSonucHtml(sistem, deger, basisUnit){
             </td>
             <td class="num" data-basecell-id="${m.id}">${baseHtml}</td>
             <td class="num">
-              <input class="mono" type="number" step="any" data-ekstra-id="${m.id}" value="${r.ekstra? esc(r.ekstra) : ''}" placeholder="+0" title="Ekstra adet ekler. Örn: 2 yazarsanız 2 adet eklenir; mt satılan profilde metraj da profil boyu kadar artar." style="width:76px;text-align:right;padding:6px 8px;border-radius:8px;border:1px solid rgba(11,36,54,0.15);background:rgba(255,255,255,0.7);">
+              <input class="mono" type="number" step="any" data-ekstra-id="${m.id}" value="${(r.ekstra!=null && Number(r.ekstra)!==0) ? esc(r.ekstra) : ''}" placeholder="±0" title="Ekstra adet: + ekler, − çıkarır. Örn: 2 → +2 adet, -2 → 2 adet düşer. mt satılan profilde metraj da profil boyu kadar değişir." style="width:76px;text-align:right;padding:6px 8px;border-radius:8px;border:1px solid rgba(11,36,54,0.15);background:rgba(255,255,255,0.7);">
             </td>
             <td class="num" style="font-weight:700;" data-miktarcell-id="${m.id}">${totalHtml}</td>
             <td class="num" data-tutar-id="${m.id}">${fmtAnalizTutarHtml(r.tutar, r.paraBirimi, 'satis')}</td>
@@ -16193,8 +16290,20 @@ async function exportHesapAnalizPdf(){
   const fireOran = getHesapFireOran();
   const olcuAciklama = parsed.isMulti && parsed.mahaller && parsed.mahaller.length
     ? (parsed.isPoligon
-      ? parsed.mahaller.map((x,i)=>`${x.mahal.ad||(i+1)+'. Mahaller'}: ${fmtNum(x.deger)} ${basisLabel}`).join(' · ') + ` · Toplam: ${fmtNum(deger)} ${basisLabel}`
-      : parsed.mahaller.map((x,i)=>`${x.mahal.ad||(i+1)+'. Mahaller'}: ${x.input} (${fmtNum(x.deger)} ${basisLabel})`).join(' · ') + ` · Toplam: ${fmtNum(deger)} ${basisLabel}`)
+      ? parsed.mahaller.map((x,i)=>{
+          const lbl = x.mahal.ad||(i+1)+'. Mahaller';
+          const ifade = (x.adet||1)>1 ? `${x.adet}×(${fmtNum(x.baseDeger!=null?x.baseDeger:x.deger/(x.adet||1))})` : fmtNum(x.deger);
+          return `${lbl}: ${ifade} (${fmtNum(x.deger)} ${basisLabel})`;
+        }).join(' · ') + ` · Toplam: ${fmtNum(deger)} ${basisLabel}`
+      : parsed.mahaller.map((x,i)=>{
+          const lbl = x.mahal.ad||(i+1)+'. Mahaller';
+          const ifade = formatMahalHesapIfade(x.adet, x.olcuInput||x.input, x.input);
+          return `${lbl}: ${ifade} (${fmtNum(x.deger)} ${basisLabel})`;
+        }).join(' · ') + ` · Toplam: ${fmtNum(deger)} ${basisLabel}`)
+    : (parsed.mahaller && parsed.mahaller.length===1 && (parsed.mahaller[0].adet||1)>1)
+    ? (parsed.isPoligon
+      ? `${parsed.mahaller[0].adet}×(${fmtNum(parsed.mahaller[0].baseDeger)}) = ${fmtNum(deger)} ${basisLabel}`
+      : `${formatMahalHesapIfade(parsed.mahaller[0].adet, parsed.mahaller[0].olcuInput||parsed.mahaller[0].input, parsed.mahaller[0].input)} = ${fmtNum(deger)} ${basisLabel}`)
     : parsed.isPoligon
     ? (parsed.unit==='mt'
       ? `${parsed.poligonKenarSayisi} kenarlı poligon — kenar uzunlukları toplamı (mt)`
