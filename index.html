@@ -16082,9 +16082,9 @@ function renderAyarlarTab(main){
       ${eski?`<p class="hint" style="color:#c77700;font-weight:700;">Kayıtlı asgari ücret güncel değil (${fmtMoney(o.asgariUcret)}). 2026 tutarı: ${fmtMoney(d.asgariUcret)}.</p>`:''}
       <div class="field-grid">
         <div class="field"><label>Aylık Asgari Ücret (TL, brüt) — 2026: 33.030</label>
-          <div style="display:flex;gap:6px;align-items:center;">
+          <div class="field-actions">
             <input class="mono" type="number" step="any" id="s-br-asgariUcret" value="${esc(o.asgariUcret)}" style="flex:1;min-width:0;">
-            <button type="button" class="btn btn-ghost btn-sm" id="btnAsgari2026" title="2026 resmi brüt asgari ücreti yaz">2026 Güncel Asgari</button>
+            <button type="button" class="btn btn-ghost" id="btnAsgari2026" title="2026 resmi brüt asgari ücreti yaz">2026 Güncel Asgari</button>
           </div>
         </div>
         <div class="field"><label>SSK İşçi %</label>
@@ -16865,6 +16865,13 @@ async function buildPdfDoc(html, orientation, opts){
   if(!node) throw new Error('PDF içeriği oluşturulamadı.');
   const captureW = Math.max(node.scrollWidth, node.offsetWidth, width);
   const captureH = Math.max(node.scrollHeight, node.offsetHeight, 1);
+  // Gece modunda global CSS bazı inline style parçalarını `!important` ile
+  // override edebiliyor. PDF çıktısında bunun yaratacağı boşa-render/boş
+  // görünümü engellemek için yakalama sırasında temayı geçici olarak light'a al.
+  const htmlEl = document.documentElement;
+  const prevTheme = htmlEl.getAttribute('data-theme');
+  const forcedLightTheme = prevTheme === 'dark';
+  if(forcedLightTheme) htmlEl.setAttribute('data-theme', 'light');
   document.body.classList.add('dnz-pdf-capturing');
   root.classList.add('pdf-capturing');
   let canvas;
@@ -16886,6 +16893,10 @@ async function buildPdfDoc(html, orientation, opts){
   }finally{
     root.classList.remove('pdf-capturing');
     document.body.classList.remove('dnz-pdf-capturing');
+    if(forcedLightTheme){
+      if(prevTheme == null) htmlEl.removeAttribute('data-theme');
+      else htmlEl.setAttribute('data-theme', prevTheme);
+    }
     root.innerHTML = '';
     root.style.cssText = savedRootCss;
   }
@@ -17008,52 +17019,38 @@ async function sharePreparedPdf(prepared, shareOpts){
     return 'unavailable';
   }
 
-  // Stratejiler: WhatsApp Android bazen files+text birlikte olunca başarısız olur;
-  // önce dosya(+başlık), sonra metinli dene. Bu fonksiyon await ÖNCE çağrılmamalı
-  // (kullanıcı jesti korunmalı — confirm/dialog kullanma).
-  const strategies = [];
+  // Tek sefer paylaş: daha önce birden fazla stratejiyle sırayla deneme
+  // yapılıyordu; bu da paylaş ekranı/geri bildirimlerinin birden fazla kez
+  // tetiklenmesine yol açabiliyor. Kullanıcıya tek bir paylaş deneyimi sun.
+  const candidates = [];
   if(file){
-    strategies.push({ files:[file], title });
-    if(text) strategies.push({ files:[file], title, text });
-    strategies.push({ files:[file] });
+    if(text) candidates.push({ files:[file], title, text });
+    candidates.push({ files:[file], title });
+    candidates.push({ files:[file] });
   }
 
-  let sawAbort = false;
-  let lastErr = null;
-  for(let i=0;i<strategies.length;i++){
-    const data = strategies[i];
-    if(typeof navigator.canShare === 'function'){
+  let shareData = candidates[0] || null;
+  if(typeof navigator.canShare === 'function'){
+    for(const c of candidates){
       try{
-        if(!navigator.canShare(data)) continue;
-      }catch(_){
-        // canShare hata verirse yine de dene (özellikle mobil)
-        if(!isLikelyMobileDevice()) continue;
-      }
+        if(navigator.canShare(c)){ shareData = c; break; }
+      }catch(_){}
     }
-    try{
-      await navigator.share(data);
-      return 'shared';
-    }catch(e){
-      if(e && e.name==='AbortError'){ sawAbort = true; break; }
-      lastErr = e;
-      console.warn('Paylaşım stratejisi başarısız', i, e);
-    }
-  }
-  if(sawAbort) return 'cancelled';
-
-  // canShare hepsini reddettiyse mobilde son bir kez files ile zorla dene
-  if(file && isLikelyMobileDevice() && strategies.length){
-    try{
-      await navigator.share({ files:[file], title });
-      return 'shared';
-    }catch(e){
-      if(e && e.name==='AbortError') return 'cancelled';
-      lastErr = e;
-      console.warn('Zorunlu dosya paylaşımı başarısız', e);
-    }
+  } else if(text && candidates.length >= 2){
+    // canShare yoksa metinli payload yerine daha güvenli seçenek (metinsiz)
+    // ile tek deneme yap.
+    shareData = candidates[1];
   }
 
-  if(lastErr) console.error('Paylaşım hatası', lastErr);
+  if(!shareData) return 'unavailable';
+
+  try{
+    await navigator.share(shareData);
+    return 'shared';
+  }catch(e){
+    if(e && e.name==='AbortError') return 'cancelled';
+    console.error('Paylaşım hatası', e);
+  }
   if(shareOpts.allowDownloadFallback && !isLikelyMobileDevice()){
     pdf.save(filename);
     return 'downloaded';
@@ -17153,6 +17150,12 @@ function exportHtmlTablesToExcel(previewNode, filename){
 function showPdfPreview(html, filename, orientation, opts){
   orientation = orientation === 'l' ? 'l' : 'p';
   opts = opts || {};
+  // Önizleme sırasında da gece modunun bazı inline stilleri `!important`
+  // override edip metni beyaz/siliktir hale getirmesini engelle.
+  const htmlEl = document.documentElement;
+  const prevTheme = htmlEl.getAttribute('data-theme');
+  const forcedLightThemePreview = prevTheme === 'dark';
+  if(forcedLightThemePreview) htmlEl.setAttribute('data-theme', 'light');
   const paperSize = ['a3','a4','a5'].includes(String(opts.paperSize||'').toLowerCase())
     ? String(opts.paperSize).toLowerCase() : 'a4';
   const PREVIEW_W = { a5:{p:559,l:794}, a4:{p:794,l:1123}, a3:{p:1123,l:1587} };
@@ -17217,6 +17220,10 @@ function showPdfPreview(html, filename, orientation, opts){
   const cleanupAndClose = ()=>{
     window.removeEventListener('resize', fitScale);
     if(previewResizeObs){ previewResizeObs.disconnect(); previewResizeObs = null; }
+    if(forcedLightThemePreview){
+      if(prevTheme == null) htmlEl.removeAttribute('data-theme');
+      else htmlEl.setAttribute('data-theme', prevTheme);
+    }
     closeModal();
   };
 
