@@ -6235,10 +6235,16 @@ function renderTeklifTab(main){
     }
   };
   prefixInput.addEventListener('input', ()=>{
+    // Sadece harfe çevir ve 3 karakterle sınırla; burada DNZ dolgusu UYGULAMIYORUZ.
+    // (Aksi halde her tuş vuruşunda eksik kalan harfler DNZ ile tamamlanır ve
+    // kullanıcı kendi önekini hiç yazamaz.) DNZ sadece boş bırakılırsa (change/blur'da) öneri olarak eklenir.
     prefixInput.value = prefixInput.value.toUpperCase().replace(/[^A-Z]/g,'').slice(0,3);
-    refreshNoPreview();
+    const previewPrefix = prefixInput.value || 'DNZ';
+    const suffixPart = aktif.teklifNo ? (aktif.teklifNo.split('-')[1] || buildTeklifNoSuffix()) : buildTeklifNoSuffix();
+    noPreview.textContent = previewPrefix + '-' + suffixPart;
   });
   prefixInput.addEventListener('change', ()=>{
+    // Alan tamamlanmamışsa/boşsa burada normalize edilip DNZ ile tamamlanır.
     refreshNoPreview();
     saveState();
   });
