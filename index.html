@@ -7375,17 +7375,20 @@ function semaAdaptProfile(W, L, scale){
   const strokeMul = Math.max(0.4, Math.min(1.2, px / 36));
   const askiR = Math.max(2.0, Math.min(5.2, 4.2 * markScale));
   const birSize = Math.max(2.2, Math.min(5.5, 3.2 * markScale));
-  const askiStep = level==='full' ? 1 : level==='medium' ? 2 : level==='sparse' ? 3 : 4;
-  const maxAski = level==='full' ? 350 : level==='medium' ? 180 : level==='sparse' ? 100 : 64;
-  const maxTiles = level==='full' ? 600 : level==='medium' ? 280 : level==='sparse' ? 140 : 64;
-  const birStep = level==='full' ? 1 : level==='medium' ? 2 : 3;
+  // Büyük metrajda da askı / panel / birleştirici / ekleme / vida seyreltilmez ve gizlenmez:
+  // şema, hesap panelindeki adetlerle aynı ürünleri eksiksiz gösterir (yalnız çizgi/işaret
+  // kalınlıkları ölçeğe göre küçülür). Üst sınırlar sadece tarayıcıyı korumak için çok yüksek tutuldu.
+  const askiStep = 1;
+  const maxAski = 5000;
+  const maxTiles = 20000;
+  const birStep = 1;
   return {
     level, markScale, strokeMul, askiR, birSize, askiStep, maxAski, maxTiles, birStep,
     showTileInset: level==='full' || level==='medium',
-    simplifyTiles: level==='schematic' || level==='sparse',
-    showBirlestirici: level!=='schematic',
-    showVida: level==='full',
-    showEkleme: level!=='schematic',
+    simplifyTiles: false,
+    showBirlestirici: true,
+    showVida: true,
+    showEkleme: true,
     gapScale: level==='full' ? 1 : level==='medium' ? 1.35 : 1.7,
     strokeScale: level==='full' ? 1 : level==='medium' ? 1.15 : 1.35
   };
@@ -7474,7 +7477,7 @@ function imalatSemaSpacingPositions(axisLenM, firstCm, stepCm){
   const pos = [];
   if(!(axisLenM>0) || !(step>0) || !(first>0)) return pos;
   // Çok küçük aralık / aşırı nokta sayısını engelle (tarayıcı kilitlenmesi önlenir)
-  const maxPts = 250;
+  const maxPts = 2000;
   for(let p = first, n=0; p < axisLenM - 0.001 && n<maxPts; p += step, n++) pos.push(+p.toFixed(4));
   return pos;
 }
@@ -7558,10 +7561,16 @@ function countProfilParcasiFromHats(hatLengths, stockLen){
 // Tavan/zemin: kısa/uzun kenar = odanın geometrik min/max kenarı (giriş sırasından bağımsız).
 // Duvar: W=uzunluk, L=yükseklik — olduğu gibi.
 // parallel=kisa → aralık uzun kenar boyunca, hat boyu = kısa kenar (index1 ile aynı).
-function roomAxisRunForParallel(parallel, W, L, uygulamaTipi){
+function roomAxisRunForParallel(parallel, W, L, uygulamaTipi, bboxMode){
   const w = parseFloat(W)||0, l = parseFloat(L)||0;
   if(!(w>0) || !(l>0)) return { axis:0, run:0 };
   if(normalizeUygulamaTipi(uygulamaTipi)==='duvar'){
+    return parallel==='uzun' ? { axis:w, run:l } : { axis:l, run:w };
+  }
+  // Poligon (bbox): W = x uzunluğu, L = y uzunluğu — kısa/uzun diye yer değiştirmeden gerçek eksen
+  // boyları kullanılır. (kisa = yatay hat, aralık y boyunca; uzun = dikey hat, aralık x boyunca.)
+  // Aksi halde x'i y'den uzun olan poligonlarda dikey hatlar bbox'ın kısa kenarında kesilip eksik kalıyordu.
+  if(bboxMode){
     return parallel==='uzun' ? { axis:w, run:l } : { axis:l, run:w };
   }
   const K = Math.min(w, l), U = Math.max(w, l);
@@ -7573,7 +7582,7 @@ function getTasiyiciHatLengthsForAyar(a, W, L, kind, polyPts, uygulamaTipi){
     return len>0 ? [len] : [];
   }
   const parallel = a && a.parallel==='uzun' ? 'uzun' : 'kisa';
-  const { axis, run } = roomAxisRunForParallel(parallel, W, L, uygulamaTipi);
+  const { axis, run } = roomAxisRunForParallel(parallel, W, L, uygulamaTipi, !!(polyPts && polyPts.length>=3));
   if(!(run>0) || !(axis>0)) return [];
   const positions = imalatSemaSpacingPositions(axis, a.firstCm, a.stepCm);
   // Poligon şeması: yalnızca poligon içindeki hat parçalarının gerçek uzunlukları
@@ -7924,7 +7933,7 @@ function buildRoomCarriersList(sistem, room, polyPts){
         positions = [0];
         run = room.W;
       } else {
-        const ar = roomAxisRunForParallel(parallel, room.W, room.L, uygTip);
+        const ar = roomAxisRunForParallel(parallel, room.W, room.L, uygTip, !!(pts && pts.length>=3));
         run = ar.run;
         positions = imalatSemaSpacingPositions(ar.axis, a.firstCm, a.stepCm);
         // Şema gibi: poligon dışındaki hatları sayma
@@ -8270,7 +8279,7 @@ function collectSemaTipDrawData(sistem, W, L, opts){
       const a = ayarlar[tip] || emptyTasiyiciAyar();
       const parallel = a.parallel==='uzun' ? 'uzun' : 'kisa';
       const uygTip = getSistemUygulamaTipi(sistem);
-      const ar = roomAxisRunForParallel(parallel, W, L, uygTip);
+      const ar = roomAxisRunForParallel(parallel, W, L, uygTip, !!(opts.polyPts && opts.polyPts.length>=3));
       const axis = ar.axis, run = ar.run;
       const positions = imalatSemaSpacingPositions(axis, a.firstCm, a.stepCm);
       const stock = parseFloat(a.profilBoyu)||3;
@@ -8314,7 +8323,7 @@ function collectSemaTipDrawData(sistem, W, L, opts){
     askiPts = computeAskiRelativePoints(
       sistem,
       askiAyar || emptyAskiAyar(),
-      { W, L, kind:'rect' },
+      { W, L, kind: (opts.polyPts ? 'bbox' : 'rect'), polyPts: opts.polyPts || null },
       opts.polyPts || null
     );
   }
@@ -8763,7 +8772,7 @@ function buildSemaTipLayersMarkup(ox, oy, W, L, scale, drawData, opts){
             if(yi % hs) return;
             V.positions.forEach((px, xi)=>{
               if(xi % hs) return;
-              if(++bi > 400) return;
+              if(++bi > 5000) return;
               const cx = ox + px*scale, cy = oy + py*scale;
               if(polyPts && !imalatPointInPoly(cx, cy, polyPts)) return;
               s += `<rect x="${(cx-half).toFixed(2)}" y="${(cy-half).toFixed(2)}" width="${(half*2).toFixed(2)}" height="${(half*2).toFixed(2)}" fill="${col}" opacity="0.9"/>`;
@@ -8779,7 +8788,7 @@ function buildSemaTipLayersMarkup(ox, oy, W, L, scale, drawData, opts){
     const ekHalf = Math.max(1.5, (adapt.birSize||3)/2);
     if(marks.length){
       const col = imalatUrunTipiColor('ekleme');
-      const thinned = thinSemaPoints(marks, adapt.birStep||1, 250);
+      const thinned = thinSemaPoints(marks, adapt.birStep||1, 5000);
       thinned.forEach(mk=>{
         let cx, cy;
         if(mk.parallel==='kisa'){
@@ -9141,7 +9150,7 @@ function renderRectSemaSvg(W, L, approx, sistem){
   const drawData = collectSemaTipDrawData(sistem, W, L);
   const sonItems = buildSemaSonParcaItems(W, L, drawData, uygTip);
   const pads = semaSonParcaPadding(sonItems, scale, approx);
-  if(adapt.level!=='full') pads.padBottom = (pads.padBottom||12) + 16;
+  // (Yoğunluk sadeleştirme kaldırıldı: şema tüm ürünleri eksiksiz çizer.)
   const padLeft = padTop + (pads.padLeftExtra || 0);
   const ox = padLeft, oy = padTop;
   const vbW = rw + padLeft + pads.padRight, vbH = rh + padTop + pads.padBottom;
@@ -9152,9 +9161,7 @@ function renderRectSemaSvg(W, L, approx, sistem){
   });
   const sonMarkup = semaSonParcaEtiketMarkup(ox, oy, W, L, scale, sonItems, { fontSize: pads.fontSize });
   const olcu = uygulamaTipiOlcuEtiketleri(uygTip);
-  const densNote = adapt.level!=='full'
-    ? `<text x="${ox+rw/2}" y="${(oy+rh+pads.padBottom-6).toFixed(1)}" text-anchor="middle" font-size="9" fill="#8096A3">Yoğunluk sadeleştirildi · yakınlaştırmak için ölçek kullanın</text>`
-    : '';
+  const densNote = '';
   const maxWcss = Math.min(720, Math.round(maxDim * 1.15));
   return `
     <svg viewBox="0 0 ${vbW.toFixed(1)} ${vbH.toFixed(1)}" style="width:100%;max-width:${maxWcss}px;height:auto;display:block;margin:0 auto;" data-sema-level="${adapt.level}">
