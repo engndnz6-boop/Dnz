@@ -8041,19 +8041,22 @@ function computeAskiRelativePoints(sistem, askiAyar, room, polyPts){
 function computeAskiAdetFromRoom(sistem, malzeme, room, polyPts){
   if(!room) return null;
   const tips = malzeme ? normalizeUrunTipleri(malzeme.urunTipi) : [];
-  // Malzeme askı değilse sistemdeki ilk askı ayarını kullan
+  // Sistemdeki tüm askı ürünleri (askı çubuğu, askı maşası, çelik dubel…) birbirine bağlıdır:
+  // hepsi şemadaki (ilk) askı ürününün noktalarını kullanır. Böylece adetler ürünler arasında
+  // eşit kalır ve şemayla birebir tutar (her ürün kendi aralığıyla ayrı hesaplanmaz).
   let askiAyar = null;
-  if(malzeme && tips.includes('aski')){
-    const tipAy = normalizeTipAyarlari(Object.assign({}, malzeme, {urunTipi:tips}));
-    askiAyar = tipAy.aski || emptyAskiAyar();
-  } else if(sistem){
-    for(const m of (sistem.malzemeler||[])){
+  if(sistem){
+    for(const m of sistemMalzemeleriHesap(sistem)){
       const t = normalizeUrunTipleri(m.urunTipi);
       if(!t.includes('aski')) continue;
       const tipAy = normalizeTipAyarlari(Object.assign({}, m, {urunTipi:t}));
       askiAyar = tipAy.aski || emptyAskiAyar();
       break;
     }
+  }
+  if(!askiAyar && malzeme && tips.includes('aski')){
+    const tipAy = normalizeTipAyarlari(Object.assign({}, malzeme, {urunTipi:tips}));
+    askiAyar = tipAy.aski || emptyAskiAyar();
   }
   if(!askiAyar) askiAyar = emptyAskiAyar();
   return computeAskiRelativePoints(sistem, askiAyar, room, polyPts).length;
