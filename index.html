@@ -2100,7 +2100,8 @@ const IMALAT_URUN_TIPLERI = [
   { id:'demir', label:'Demir', color:'#5c4033' },
   { id:'file', label:'File', color:'#708090' },
   { id:'tugla_bims', label:'Tuğla/Bims', color:'#b55239' },
-  { id:'armatur', label:'Armatör', color:'#4a5568' }
+  { id:'armatur', label:'Armatör', color:'#4a5568' },
+  { id:'takoz', label:'Baskı Takozu', color:'#d63384' }
 ];
 // İmalat sisteminin uygulama yeri — ölçü hesabı buna göre değişir.
 const IMALAT_UYGULAMA_TIPLERI = [
@@ -2425,7 +2426,7 @@ function renderTasiyiciFormsHtml(tips, ayarlar, uygulamaTipi){
 }
 
 // Taşıyıcı dışı ürün tipleri için form alanları (panel/plaka/yalıtım/vida/kenar/ekleme/birleştirici/askı)
-const IMALAT_DIGER_TIP_FORM_SIRASI = ['panel','plaka','yalitim','vida','kenar','ekleme','birlestirici','aski','torba','demir','file','tugla_bims','armatur'];
+const IMALAT_DIGER_TIP_FORM_SIRASI = ['panel','plaka','yalitim','vida','kenar','ekleme','birlestirici','aski','torba','demir','file','tugla_bims','armatur','takoz'];
 const IMALAT_BIRLESTIRICI_TABANLARI = [
   { id:'kesisim', label:'Kesişim' },
   { id:'aski', label:'Askı noktası' },
@@ -2499,6 +2500,8 @@ function emptyDemirAyar(){ return { boy:'12', agirlik:'', mtAgirlik:'' }; }
 function emptyFileAyar(){ return { en:'', boy:'' }; }
 function emptyTuglaBimsAyar(){ return { uzunluk:'', yukseklik:'' }; }
 function emptyArmaturAyar(){ return { en:'', boy:'' }; }
+// Baskı takozu: kenara gelen her plaka için adet (çarpan). Plaka ebatı boşsa sistemdeki Plaka/Panel'den alınır.
+function emptyTakozAyar(){ return { carpan:'1', en:'', boy:'' }; }
 function emptyTipAyar(tip){
   if(tip==='panel' || tip==='plaka') return emptyPanelPlakaAyar();
   if(tip==='yalitim') return emptyYalitimAyar();
@@ -2512,6 +2515,7 @@ function emptyTipAyar(tip){
   if(tip==='file') return emptyFileAyar();
   if(tip==='tugla_bims') return emptyTuglaBimsAyar();
   if(tip==='armatur') return emptyArmaturAyar();
+  if(tip==='takoz') return emptyTakozAyar();
   return {};
 }
 function seciliDigerTipFormlari(val){
@@ -2601,6 +2605,13 @@ function normalizeTipAyarlari(m){
         en: from.en!=null && from.en!=='' ? String(from.en) : base.en,
         boy: from.boy!=null && from.boy!=='' ? String(from.boy) : base.boy
       };
+    } else if(tip==='takoz'){
+      const pos = (v)=> (v!=null && v!=='' && parseFloat(v)>0) ? String(v) : '';
+      out[tip] = {
+        carpan: from.carpan!=null && from.carpan!=='' ? String(from.carpan) : base.carpan,
+        en: pos(from.en),
+        boy: pos(from.boy)
+      };
     }
   });
   return out;
@@ -2686,6 +2697,9 @@ function serializeTipAyarlari(ayarlar, tips){
     } else if(tip==='armatur'){
       const e = parseEbatMetreCift(a.en, a.boy, 0, 0);
       out[tip] = { en: e.en>0 ? e.en : 0, boy: e.boy>0 ? e.boy : 0 };
+    } else if(tip==='takoz'){
+      const e = parseEbatMetreCift(a.en, a.boy, 0, 0);
+      out[tip] = { carpan: Math.max(0, num(a.carpan, 1)), en: e.en>0 ? e.en : 0, boy: e.boy>0 ? e.boy : 0 };
     }
   });
   return out;
@@ -2907,6 +2921,23 @@ function renderDigerTipFormsHtml(tips, ayarlar, uygulamaTipi){
         </div>
         <p class="hint" style="margin:0;font-size:0.68rem;">Armatör (hasır) levha en×boy ölçüsü. Sipariş m² = adet × (en×boy).</p>`);
     }
+    if(tip==='takoz'){
+      return tipFormShell(tip, `
+        <div class="field-grid" style="margin:0;">
+          <div class="field"><label>Kenar plakası başına adet</label>
+            <input class="mono" type="number" step="any" min="0" data-tip-field="${tip}" data-field="carpan" value="${esc(a.carpan??'1')}" placeholder="Örn: 1">
+          </div>
+        </div>
+        <div class="field-grid" style="margin:8px 0 0;">
+          <div class="field"><label>Plaka En (m) <span style="font-weight:500;color:var(--ink-soft);text-transform:none;letter-spacing:0;">(isteğe bağlı)</span></label>
+            <input class="mono" type="number" step="any" min="0.01" data-tip-field="${tip}" data-field="en" value="${esc(a.en??'')}" placeholder="Boş: sistemdeki plaka">
+          </div>
+          <div class="field"><label>Plaka Boy (m) <span style="font-weight:500;color:var(--ink-soft);text-transform:none;letter-spacing:0;">(isteğe bağlı)</span></label>
+            <input class="mono" type="number" step="any" min="0.01" data-tip-field="${tip}" data-field="boy" value="${esc(a.boy??'')}" placeholder="Boş: sistemdeki plaka">
+          </div>
+        </div>
+        <p class="hint" style="margin:8px 0 0;font-size:0.68rem;">Duvara/kenara temas eden her plakaya takoz takılır: adet = kenardaki plaka sayısı × çarpan. Plaka ebatı boş bırakılırsa sistemdeki Plaka (yoksa Panel) ürününden alınır. Köşe plakası tek sayılır. Şemada kenar plakalarında pembe eşkenar işaret görünür.</p>`);
+    }
     return '';
   }).join('');
 }
@@ -2968,6 +2999,8 @@ function renderTipAyarOzetHtml(m, uygulamaTipi){
       detail = `uzunluk ${a.uzunluk?esc(fmtNum(a.uzunluk))+' m':'—'} · yükseklik ${a.yukseklik?esc(fmtNum(a.yukseklik))+' m':'—'}`;
     } else if(tip==='armatur'){
       detail = `en ${a.en?esc(fmtNum(a.en))+' m':'—'} · boy ${a.boy?esc(fmtNum(a.boy))+' m':'—'}`;
+    } else if(tip==='takoz'){
+      detail = `kenar plakası başına ${esc(fmtNum(a.carpan))} adet · plaka ${(a.en&&a.boy)?esc(fmtNum(a.en))+'×'+esc(fmtNum(a.boy))+' m':'sistemden'}`;
     }
     if(!detail) return '';
     return `<div style="font-size:0.68rem;color:var(--ink-soft);margin-top:3px;line-height:1.35;"><span style="display:inline-flex;align-items:center;gap:5px;"><i style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${imalatUrunTipiColor(tip)};"></i><b style="color:var(--ink);font-weight:600;">${esc(imalatUrunTipiLabel(tip))}</b></span> · ${detail}</div>`;
@@ -8061,6 +8094,119 @@ function computeAskiAdetFromRoom(sistem, malzeme, room, polyPts){
   if(!askiAyar) askiAyar = emptyAskiAyar();
   return computeAskiRelativePoints(sistem, askiAyar, room, polyPts).length;
 }
+// ---- Baskı takozu (Clip-in vb.): kenara gelen (duvara temas eden) her plakaya bir takoz ----
+// Plaka ebatı: takoz ürününde girilmişse o; yoksa sistemdeki Plaka (kesim ölçüsü varsa o), yoksa Panel.
+function getTakozPlakaEbat(sistem, malzeme){
+  const tips = malzeme ? normalizeUrunTipleri(malzeme.urunTipi) : [];
+  if(malzeme && tips.includes('takoz')){
+    const ta = normalizeTipAyarlari(Object.assign({}, malzeme, {urunTipi:tips})).takoz || emptyTakozAyar();
+    const own = parseEbatMetreCift(ta.en, ta.boy, 0, 0);
+    if(own.w>0 && own.h>0) return { w:own.w, h:own.h };
+  }
+  let panel = null;
+  for(const m of sistemMalzemeleriHesap(sistem)){
+    const t = normalizeUrunTipleri(m.urunTipi);
+    const ay = normalizeTipAyarlari(Object.assign({}, m, {urunTipi:t}));
+    if(t.includes('plaka') && ay.plaka){
+      const eb = plakaStokVeKesimEbat(ay.plaka);
+      if(eb.layout.w>0 && eb.layout.h>0) return { w:eb.layout.w, h:eb.layout.h };
+    }
+    if(!panel && t.includes('panel') && ay.panel){
+      const e = parseEbatMetreCift(ay.panel.en, ay.panel.boy, 1.2, 2.5);
+      if(e.w>0 && e.h>0) panel = { w:e.w, h:e.h };
+    }
+  }
+  return panel;
+}
+// Kenara gelen plaka hücreleri. Izgara şemadaki gibi köşeden başlar (en → x, boy → y).
+// Dikdörtgen: dış halka. Poligon: duvar çizgisinin içe baktığı hücreler (cx,cy: hücrenin oda içindeki merkezi).
+function computeTakozCells(pw, ph, W, L, polyPts){
+  if(!(pw>0) || !(ph>0) || !(W>0) || !(L>0)) return [];
+  const cols = Math.max(1, Math.ceil(W/pw - 1e-9));
+  const rows = Math.max(1, Math.ceil(L/ph - 1e-9));
+  const cells = [];
+  if(!(polyPts && polyPts.length>=3)){
+    const mk = (ix, iy)=>{
+      const x0 = ix*pw, y0 = iy*ph, x1 = Math.min(W, x0+pw), y1 = Math.min(L, y0+ph);
+      return { ix, iy, cx:(x0+x1)/2, cy:(y0+y1)/2 };
+    };
+    for(let iy=0; iy<rows; iy++){
+      if(iy===0 || iy===rows-1){
+        for(let ix=0; ix<cols; ix++) cells.push(mk(ix, iy));
+      } else {
+        cells.push(mk(0, iy));
+        if(cols>1) cells.push(mk(cols-1, iy));
+      }
+    }
+    return cells;
+  }
+  const xs = polyPts.map(p=>p.x), ys = polyPts.map(p=>p.y);
+  const minX = Math.min(...xs), minY = Math.min(...ys);
+  const seen = new Set();
+  const eps = 1e-4; // duvarın içe bakan tarafını yoklamak için (0,1 mm)
+  const clampI = (v, n)=> Math.max(0, Math.min(n-1, v));
+  const rep = (ix, iy, qx, qy)=>{
+    const x0 = minX + ix*pw, y0 = minY + iy*ph;
+    const x1 = Math.min(minX + W, x0 + pw), y1 = Math.min(minY + L, y0 + ph);
+    let sx = 0, sy = 0, k = 0;
+    for(let a=0; a<5; a++){
+      for(let b=0; b<5; b++){
+        const px = x0 + (x1-x0)*(a+0.5)/5, py = y0 + (y1-y0)*(b+0.5)/5;
+        if(imalatPointInPoly(px, py, polyPts)){ sx += px; sy += py; k++; }
+      }
+    }
+    return k ? { cx: sx/k - minX, cy: sy/k - minY } : { cx: qx - minX, cy: qy - minY };
+  };
+  // Her duvar kenarı ızgara çizgileriyle parçalara bölünür; her parçanın içe bakan tarafındaki hücre
+  // "kenara gelen plaka"dır. (Yalnızca köşeye değen komşu hücre sayılmaz.)
+  for(let i=0; i<polyPts.length; i++){
+    const a = polyPts[i], b = polyPts[(i+1)%polyPts.length];
+    const dx = b.x - a.x, dy = b.y - a.y, len = Math.hypot(dx, dy);
+    if(!(len > 1e-9)) continue;
+    const u0 = (a.x-minX)/pw, u1 = (b.x-minX)/pw, v0 = (a.y-minY)/ph, v1 = (b.y-minY)/ph;
+    const ts = [0, 1];
+    if(Math.abs(u1-u0) > 1e-12){
+      const lo = Math.ceil(Math.min(u0,u1) - 1e-12), hi = Math.floor(Math.max(u0,u1) + 1e-12);
+      for(let k=lo, g=0; k<=hi && g<200000; k++, g++){ const t = (k-u0)/(u1-u0); if(t>0 && t<1) ts.push(t); }
+    }
+    if(Math.abs(v1-v0) > 1e-12){
+      const lo = Math.ceil(Math.min(v0,v1) - 1e-12), hi = Math.floor(Math.max(v0,v1) + 1e-12);
+      for(let k=lo, g=0; k<=hi && g<200000; k++, g++){ const t = (k-v0)/(v1-v0); if(t>0 && t<1) ts.push(t); }
+    }
+    ts.sort((x,y)=>x-y);
+    const nx = -dy/len, ny = dx/len;
+    for(let j=0; j<ts.length-1; j++){
+      if(!((ts[j+1]-ts[j])*len > 1e-6)) continue;
+      const tm = (ts[j]+ts[j+1])/2, mx = a.x + dx*tm, my = a.y + dy*tm;
+      [1, -1].forEach(sg=>{
+        const qx = mx + nx*eps*sg, qy = my + ny*eps*sg;
+        if(!imalatPointInPoly(qx, qy, polyPts)) return;
+        const ix = clampI(Math.floor((qx - minX)/pw), cols);
+        const iy = clampI(Math.floor((qy - minY)/ph), rows);
+        const key = iy*cols + ix;
+        if(seen.has(key)) return;
+        seen.add(key);
+        const r = rep(ix, iy, qx, qy);
+        cells.push({ ix, iy, cx:r.cx, cy:r.cy });
+      });
+    }
+  }
+  return cells;
+}
+function computeTakozAdetFromRoom(sistem, malzeme, room, polyPts){
+  if(!room || room.kind==='length') return null;
+  const tips = malzeme ? normalizeUrunTipleri(malzeme.urunTipi) : [];
+  if(!tips.includes('takoz')) return null;
+  if(!(room.W>0) || !(room.L>0)) return null;
+  const eb = getTakozPlakaEbat(sistem, malzeme);
+  if(!eb) return null;
+  const ta = normalizeTipAyarlari(Object.assign({}, malzeme, {urunTipi:tips})).takoz || emptyTakozAyar();
+  const carpan = parseFloat(String(ta.carpan).replace(',','.'));
+  const mul = (!isNaN(carpan) && carpan>=0) ? carpan : 1;
+  const pts = polyPts || room.polyPts || null;
+  const cells = computeTakozCells(eb.w, eb.h, room.W, room.L, pts);
+  return Math.ceil(cells.length * mul - 1e-12);
+}
 function getImalatPolyPts(){
   if(ui.imalatCalcMode!=='poligon') return null;
   const pts = tracePoligonVertices(ui.imalatCalcPoligon);
@@ -8241,13 +8387,14 @@ function collectSemaTipDrawData(sistem, W, L, opts){
   const carriers = [];
   let hasKenar = false, hasPanel = false, hasPlaka = false, hasYalitim = false, hasAski = false;
   let hasEkleme = false, hasBirlestirici = false, hasVida = false;
+  let hasTakoz = false, takozCells = [], takozSize = null;
   const usedTips = new Set();
   const eklemeMarks = [];
   let panelSize = null, plakaSize = null, yalitimSize = null;
   let askiFirstCm = 70, askiStepCm = 100;
   let askiAyar = null;
   let askiPts = [];
-  if(!sistem || !(W>0) || !(L>0)) return { carriers, hasKenar, hasPanel, hasPlaka, hasYalitim, hasAski, hasEkleme, hasBirlestirici, hasVida, usedTips, eklemeMarks, panelSize, plakaSize, yalitimSize, askiFirstCm, askiStepCm, askiPts };
+  if(!sistem || !(W>0) || !(L>0)) return { carriers, hasKenar, hasPanel, hasPlaka, hasYalitim, hasAski, hasEkleme, hasBirlestirici, hasVida, usedTips, eklemeMarks, panelSize, plakaSize, yalitimSize, askiFirstCm, askiStepCm, askiPts, hasTakoz, takozCells, takozSize };
   sistemMalzemeleriHesap(sistem).forEach(m=>{
     const tips = normalizeUrunTipleri(m.urunTipi);
     tips.forEach(id=>usedTips.add(id));
@@ -8259,6 +8406,7 @@ function collectSemaTipDrawData(sistem, W, L, opts){
     if(tips.includes('ekleme')) hasEkleme = true;
     if(tips.includes('birlestirici')) hasBirlestirici = true;
     if(tips.includes('vida')) hasVida = true;
+    if(tips.includes('takoz')) hasTakoz = true;
     const tipAy = normalizeTipAyarlari(Object.assign({}, m, {urunTipi:tips}));
     if(tips.includes('panel') && tipAy.panel && !panelSize){
       const e = parseEbatMetreCift(tipAy.panel.en, tipAy.panel.boy, 1.2, 2.5);
@@ -8321,6 +8469,15 @@ function collectSemaTipDrawData(sistem, W, L, opts){
       });
     });
   });
+  // Baskı takozu: kenara gelen plakalar (hesapla aynı fonksiyon)
+  if(hasTakoz){
+    const tm = sistemMalzemeleriHesap(sistem).find(m=>normalizeUrunTipleri(m.urunTipi).includes('takoz'));
+    const eb = tm ? getTakozPlakaEbat(sistem, tm) : null;
+    if(eb){
+      takozSize = eb;
+      takozCells = computeTakozCells(eb.w, eb.h, W, L, opts.polyPts || null);
+    }
+  }
   // Ekleme tipi seçilmediyse şemada birleşim/ek yerleri çizilmez
   if(hasAski){
     askiPts = computeAskiRelativePoints(
@@ -8330,7 +8487,7 @@ function collectSemaTipDrawData(sistem, W, L, opts){
       opts.polyPts || null
     );
   }
-  return { carriers, hasKenar, hasPanel, hasPlaka, hasYalitim, hasAski, hasEkleme, hasBirlestirici, hasVida, usedTips, eklemeMarks, panelSize, plakaSize, yalitimSize, askiFirstCm, askiStepCm, askiPts };
+  return { carriers, hasKenar, hasPanel, hasPlaka, hasYalitim, hasAski, hasEkleme, hasBirlestirici, hasVida, usedTips, eklemeMarks, panelSize, plakaSize, yalitimSize, askiFirstCm, askiStepCm, askiPts, hasTakoz, takozCells, takozSize };
 }
 // Panel: bordür + içi delikli; Plaka: bordür + beyaz mermer. carryOver=true → kesilen parça sonraki şeride aktarılır.
 // Yalıtım: açık sarı bordür + içi dalgalı çizgiler.
@@ -8834,6 +8991,16 @@ function buildSemaTipLayersMarkup(ox, oy, W, L, scale, drawData, opts){
       }
     }
   }
+  // Baskı takozu — kenara gelen her plakada küçük eşkenar işaret
+  if(drawData.hasTakoz && (drawData.takozCells||[]).length){
+    const col = imalatUrunTipiColor('takoz');
+    const ts = drawData.takozSize || { w:0.3, h:0.3 };
+    const rr = Math.max(1.2, Math.min(4.2, Math.min(ts.w, ts.h) * scale * 0.34));
+    drawData.takozCells.forEach(c=>{
+      const cx = ox + c.cx*scale, cy = oy + c.cy*scale;
+      s += `<polygon points="${cx.toFixed(2)},${(cy-rr).toFixed(2)} ${(cx+rr).toFixed(2)},${cy.toFixed(2)} ${cx.toFixed(2)},${(cy+rr).toFixed(2)} ${(cx-rr).toFixed(2)},${cy.toFixed(2)}" fill="${col}" stroke="#fff" stroke-width="0.6"/>`;
+    });
+  }
   // Askı noktaları — yoğunlukta seyreltilir; yarıçap ölçeğe göre ayarlanır
   if(drawData.hasAski){
     const askiColor = imalatUrunTipiColor('aski');
@@ -8864,7 +9031,7 @@ function buildPoligonTipLayersGroup(points, meta, sistem, opts){
   let drawData = collectSemaTipDrawData(sistem, W, H, { polyPts: points });
   const hasAny = drawData && (
     drawData.hasYalitim || drawData.hasPlaka || drawData.hasPanel || drawData.hasAski ||
-    drawData.hasEkleme || drawData.hasBirlestirici || drawData.hasVida || drawData.hasKenar ||
+    drawData.hasEkleme || drawData.hasBirlestirici || drawData.hasVida || drawData.hasKenar || drawData.hasTakoz ||
     (drawData.carriers&&drawData.carriers.length)
   );
   if(!hasAny) return { markup:'', borderColor:'#1C6E8C', drawData };
@@ -9054,6 +9221,17 @@ function buildPoligonTipLayersGroup(points, meta, sistem, opts){
         s += `<circle cx="${p.x.toFixed(3)}" cy="${p.y.toFixed(3)}" r="${vidaR.toFixed(3)}" fill="${col}"/>`;
       }
     }
+  }
+  // Baskı takozu — kenara gelen her plakada küçük eşkenar işaret
+  if(drawData.hasTakoz && (drawData.takozCells||[]).length){
+    const col = imalatUrunTipiColor('takoz');
+    const ts = drawData.takozSize || { w:0.3, h:0.3 };
+    const pxScale = Math.max(8, (meta && meta.scale) || swBase * 12);
+    const rr = Math.max(1.2, Math.min(swBase * 1.1, Math.min(ts.w, ts.h) * pxScale * 0.34));
+    drawData.takozCells.forEach(c=>{
+      const p = toSvg(minX + c.cx, minY + c.cy);
+      s += `<polygon points="${p.x.toFixed(3)},${(p.y-rr).toFixed(3)} ${(p.x+rr).toFixed(3)},${p.y.toFixed(3)} ${p.x.toFixed(3)},${(p.y+rr).toFixed(3)} ${(p.x-rr).toFixed(3)},${p.y.toFixed(3)}" fill="${col}" stroke="#fff" stroke-width="${(swBase*0.3).toFixed(3)}"/>`;
+    });
   }
   // Askı — en üstte yuvarlak noktalar (yoğunlukta seyreltilir)
   if(drawData.hasAski){
@@ -9397,6 +9575,15 @@ function computeMalzemeSonuc(malzeme, deger, opts){
       miktar = parca;
     }
   }
+  // Baskı takozu: kenara gelen (duvara temas eden) her plaka için takoz; plaka ebatı sistemden
+  if(tipsAll.includes('takoz') && room){
+    const tk = computeTakozAdetFromRoom(opts.sistem, malzeme, room, polyPts);
+    if(tk!=null){
+      let parca = tamAdetYuvarla(tk * (ciftMul > 1 ? ciftMul : 1));
+      adetNote = parca;
+      miktar = parca;
+    }
+  }
   // Kenar profil: çevre ÷ profil boyu yukarı tamamla; mt = adet × boy
   if(tipsAll.includes('kenar')){
     const kn = computeKenarAdet(malzeme, deger, room);
@@ -9427,7 +9614,7 @@ function computeMalzemeSonuc(malzeme, deger, opts){
     && !tipsAll.includes('ekleme') && !tipsAll.includes('vida')
     && !tipsAll.includes('plaka') && !tipsAll.includes('panel')
     && !tipsAll.includes('yalitim') && !tipsAll.includes('aski')
-    && !tipsAll.includes('kenar') && !tipsAll.includes('torba')){
+    && !tipsAll.includes('kenar') && !tipsAll.includes('torba') && !tipsAll.includes('takoz')){
     miktar = Math.round(miktar * ciftMul * 100) / 100;
     if(adetNote != null) adetNote = adetNote * ciftMul;
     if(kgNote != null) kgNote = Math.round(kgNote * ciftMul * 100) / 100;
