@@ -1372,7 +1372,23 @@ td.num,th.num{font-family:var(--font-mono);text-align:right;}
 .project-item .pinfo b{display:block;font-family:var(--font-display);font-size:0.92rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .project-item .pinfo .pbadges{display:flex;flex-wrap:wrap;gap:5px;margin:3px 0;}
 .project-item .pinfo span{font-size:0.72rem;color:var(--ink-soft);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;}
-/* Teklif listesi: tıklanan kart "iç içe" (accordion) açılır; .teklif-detay o satırın hemen altına gelir. */
+/* Teklif listesi: kart değil, sade/ince bir liste. Satıra tıklayınca aç/kapa (toggle); .teklif-detay o satırın hemen altına "iç içe" gelir. */
+.teklif-list{display:flex;flex-direction:column;}
+.teklif-row{
+  display:flex;align-items:center;gap:8px;padding:9px 6px;cursor:pointer;
+  border-bottom:1px solid rgba(11,36,54,0.08);
+}
+.teklif-list .teklif-row:last-child{border-bottom:none;}
+.teklif-row:hover{background:rgba(47,143,227,0.06);}
+.teklif-row.active{background:rgba(47,143,227,0.12);}
+.teklif-row .pinfo{flex:1;min-width:0;}
+.teklif-row .pinfo b{display:block;font-family:var(--font-display);font-size:0.88rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.teklif-row .pinfo span{font-size:0.72rem;color:var(--ink-soft);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;}
+.teklif-row .icon-btn{width:30px;height:30px;flex-shrink:0;}
+.teklif-chevron{width:16px;height:16px;flex-shrink:0;color:var(--ink-soft);transition:transform 160ms ease;}
+.teklif-row.active .teklif-chevron{transform:rotate(180deg);color:var(--aqua-dim);}
+html[data-theme="dark"] .teklif-row{border-bottom-color:rgba(255,255,255,0.1);}
+/* Teklif detay paneli: "iç içe" (accordion) açılır, .teklif-detay o satırın hemen altına gelir. */
 .teklif-detay{
   margin:-2px 0 4px 14px;padding:12px 14px 14px;
   border-left:2px solid var(--aqua-dim);border-radius:0 12px 12px 0;
@@ -3365,6 +3381,7 @@ let ui = {
   metrajEditId:null,
   teklifEditId:null,
   aktifTeklifKayitId:null,
+  teklifPanelAcik:true, // Teklif listesinde o an açık (genişletilmiş) kartın gösterilip gösterilmeyeceği
   filters:{blok:'',kat:'',daire:'',mekan:'',eleman:'',imalat:'',minha:''},
   icmalFilters:{blok:'',kat:'',daire:'',mekan:''},
   puantajAy: currentYm(),
@@ -6237,28 +6254,27 @@ function renderTeklifTab(main){
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
         </button>
       </h2>
-      <div class="project-list" id="teklifListesi">
+      <div class="teklif-list" id="teklifListesi">
         ${tumTeklifler.map(t=>{
           const p = t.projectId && state.projects[t.projectId] ? state.projects[t.projectId].name : (t.musteriAdSoyad || null);
           const no = t.teklifNo || (normalizeTeklifNoPrefix(t.teklifNoPrefix)+'-…');
-          const acikMi = t.id===aktif.id;
+          const acikMi = t.id===aktif.id && ui.teklifPanelAcik;
           const satir = `
-          <div class="project-item ${acikMi?'active':''}" data-id="${t.id}">
+          <div class="teklif-row ${acikMi?'active':''}" data-id="${t.id}">
             <div class="pinfo">
               <b>${esc(no)}</b>
               <span>${p ? esc(p) : 'Projeye/müşteriye bağlı değil'} · ${fmtMoney(teklifKdvliToplam(t).brut)}</span>
             </div>
-            <button class="icon-btn" data-act="edit" title="Düzenle">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
-            </button>
+            ${acikMi ? `
             <button class="icon-btn" data-act="copy" title="Kopyala">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
             </button>
             <button class="icon-btn danger" data-act="delete" ${tumTeklifler.length<2?'disabled':''} title="${tumTeklifler.length<2?'En az bir teklif kalmalı':'Sil'}">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0l-1 14a2 2 0 01-2 2H7a2 2 0 01-2-2L4 6h16z"/></svg>
-            </button>
+            </button>` : ''}
+            <svg class="teklif-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
           </div>`;
-          // Yalnızca tıklanan (aktif) teklifin ayrıntıları, tam bu satırın altına "iç içe" açılır.
+          // Yalnızca tıklanan (açık) teklifin ayrıntıları, tam bu satırın altına "iç içe" açılır.
           const detay = !acikMi ? '' : `
           <div class="teklif-detay">
             <div class="field-grid field-grid-single">
@@ -6372,50 +6388,50 @@ function renderTeklifTab(main){
       <div class="table-scroll" id="imalatFiyatTableWrap" style="margin-top:10px;">${renderImalatFiyatTableHtml()}</div>
     </div>
   `;
-  ['aciklama','miktar','birim','birimFiyat','kdvOrani'].forEach(k=>{
-    document.getElementById('t-'+k).addEventListener('input', ()=>{
-      teklifForm[k] = document.getElementById('t-'+k).value;
-      document.getElementById('t-tutarDisplay').value = fmtMoney((parseFloat(teklifForm.miktar)||0)*(parseFloat(teklifForm.birimFiyat)||0));
+  // Aşağıdaki alanlar yalnızca o an açık (genişletilmiş) teklifin panelinde vardır;
+  // panel kapalıyken (ui.teklifPanelAcik===false) hiçbiri DOM'da olmaz, bu yüzden
+  // tüm bağlama/dinleyici kurulumu bu korumanın içinde yapılır.
+  if(ui.teklifPanelAcik){
+    ['aciklama','miktar','birim','birimFiyat','kdvOrani'].forEach(k=>{
+      document.getElementById('t-'+k).addEventListener('input', ()=>{
+        teklifForm[k] = document.getElementById('t-'+k).value;
+        document.getElementById('t-tutarDisplay').value = fmtMoney((parseFloat(teklifForm.miktar)||0)*(parseFloat(teklifForm.birimFiyat)||0));
+      });
     });
-  });
-  document.getElementById('btnSaveTeklif').onclick = ()=>saveTeklifRow();
-  document.getElementById('btnClearTeklif').onclick = ()=>{ teklifForm = emptyTeklifForm(); renderMain(); };
-  document.getElementById('btnFromMetraj').onclick = ()=>{
-    if(!bagliProje){ showToast('Metrajdan eklemek için önce bir projeye bağlayın.'); return; }
-    openMetrajPickModal(bagliProje);
-  };
-  document.getElementById('btnFromAnaliz').onclick = ()=> openAnalizKayitPickModal();
-  document.getElementById('btnTeklifPdf').onclick = ()=>openTeklifTemplateModal();
-  document.getElementById('btnMergeTeklif').onclick = ()=>{
-    const before = aktif.teklifRows.length;
-    mergeAllTeklifRows(aktif);
-    const after = aktif.teklifRows.length;
-    saveState();
-    renderMain();
-    if(before===after){ showToast('Birleştirilecek aynı kalem bulunamadı.'); }
-    else { showToast(`${before-after} kalem birleştirildi, ${after} satır kaldı.`); }
-  };
-  let noteSaveTimer = null;
-  document.getElementById('t-note').addEventListener('input',(e)=>{
-    aktif.teklifNote = e.target.value;
-    clearTimeout(noteSaveTimer);
-    noteSaveTimer = setTimeout(()=>saveState(), 500);
-  });
+    document.getElementById('btnSaveTeklif').onclick = ()=>saveTeklifRow();
+    document.getElementById('btnClearTeklif').onclick = ()=>{ teklifForm = emptyTeklifForm(); renderMain(); };
+    document.getElementById('btnFromMetraj').onclick = ()=>{
+      if(!bagliProje){ showToast('Metrajdan eklemek için önce bir projeye bağlayın.'); return; }
+      openMetrajPickModal(bagliProje);
+    };
+    document.getElementById('btnFromAnaliz').onclick = ()=> openAnalizKayitPickModal();
+    document.getElementById('btnTeklifPdf').onclick = ()=>openTeklifTemplateModal();
+    document.getElementById('btnMergeTeklif').onclick = ()=>{
+      const before = aktif.teklifRows.length;
+      mergeAllTeklifRows(aktif);
+      const after = aktif.teklifRows.length;
+      saveState();
+      renderMain();
+      if(before===after){ showToast('Birleştirilecek aynı kalem bulunamadı.'); }
+      else { showToast(`${before-after} kalem birleştirildi, ${after} satır kaldı.`); }
+    };
+    let noteSaveTimer = null;
+    document.getElementById('t-note').addEventListener('input',(e)=>{
+      aktif.teklifNote = e.target.value;
+      clearTimeout(noteSaveTimer);
+      noteSaveTimer = setTimeout(()=>saveState(), 500);
+    });
+  }
 
-  // ---- Teklif listesi: tıklayınca seç (düzenle), kopyala, sil ----
+  // ---- Teklif listesi: satıra tıklayınca aç/kapa (toggle), kopyala, sil ----
   document.getElementById('teklifListesi').addEventListener('click',(e)=>{
-    const item = e.target.closest('.project-item');
+    const item = e.target.closest('.teklif-row');
     if(!item) return;
     const id = item.dataset.id;
-    const act = e.target.closest('[data-act]')?.dataset.act || 'edit';
-    if(act==='edit'){
-      ui.aktifTeklifKayitId = id;
-      saveState();
-      teklifForm = emptyTeklifForm();
-      renderMain();
-      window.scrollTo({top:0, behavior:'smooth'});
-    } else if(act==='copy'){
+    const act = e.target.closest('[data-act]')?.dataset.act;
+    if(act==='copy'){
       const copy = kopyalaTeklif(id);
+      ui.teklifPanelAcik = true;
       saveState();
       teklifForm = emptyTeklifForm();
       renderMain();
@@ -6433,74 +6449,88 @@ function renderTeklifTab(main){
         renderMain();
         showToast('Teklif silindi.');
       });
+    } else {
+      // İkon dışında, satırın herhangi bir yerine tıklanınca: açıksa kapat, kapalıysa (ve gerekirse
+      // başka bir teklifi kapatıp) bu teklifi aç.
+      if(ui.aktifTeklifKayitId===id && ui.teklifPanelAcik){
+        ui.teklifPanelAcik = false;
+      } else {
+        ui.aktifTeklifKayitId = id;
+        ui.teklifPanelAcik = true;
+      }
+      saveState();
+      teklifForm = emptyTeklifForm();
+      renderMain();
     }
-  });
-  document.getElementById('t-projeBagla').addEventListener('change',(e)=>{
-    const pid = e.target.value || null;
-    aktif.projectId = pid;
-    if(!pid) aktif.teklifOnaylandi = false;
-    else if(state.projects[pid]) state.projects[pid].aktifTeklifId = aktif.id;
-    saveState();
-    renderMain();
-    showToast(pid ? 'Teklif projeye bağlandı.' : 'Teklif yalnızca müşteriye bağlı bırakıldı.');
   });
   document.getElementById('btnYeniTeklif').onclick = ()=>{
     yeniTeklifEkleGlobal();
+    ui.teklifPanelAcik = true;
     saveState();
     teklifForm = emptyTeklifForm();
     renderMain();
     showToast('Yeni teklif oluşturuldu.');
   };
-  document.getElementById('t-gecerlilikTarihi').addEventListener('change',(e)=>{
-    aktif.gecerlilikTarihi = e.target.value;
-    saveState();
-  });
-  document.getElementById('t-teklifTarihi').addEventListener('change',(e)=>{
-    aktif.teklifTarihi = e.target.value || isoToday();
-    saveState();
-  });
-  document.getElementById('t-musteriAdSoyad').addEventListener('input',(e)=>{
-    aktif.musteriAdSoyad = e.target.value;
-  });
-  document.getElementById('t-musteriAdSoyad').addEventListener('change',()=> saveState());
-  document.getElementById('t-musteriTelefon').addEventListener('input',(e)=>{
-    aktif.musteriTelefon = e.target.value;
-  });
-  document.getElementById('t-musteriTelefon').addEventListener('change',()=> saveState());
-  const prefixInput = document.getElementById('t-teklifNoPrefix');
-  const noPreview = document.getElementById('t-teklifNoPreview');
-  const refreshNoPreview = ()=>{
-    const prefix = normalizeTeklifNoPrefix(prefixInput.value);
-    prefixInput.value = prefix;
-    aktif.teklifNoPrefix = prefix;
-    if(aktif.teklifNo){
-      ensureTeklifNo(aktif);
-      noPreview.textContent = aktif.teklifNo;
-    } else {
-      noPreview.textContent = prefix + '-' + buildTeklifNoSuffix();
-    }
-  };
-  prefixInput.addEventListener('input', ()=>{
-    // Sadece harfe çevir ve 3 karakterle sınırla; burada DNZ dolgusu UYGULAMIYORUZ.
-    // (Aksi halde her tuş vuruşunda eksik kalan harfler DNZ ile tamamlanır ve
-    // kullanıcı kendi önekini hiç yazamaz.) DNZ sadece boş bırakılırsa (change/blur'da) öneri olarak eklenir.
-    prefixInput.value = prefixInput.value.toUpperCase().replace(/[^A-Z]/g,'').slice(0,3);
-    const previewPrefix = prefixInput.value || 'DNZ';
-    const suffixPart = aktif.teklifNo ? (aktif.teklifNo.split('-')[1] || buildTeklifNoSuffix()) : buildTeklifNoSuffix();
-    noPreview.textContent = previewPrefix + '-' + suffixPart;
-  });
-  prefixInput.addEventListener('change', ()=>{
-    // Alan tamamlanmamışsa/boşsa burada normalize edilip DNZ ile tamamlanır.
-    refreshNoPreview();
-    saveState();
-  });
-  document.getElementById('t-onay').addEventListener('change',(e)=>{
-    aktif.teklifOnaylandi = e.target.checked;
-    saveState();
-  });
-
-  renderTeklifTable();
-  renderTeklifTotals();
+  if(ui.teklifPanelAcik){
+    document.getElementById('t-projeBagla').addEventListener('change',(e)=>{
+      const pid = e.target.value || null;
+      aktif.projectId = pid;
+      if(!pid) aktif.teklifOnaylandi = false;
+      else if(state.projects[pid]) state.projects[pid].aktifTeklifId = aktif.id;
+      saveState();
+      renderMain();
+      showToast(pid ? 'Teklif projeye bağlandı.' : 'Teklif yalnızca müşteriye bağlı bırakıldı.');
+    });
+    document.getElementById('t-gecerlilikTarihi').addEventListener('change',(e)=>{
+      aktif.gecerlilikTarihi = e.target.value;
+      saveState();
+    });
+    document.getElementById('t-teklifTarihi').addEventListener('change',(e)=>{
+      aktif.teklifTarihi = e.target.value || isoToday();
+      saveState();
+    });
+    document.getElementById('t-musteriAdSoyad').addEventListener('input',(e)=>{
+      aktif.musteriAdSoyad = e.target.value;
+    });
+    document.getElementById('t-musteriAdSoyad').addEventListener('change',()=> saveState());
+    document.getElementById('t-musteriTelefon').addEventListener('input',(e)=>{
+      aktif.musteriTelefon = e.target.value;
+    });
+    document.getElementById('t-musteriTelefon').addEventListener('change',()=> saveState());
+    const prefixInput = document.getElementById('t-teklifNoPrefix');
+    const noPreview = document.getElementById('t-teklifNoPreview');
+    const refreshNoPreview = ()=>{
+      const prefix = normalizeTeklifNoPrefix(prefixInput.value);
+      prefixInput.value = prefix;
+      aktif.teklifNoPrefix = prefix;
+      if(aktif.teklifNo){
+        ensureTeklifNo(aktif);
+        noPreview.textContent = aktif.teklifNo;
+      } else {
+        noPreview.textContent = prefix + '-' + buildTeklifNoSuffix();
+      }
+    };
+    prefixInput.addEventListener('input', ()=>{
+      // Sadece harfe çevir ve 3 karakterle sınırla; burada DNZ dolgusu UYGULAMIYORUZ.
+      // (Aksi halde her tuş vuruşunda eksik kalan harfler DNZ ile tamamlanır ve
+      // kullanıcı kendi önekini hiç yazamaz.) DNZ sadece boş bırakılırsa (change/blur'da) öneri olarak eklenir.
+      prefixInput.value = prefixInput.value.toUpperCase().replace(/[^A-Z]/g,'').slice(0,3);
+      const previewPrefix = prefixInput.value || 'DNZ';
+      const suffixPart = aktif.teklifNo ? (aktif.teklifNo.split('-')[1] || buildTeklifNoSuffix()) : buildTeklifNoSuffix();
+      noPreview.textContent = previewPrefix + '-' + suffixPart;
+    });
+    prefixInput.addEventListener('change', ()=>{
+      // Alan tamamlanmamışsa/boşsa burada normalize edilip DNZ ile tamamlanır.
+      refreshNoPreview();
+      saveState();
+    });
+    document.getElementById('t-onay').addEventListener('change',(e)=>{
+      aktif.teklifOnaylandi = e.target.checked;
+      saveState();
+    });
+    renderTeklifTable();
+    renderTeklifTotals();
+  }
   bindImalatFiyatListesiEvents();
 }
 
@@ -6665,6 +6695,7 @@ function saveTeklifRow(){
 
 function renderTeklifTable(){
   const wrap = document.getElementById('teklifTableWrap');
+  if(!wrap) return;
   const aktif = ensureAktifTeklifKaydi();
   if(aktif.teklifRows.length===0){
     wrap.innerHTML = `<div class="empty-state">Henüz teklif kalemi eklenmedi.</div>`;
