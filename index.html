@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>DNZ</title>
 <link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#0F3B4C">
+<meta name="theme-color" content="#123A5C">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -891,19 +891,19 @@
 </script>
 <style>
 :root{
-  --abyss:#08202E;
-  --lagoon:#0F3B4C;
-  --tide:#1C6E8C;
-  --foam:#EAF6F5;
-  --aqua:#2FD3C7;
-  --aqua-dim:#22A99F;
+  --abyss:#0A1F3D;
+  --lagoon:#123A5C;
+  --tide:#1C5E99;
+  --foam:#EAF1FA;
+  --aqua:#2F8FE3;
+  --aqua-dim:#2272C4;
   --ink:#0B2436;
   --ink-soft:#345264;
   --coral:#E8776B;
   --glass-bg:rgba(234,246,245,0.62);
   --glass-bg-strong:rgba(234,246,245,0.82);
   --glass-border:rgba(255,255,255,0.55);
-  --shadow-color:rgba(4,20,28,0.35);
+  --shadow-color:rgba(178,24,24,0.35);
   --radius:18px;
   --font-display:'Outfit',sans-serif;
   --font-body:'Inter',sans-serif;
@@ -921,7 +921,7 @@ body{
   min-height:100vh;
   min-height:100dvh;
   background:
-    radial-gradient(ellipse 80% 60% at 20% -10%, rgba(47,211,199,0.28), transparent 60%),
+    radial-gradient(ellipse 80% 60% at 20% -10%, rgba(47,143,227,0.28), transparent 60%),
     radial-gradient(ellipse 70% 50% at 90% 10%, rgba(28,110,140,0.16), transparent 60%),
     linear-gradient(160deg, #F5FBFA 0%, #E6F4F2 45%, #D7EDEC 100%);
   background-attachment:fixed;
@@ -959,7 +959,7 @@ body{
 .ripple-wrap{position:relative;overflow:hidden;}
 .ripple-el{
   position:absolute;border-radius:50%;
-  background:radial-gradient(circle, rgba(47,211,199,0.55) 0%, rgba(47,211,199,0.25) 40%, rgba(255,255,255,0) 70%);
+  background:radial-gradient(circle, rgba(47,143,227,0.55) 0%, rgba(47,143,227,0.25) 40%, rgba(255,255,255,0) 70%);
   transform:scale(0);
   animation:rippleAnim 700ms ease-out forwards;
   pointer-events:none;
@@ -985,13 +985,13 @@ header.topbar{
   width:104px;height:38px;border-radius:10px;flex-shrink:0;
   background:#FFFFFF;
   display:flex;align-items:center;justify-content:center;
-  box-shadow:0 4px 14px rgba(8,32,46,0.22);
+  box-shadow:0 4px 14px rgba(178,24,24,0.22);
   padding:3px 8px;overflow:hidden;
 }
 .brand-mark svg{width:22px;height:22px;}
 .brand-mark img{width:100%;height:100%;object-fit:contain;display:block;}
-.brand-text{display:flex;flex-direction:column;line-height:1.05;min-width:0;}
-.brand-text b{font-family:var(--font-display);font-weight:800;font-size:1.15rem;letter-spacing:0.5px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:46vw;display:inline-block;}
+.brand-text{display:flex;flex-direction:column;line-height:1.05;min-width:0;max-width:52vw;}
+.brand-text b{font-family:var(--font-display);font-weight:800;font-size:1.15rem;letter-spacing:0.5px;color:var(--ink);white-space:normal;overflow-wrap:break-word;line-height:1.15;}
 .brand-text span{font-size:0.68rem;color:var(--ink-soft);font-weight:500;letter-spacing:0.3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 
 .project-picker{
@@ -1033,7 +1033,7 @@ nav.tabs{
   border-radius:0 22px 22px 0;
   transform:translateX(-104%);
   transition:transform 240ms cubic-bezier(.4,0,.2,1);
-  box-shadow:0 0 50px rgba(4,20,28,0.35);
+  box-shadow:0 0 50px rgba(178,24,24,0.35);
 }
 nav.tabs.open{transform:translateX(0);}
 nav.tabs.no-project .nav-proj-tab{display:none;}
@@ -1057,7 +1057,7 @@ nav.tabs::-webkit-scrollbar-thumb{background:rgba(11,36,54,0.2);border-radius:10
 .tab-btn svg{width:16px;height:16px;flex-shrink:0;}
 .tab-btn.active{
   background:linear-gradient(135deg,var(--aqua),var(--aqua-dim));
-  color:#04201C;box-shadow:0 4px 14px rgba(47,211,199,0.4);
+  color:#04201C;box-shadow:0 4px 14px rgba(178,24,24,0.4);
 }
 .tab-btn:not(.active):hover{background:rgba(255,255,255,0.5);color:var(--ink);}
 
@@ -1077,10 +1077,10 @@ main{flex:1;min-width:0;width:100%;padding:0 10px 40px 10px;display:flex;flex-di
 }
 .field-grid .field[style*="grid-column:span 2"]{grid-column:1 / -1;}
 .field{display:flex;flex-direction:column;gap:4px;min-width:0;}
-.sg-list{position:absolute;top:100%;left:0;right:0;z-index:60;background:var(--card,#fff);border:1px solid rgba(11,36,54,0.15);border-radius:10px;margin-top:4px;max-height:190px;overflow-y:auto;box-shadow:0 10px 24px rgba(8,32,46,0.22);}
+.sg-list{position:absolute;top:100%;left:0;right:0;z-index:60;background:var(--card,#fff);border:1px solid rgba(11,36,54,0.15);border-radius:10px;margin-top:4px;max-height:190px;overflow-y:auto;box-shadow:0 10px 24px rgba(178,24,24,0.22);}
 .sg-item{padding:10px 12px;font-size:0.88rem;color:var(--ink,#0B2436);cursor:pointer;border-bottom:1px solid rgba(11,36,54,0.07);}
 .sg-item:last-child{border-bottom:none;}
-.sg-item:hover,.sg-item:active{background:rgba(47,211,199,0.16);}
+.sg-item:hover,.sg-item:active{background:rgba(47,143,227,0.16);}
 .field label{font-size:0.7rem;font-weight:600;color:var(--ink-soft);letter-spacing:0.2px;}
 .field input,.field select,.field textarea{
   width:100%;padding:9px 10px;border-radius:10px;
@@ -1101,7 +1101,7 @@ main{flex:1;min-width:0;width:100%;padding:0 10px 40px 10px;display:flex;flex-di
 }
 .btn svg{width:15px;height:15px;}
 .btn:active{transform:scale(0.97);}
-.btn-primary{background:linear-gradient(135deg,var(--aqua),var(--aqua-dim));color:#04201C;box-shadow:0 4px 14px rgba(47,211,199,0.4);}
+.btn-primary{background:linear-gradient(135deg,var(--aqua),var(--aqua-dim));color:#04201C;box-shadow:0 4px 14px rgba(178,24,24,0.4);}
 .btn-ghost{background:rgba(255,255,255,0.45);color:var(--ink);border:1px solid rgba(11,36,54,0.12);}
 .btn-danger{background:rgba(232,119,107,0.18);color:#7A2B22;border:1px solid rgba(232,119,107,0.4);}
 .btn-danger:hover{background:rgba(232,119,107,0.3);}
@@ -1183,7 +1183,7 @@ main{flex:1;min-width:0;width:100%;padding:0 10px 40px 10px;display:flex;flex-di
 .report-subtab-btn svg{width:15px;height:15px;flex-shrink:0;}
 .report-subtab-btn.active{
   background:linear-gradient(135deg,var(--aqua),var(--aqua-dim));
-  color:#04201C;box-shadow:0 4px 14px rgba(47,211,199,0.4);border-color:transparent;
+  color:#04201C;box-shadow:0 4px 14px rgba(178,24,24,0.4);border-color:transparent;
 }
 .report-subtab-btn:not(.active):hover{background:rgba(255,255,255,0.8);color:var(--ink);}
 table{border-collapse:collapse;width:100%;min-width:760px;font-size:0.78rem;}
@@ -1303,7 +1303,7 @@ td.num,th.num{font-family:var(--font-mono);text-align:right;}
 }
 .urun-tip-multi label:hover{background:rgba(255,255,255,0.75);color:var(--ink);}
 .urun-tip-multi label:has(input:checked){
-  background:rgba(47,211,199,0.22);color:var(--ink);border:1px solid rgba(47,211,199,0.45);
+  background:rgba(47,143,227,0.22);color:var(--ink);border:1px solid rgba(47,143,227,0.45);
 }
 .urun-tip-multi input{accent-color:var(--aqua-dim);width:15px;height:15px;flex-shrink:0;}
 .urun-tip-multi i{width:8px;height:8px;border-radius:50%;flex-shrink:0;display:inline-block;}
@@ -1331,7 +1331,7 @@ td.num,th.num{font-family:var(--font-mono);text-align:right;}
 }
 .dir-btn.active{
   border-color:var(--aqua-dim);color:var(--ink);
-  background:rgba(47,211,199,0.22);box-shadow:0 0 0 1px rgba(47,211,199,0.3);
+  background:rgba(47,143,227,0.22);box-shadow:0 0 0 1px rgba(178,24,24,0.3);
 }
 .dir-btn:hover{background:rgba(255,255,255,0.85);color:var(--ink);}
 .uygulama-tip-grid{
@@ -1346,8 +1346,8 @@ td.num,th.num{font-family:var(--font-mono);text-align:right;}
 .uygulama-tip-btn b{display:block;font-size:0.88rem;font-weight:700;color:var(--ink);line-height:1.2;}
 .uygulama-tip-btn small{display:block;margin-top:4px;font-size:0.68rem;font-weight:600;line-height:1.25;opacity:0.85;white-space:normal;}
 .uygulama-tip-btn.active{
-  background:rgba(47,211,199,0.22);border-color:var(--aqua-dim);color:var(--ink);
-  box-shadow:0 0 0 1px rgba(47,211,199,0.3);
+  background:rgba(47,143,227,0.22);border-color:var(--aqua-dim);color:var(--ink);
+  box-shadow:0 0 0 1px rgba(178,24,24,0.3);
 }
 .uygulama-tip-btn:hover{background:rgba(255,255,255,0.88);}
 .sistem-tip-select{
@@ -1367,7 +1367,7 @@ td.num,th.num{font-family:var(--font-mono);text-align:right;}
   display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:14px;
   background:rgba(255,255,255,0.4);border:1px solid rgba(255,255,255,0.5);cursor:pointer;
 }
-.project-item.active{background:rgba(47,211,199,0.25);border-color:var(--aqua-dim);}
+.project-item.active{background:rgba(47,143,227,0.25);border-color:var(--aqua-dim);}
 .project-item .pinfo{flex:1;min-width:0;}
 .project-item .pinfo b{display:block;font-family:var(--font-display);font-size:0.92rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .project-item .pinfo .pbadges{display:flex;flex-wrap:wrap;gap:5px;margin:3px 0;}
@@ -1411,7 +1411,7 @@ html[data-theme="dark"] .urun-kart{background:rgba(255,255,255,0.05);border-colo
 .modal-pdf-preview{max-width:900px;}
 .pdf-preview-scroll{background:#DCE7E9;border-radius:10px;padding:14px;overflow:auto;max-height:56vh;}
 .pdf-preview-scale-wrap{margin:0 auto;}
-#pdfPreviewNode{box-shadow:0 6px 24px rgba(0,0,0,0.18);}
+#pdfPreviewNode{box-shadow:0 6px 24px rgba(178,24,24,0.18);}
 
 /* Dosya eki (özgeçmiş / masraf fişi vb.) */
 .file-attach-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
@@ -1419,11 +1419,11 @@ html[data-theme="dark"] .urun-kart{background:rgba(255,255,255,0.05);border-colo
 .file-attach-chip svg{width:13px;height:13px;flex-shrink:0;}
 .file-attach-chip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .file-attach-chip button{background:none;border:none;color:#B3392C;cursor:pointer;font-weight:800;padding:0 2px;flex-shrink:0;}
-.icon-btn.attach-active{color:#1C6E8C;}
+.icon-btn.attach-active{color:#1C5E99;}
 
 .badge{
   display:inline-flex;padding:3px 9px;border-radius:20px;font-size:0.68rem;font-weight:700;
-  background:rgba(47,211,199,0.22);color:#0A5850;
+  background:rgba(47,143,227,0.22);color:#0A5850;
 }
 .badge.durum-devam{background:rgba(230,168,0,0.2);color:#8A6300;}
 .badge.durum-tamamlandi{background:rgba(46,166,98,0.2);color:#1E7A46;}
@@ -1455,7 +1455,7 @@ html[data-theme="dark"] .urun-kart{background:rgba(255,255,255,0.05);border-colo
 .support-inbox-filters .btn-sm.active{background:var(--aqua-dim);color:#fff;border-color:var(--aqua-dim);}
 .support-reply-box{
   margin-top:10px;padding:10px 12px;border-radius:10px;
-  background:rgba(47,211,199,0.12);border:1px solid rgba(47,211,199,0.35);
+  background:rgba(47,143,227,0.12);border:1px solid rgba(47,143,227,0.35);
   font-size:0.82rem;line-height:1.45;white-space:pre-wrap;word-break:break-word;
 }
 .support-reply-admin{margin-top:12px;padding-top:10px;border-top:1px dashed rgba(11,36,54,0.15);}
@@ -1536,7 +1536,7 @@ body.dnz-pdf-capturing #app{
 
 /* personel durum rozeti */
 .status-badge{display:inline-flex;padding:3px 9px;border-radius:20px;font-size:0.66rem;font-weight:700;white-space:nowrap;}
-.status-badge.aktif{background:rgba(47,211,199,0.22);color:#0A5850;}
+.status-badge.aktif{background:rgba(47,143,227,0.22);color:#0A5850;}
 .status-badge.ayrilmis{background:rgba(232,119,107,0.2);color:#7A2B22;}
 
 /* puantaj / mesai tablosu */
@@ -1556,7 +1556,7 @@ body.dnz-pdf-capturing #app{
   display:block;margin:0 auto;
 }
 .att-cell:hover:not(:disabled){background:rgba(255,255,255,0.5);}
-.att-cell[data-val="X"]{color:#0A5850;background:rgba(47,211,199,0.28);}
+.att-cell[data-val="X"]{color:#0A5850;background:rgba(47,143,227,0.28);}
 .att-cell[data-val="Y"]{color:#8a5a00;background:rgba(255,183,77,0.32);}
 .att-cell[data-val="O"]{color:#7A2B22;background:rgba(232,119,107,0.22);}
 .att-cell:disabled{opacity:0.25;cursor:not-allowed;}
@@ -1574,7 +1574,7 @@ body.dnz-pdf-capturing #app{
 
 /* personel arama sonuç kartı */
 .arama-sonuc-item{cursor:pointer;transition:background 120ms ease;}
-.arama-sonuc-item:hover{background:rgba(47,211,199,0.22);}
+.arama-sonuc-item:hover{background:rgba(47,143,227,0.22);}
 
 /* Dashboard bar grafikleri */
 .bar-track{width:100%;height:10px;border-radius:6px;background:rgba(11,36,54,0.08);overflow:hidden;}
@@ -1583,13 +1583,13 @@ html[data-theme="dark"] .bar-track{background:rgba(255,255,255,0.09);}
 
 /* Personel Ara üzerinden bulunan kayıt, tabloda kısa süreliğine vurgulanır */
 tbody tr{transition:background 1.6s ease;}
-tbody tr.row-highlight{background:rgba(47,211,199,0.4) !important;}
+tbody tr.row-highlight{background:rgba(47,143,227,0.4) !important;}
 
 /* ======================= KOYU MOD ======================= */
 html[data-theme="dark"]{ color-scheme:dark; }
 html[data-theme="dark"] body{
   background:
-    radial-gradient(ellipse 80% 60% at 20% -10%, rgba(47,211,199,0.10), transparent 60%),
+    radial-gradient(ellipse 80% 60% at 20% -10%, rgba(47,143,227,0.10), transparent 60%),
     radial-gradient(ellipse 70% 50% at 90% 10%, rgba(28,110,140,0.16), transparent 60%),
     linear-gradient(160deg, #0B1A20 0%, #0A171D 45%, #081217 100%);
   color:var(--ink);
@@ -1600,7 +1600,7 @@ html[data-theme="dark"]{
   --glass-bg:rgba(16,38,46,0.78);
   --glass-bg-strong:rgba(18,42,52,0.92);
   --glass-border:rgba(255,255,255,0.14);
-  --shadow-color:rgba(0,0,0,0.45);
+  --shadow-color:rgba(178,24,24,0.45);
   --card:#10262E;
 }
 html[data-theme="dark"] .glass{box-shadow:0 8px 32px var(--shadow-color), inset 0 1px 0 rgba(255,255,255,0.06);}
@@ -1622,7 +1622,7 @@ html[data-theme="dark"] .urun-kart-fiyat,
 html[data-theme="dark"] .uygulama-tip-btn small,
 html[data-theme="dark"] .total-chip span.lbl,
 html[data-theme="dark"] thead th{color:var(--ink-soft);}
-html[data-theme="dark"] .brand-mark{background:#0F2229;box-shadow:0 4px 14px rgba(0,0,0,0.4);}
+html[data-theme="dark"] .brand-mark{background:#0F2229;box-shadow:0 4px 14px rgba(178,24,24,0.4);}
 html[data-theme="dark"] .field input,
 html[data-theme="dark"] .field textarea,
 html[data-theme="dark"] input.mono,
@@ -1704,7 +1704,7 @@ html[data-theme="dark"] thead th{background:rgba(255,255,255,0.08);}
 html[data-theme="dark"] tbody td{border-top-color:rgba(255,255,255,0.1);color:var(--ink);}
 html[data-theme="dark"] tbody tr:hover{background:rgba(255,255,255,0.05);}
 html[data-theme="dark"] .project-item{background:rgba(255,255,255,0.06);border-color:rgba(255,255,255,0.12);}
-html[data-theme="dark"] .project-item.active{background:rgba(47,211,199,0.2);}
+html[data-theme="dark"] .project-item.active{background:rgba(47,143,227,0.2);}
 html[data-theme="dark"] .project-item .icon-btn[data-act="toggleDurum"]{
   background:rgba(46,166,98,0.18);color:#7BE0A8;
 }
@@ -1713,7 +1713,7 @@ html[data-theme="dark"] .project-item .icon-btn[data-act="toggleDurum"]:hover{
 }
 html[data-theme="dark"] .total-chip{background:rgba(255,255,255,0.07);border-color:rgba(255,255,255,0.12);}
 html[data-theme="dark"] .pick-item{background:rgba(255,255,255,0.06);color:var(--ink);}
-html[data-theme="dark"] .arama-sonuc-item:hover{background:rgba(47,211,199,0.22);}
+html[data-theme="dark"] .arama-sonuc-item:hover{background:rgba(47,143,227,0.22);}
 html[data-theme="dark"] .sg-list{background:var(--card);border-color:rgba(255,255,255,0.14);}
 html[data-theme="dark"] .sg-item{color:var(--ink);border-bottom-color:rgba(255,255,255,0.08);}
 html[data-theme="dark"] .att-table th,html[data-theme="dark"] .att-table td{border-color:rgba(255,255,255,0.1);}
@@ -1721,7 +1721,7 @@ html[data-theme="dark"] .att-table td.name-cell,html[data-theme="dark"] .att-tab
 html[data-theme="dark"] .att-table thead th{background:rgba(255,255,255,0.09);}
 html[data-theme="dark"] .att-cell{color:var(--ink-soft);}
 html[data-theme="dark"] .mesai-input{color:var(--ink);}
-html[data-theme="dark"] .file-attach-chip{background:rgba(47,211,199,0.18);color:var(--ink);}
+html[data-theme="dark"] .file-attach-chip{background:rgba(47,143,227,0.18);color:var(--ink);}
 html[data-theme="dark"] footer.appfoot{color:rgba(242,251,250,0.4);}
 html[data-theme="dark"] .logo-preview{background:rgba(255,255,255,0.08);border-color:rgba(255,255,255,0.14);}
 html[data-theme="dark"] .backup-banner{color:#ffd8a3;}
@@ -1732,16 +1732,16 @@ html[data-theme="dark"] .uygulama-tip-btn{
   background:rgba(255,255,255,0.07);border-color:rgba(255,255,255,0.16);color:var(--ink-soft);
 }
 html[data-theme="dark"] .uygulama-tip-btn:hover{background:rgba(255,255,255,0.14);color:var(--ink);}
-html[data-theme="dark"] .uygulama-tip-btn.active{background:rgba(47,211,199,0.22);color:var(--ink);}
+html[data-theme="dark"] .uygulama-tip-btn.active{background:rgba(47,143,227,0.22);color:var(--ink);}
 html[data-theme="dark"] .dir-btn{background:rgba(255,255,255,0.07);color:var(--ink-soft);border-color:rgba(255,255,255,0.14);}
 html[data-theme="dark"] .dir-btn:hover,html[data-theme="dark"] .dir-btn.active{background:rgba(255,255,255,0.14);color:var(--ink);}
 html[data-theme="dark"] .urun-tip-multi label{background:rgba(255,255,255,0.06);color:var(--ink-soft);border-color:rgba(255,255,255,0.12);}
 html[data-theme="dark"] .urun-tip-multi label:hover{background:rgba(255,255,255,0.12);color:var(--ink);}
 html[data-theme="dark"] .urun-tip-multi label:has(input:checked),
 html[data-theme="dark"] .urun-tip-multi label.active{
-  background:rgba(47,211,199,0.22);color:var(--ink);border-color:rgba(47,211,199,0.45);
+  background:rgba(47,143,227,0.22);color:var(--ink);border-color:rgba(47,143,227,0.45);
 }
-html[data-theme="dark"] .badge{background:rgba(47,211,199,0.25);color:#9AF0E8;}
+html[data-theme="dark"] .badge{background:rgba(47,143,227,0.25);color:#9AF0E8;}
 html[data-theme="dark"] .badge.durum-devam{background:rgba(230,168,0,0.25);color:#FFD666;}
 html[data-theme="dark"] .badge.durum-tamamlandi{background:rgba(46,166,98,0.25);color:#7BE0A8;}
 html[data-theme="dark"] .modal{color:var(--ink);}
@@ -1908,39 +1908,39 @@ main{
 </style>
 </head>
 <body>
-<div id="authGate" style="position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;background:linear-gradient(160deg,#0F3B4C,#08202E);font-family:'Inter',sans-serif;padding:16px;">
-  <div style="width:100%;max-width:340px;background:rgba(234,246,245,0.96);border-radius:18px;padding:28px 24px;box-shadow:0 8px 32px rgba(4,20,28,0.35);box-sizing:border-box;">
+<div id="authGate" style="position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;background:linear-gradient(160deg,#123A5C,#0A1F3D);font-family:'Inter',sans-serif;padding:16px;">
+  <div style="width:100%;max-width:340px;background:rgba(234,246,245,0.96);border-radius:18px;padding:28px 24px;box-shadow:0 8px 32px rgba(178,24,24,0.35);box-sizing:border-box;">
     <div style="font-family:'Outfit',sans-serif;font-weight:800;font-size:1.3rem;color:#0B2436;margin-bottom:4px;text-align:center;">DNZ</div>
     <div style="font-size:0.8rem;color:#345264;text-align:center;margin-bottom:18px;">Devam etmek için giriş yapın</div>
     <input id="authEmail" type="email" placeholder="E-posta" autocomplete="username" style="width:100%;padding:11px 12px;margin-bottom:10px;border:1px solid rgba(11,36,54,0.2);border-radius:10px;font-size:0.9rem;box-sizing:border-box;">
     <input id="authPass" type="password" placeholder="Şifre" autocomplete="current-password" style="width:100%;padding:11px 12px;margin-bottom:14px;border:1px solid rgba(11,36,54,0.2);border-radius:10px;font-size:0.9rem;box-sizing:border-box;">
-    <button id="authLoginBtn" type="button" style="width:100%;padding:12px;border:none;border-radius:10px;background:linear-gradient(135deg,#2FD3C7,#22A99F);color:#08202E;font-weight:700;font-size:0.9rem;cursor:pointer;margin-bottom:8px;">Giriş Yap</button>
-    <button id="authRegisterBtn" type="button" style="width:100%;padding:12px;border:1px solid #1C6E8C;border-radius:10px;background:transparent;color:#1C6E8C;font-weight:600;font-size:0.85rem;cursor:pointer;">Hesap Oluştur</button>
+    <button id="authLoginBtn" type="button" style="width:100%;padding:12px;border:none;border-radius:10px;background:linear-gradient(135deg,#2F8FE3,#2272C4);color:#0A1F3D;font-weight:700;font-size:0.9rem;cursor:pointer;margin-bottom:8px;">Giriş Yap</button>
+    <button id="authRegisterBtn" type="button" style="width:100%;padding:12px;border:1px solid #1C5E99;border-radius:10px;background:transparent;color:#1C5E99;font-weight:600;font-size:0.85rem;cursor:pointer;">Hesap Oluştur</button>
     <div id="authMsg" style="min-height:18px;font-size:0.78rem;color:#E8776B;margin-top:10px;text-align:center;"></div>
   </div>
 </div>
 
-<div id="verifyGate" style="display:none;position:fixed;inset:0;z-index:1000;align-items:center;justify-content:center;background:linear-gradient(160deg,#0F3B4C,#08202E);font-family:'Inter',sans-serif;padding:16px;text-align:center;">
-  <div style="width:100%;max-width:380px;background:rgba(234,246,245,0.96);border-radius:18px;padding:28px 24px;box-shadow:0 8px 32px rgba(4,20,28,0.35);box-sizing:border-box;">
-    <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="#1C6E8C" stroke-width="1.6" style="margin:0 auto 10px;display:block;"><path d="M4 4h16v16H4z"/><path d="M4 6l8 7 8-7"/></svg>
+<div id="verifyGate" style="display:none;position:fixed;inset:0;z-index:1000;align-items:center;justify-content:center;background:linear-gradient(160deg,#123A5C,#0A1F3D);font-family:'Inter',sans-serif;padding:16px;text-align:center;">
+  <div style="width:100%;max-width:380px;background:rgba(234,246,245,0.96);border-radius:18px;padding:28px 24px;box-shadow:0 8px 32px rgba(178,24,24,0.35);box-sizing:border-box;">
+    <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="#1C5E99" stroke-width="1.6" style="margin:0 auto 10px;display:block;"><path d="M4 4h16v16H4z"/><path d="M4 6l8 7 8-7"/></svg>
     <div style="font-family:'Outfit',sans-serif;font-weight:800;font-size:1.1rem;color:#0B2436;margin-bottom:8px;">E-postanızı Doğrulayın</div>
     <div id="verifyMsg" style="font-size:0.85rem;color:#345264;line-height:1.5;margin-bottom:18px;">Devam edebilmek için e-posta adresinize gönderilen doğrulama bağlantısına tıklamanız gerekiyor. Gelen kutunuzu (ve spam klasörünü) kontrol edin.</div>
-    <button id="verifyCheckBtn" type="button" style="width:100%;padding:12px;border:none;border-radius:10px;background:linear-gradient(135deg,#2FD3C7,#22A99F);color:#08202E;font-weight:700;font-size:0.9rem;cursor:pointer;margin-bottom:8px;">Doğruladım, Kontrol Et</button>
-    <button id="verifyResendBtn" type="button" style="width:100%;padding:11px;border:1px solid #1C6E8C;border-radius:10px;background:transparent;color:#1C6E8C;font-weight:600;font-size:0.85rem;cursor:pointer;margin-bottom:8px;">Doğrulama E-postasını Tekrar Gönder</button>
+    <button id="verifyCheckBtn" type="button" style="width:100%;padding:12px;border:none;border-radius:10px;background:linear-gradient(135deg,#2F8FE3,#2272C4);color:#0A1F3D;font-weight:700;font-size:0.9rem;cursor:pointer;margin-bottom:8px;">Doğruladım, Kontrol Et</button>
+    <button id="verifyResendBtn" type="button" style="width:100%;padding:11px;border:1px solid #1C5E99;border-radius:10px;background:transparent;color:#1C5E99;font-weight:600;font-size:0.85rem;cursor:pointer;margin-bottom:8px;">Doğrulama E-postasını Tekrar Gönder</button>
     <div id="verifyStatusMsg" style="min-height:16px;font-size:0.75rem;color:#345264;margin-bottom:6px;"></div>
     <button id="verifyLogoutBtn" type="button" style="width:100%;padding:8px;border:none;background:transparent;color:#7a8a94;font-weight:600;font-size:0.72rem;cursor:pointer;">Çıkış Yap</button>
   </div>
 </div>
 
-<div id="onboardingGate" style="display:none;position:fixed;inset:0;z-index:1000;align-items:center;justify-content:center;background:linear-gradient(160deg,#0F3B4C,#08202E);font-family:'Inter',sans-serif;padding:16px;">
-  <div style="width:100%;max-width:380px;background:rgba(234,246,245,0.96);border-radius:18px;padding:28px 24px;box-shadow:0 8px 32px rgba(4,20,28,0.35);box-sizing:border-box;">
+<div id="onboardingGate" style="display:none;position:fixed;inset:0;z-index:1000;align-items:center;justify-content:center;background:linear-gradient(160deg,#123A5C,#0A1F3D);font-family:'Inter',sans-serif;padding:16px;">
+  <div style="width:100%;max-width:380px;background:rgba(234,246,245,0.96);border-radius:18px;padding:28px 24px;box-shadow:0 8px 32px rgba(178,24,24,0.35);box-sizing:border-box;">
     <div style="font-family:'Outfit',sans-serif;font-weight:800;font-size:1.15rem;color:#0B2436;margin-bottom:4px;text-align:center;">Firmanızı Bağlayın</div>
     <div style="font-size:0.8rem;color:#345264;text-align:center;margin-bottom:18px;">Yeni bir firma hesabı oluşturun ya da yöneticinizden aldığınız davet koduyla mevcut bir firmaya katılın.</div>
 
     <div id="onbCreateBox">
       <label style="font-size:0.75rem;font-weight:700;color:#345264;">Yeni Firma Oluştur (Patron/Yönetici olursunuz)</label>
       <input id="onbCompanyName" type="text" placeholder="Firma adı" style="width:100%;padding:11px 12px;margin:6px 0 10px;border:1px solid rgba(11,36,54,0.2);border-radius:10px;font-size:0.9rem;box-sizing:border-box;">
-      <button id="onbCreateBtn" type="button" style="width:100%;padding:12px;border:none;border-radius:10px;background:linear-gradient(135deg,#2FD3C7,#22A99F);color:#08202E;font-weight:700;font-size:0.9rem;cursor:pointer;margin-bottom:16px;">Firma Oluştur</button>
+      <button id="onbCreateBtn" type="button" style="width:100%;padding:12px;border:none;border-radius:10px;background:linear-gradient(135deg,#2F8FE3,#2272C4);color:#0A1F3D;font-weight:700;font-size:0.9rem;cursor:pointer;margin-bottom:16px;">Firma Oluştur</button>
     </div>
 
     <div style="text-align:center;font-size:0.72rem;color:#345264;margin:6px 0;">— ya da —</div>
@@ -1948,7 +1948,7 @@ main{
     <div id="onbJoinBox">
       <label style="font-size:0.75rem;font-weight:700;color:#345264;">Davet Koduyla Katıl (Personel olursunuz)</label>
       <input id="onbInviteCode" type="text" placeholder="Örn: A3K9QZ7T2M" style="width:100%;padding:11px 12px;margin:6px 0 10px;border:1px solid rgba(11,36,54,0.2);border-radius:10px;font-size:0.9rem;box-sizing:border-box;text-transform:uppercase;">
-      <button id="onbJoinBtn" type="button" style="width:100%;padding:12px;border:1px solid #1C6E8C;border-radius:10px;background:transparent;color:#1C6E8C;font-weight:600;font-size:0.85rem;cursor:pointer;">Firmaya Katıl</button>
+      <button id="onbJoinBtn" type="button" style="width:100%;padding:12px;border:1px solid #1C5E99;border-radius:10px;background:transparent;color:#1C5E99;font-weight:600;font-size:0.85rem;cursor:pointer;">Firmaya Katıl</button>
     </div>
 
     <div id="onbMsg" style="min-height:18px;font-size:0.78rem;color:#E8776B;margin-top:12px;text-align:center;"></div>
@@ -1956,12 +1956,12 @@ main{
   </div>
 </div>
 
-<div id="pendingGate" style="display:none;position:fixed;inset:0;z-index:1000;align-items:center;justify-content:center;background:linear-gradient(160deg,#0F3B4C,#08202E);font-family:'Inter',sans-serif;padding:16px;text-align:center;">
-  <div style="width:100%;max-width:380px;background:rgba(234,246,245,0.96);border-radius:18px;padding:28px 24px;box-shadow:0 8px 32px rgba(4,20,28,0.35);box-sizing:border-box;">
-    <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="#1C6E8C" stroke-width="1.6" style="margin:0 auto 10px;display:block;"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+<div id="pendingGate" style="display:none;position:fixed;inset:0;z-index:1000;align-items:center;justify-content:center;background:linear-gradient(160deg,#123A5C,#0A1F3D);font-family:'Inter',sans-serif;padding:16px;text-align:center;">
+  <div style="width:100%;max-width:380px;background:rgba(234,246,245,0.96);border-radius:18px;padding:28px 24px;box-shadow:0 8px 32px rgba(178,24,24,0.35);box-sizing:border-box;">
+    <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="#1C5E99" stroke-width="1.6" style="margin:0 auto 10px;display:block;"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
     <div style="font-family:'Outfit',sans-serif;font-weight:800;font-size:1.1rem;color:#0B2436;margin-bottom:8px;">Hesabınız Onay Bekliyor</div>
     <div id="pendingMsg" style="font-size:0.85rem;color:#345264;line-height:1.5;margin-bottom:18px;">Firma hesabınız oluşturuldu ancak henüz aktif değil. Erişiminizin açılması için lütfen firma yetkilinizle iletişime geçin.</div>
-    <button id="pendingLogoutBtn" type="button" style="width:100%;padding:11px;border:1px solid #1C6E8C;border-radius:10px;background:transparent;color:#1C6E8C;font-weight:600;font-size:0.85rem;cursor:pointer;">Çıkış Yap</button>
+    <button id="pendingLogoutBtn" type="button" style="width:100%;padding:11px;border:1px solid #1C5E99;border-radius:10px;background:transparent;color:#1C5E99;font-weight:600;font-size:0.85rem;cursor:pointer;">Çıkış Yap</button>
   </div>
 </div>
 
@@ -2116,7 +2116,7 @@ const IMALAT_URUN_TIPLERI = [
 ];
 // İmalat sisteminin uygulama yeri — ölçü hesabı buna göre değişir.
 const IMALAT_UYGULAMA_TIPLERI = [
-  { id:'tavan', label:'Tavan', hint:'En × boy (m²)', color:'#1C6E8C' },
+  { id:'tavan', label:'Tavan', hint:'En × boy (m²)', color:'#1C5E99' },
   { id:'duvar', label:'Duvar', hint:'Uzunluk × yükseklik (m²)', color:'#c45c26' },
   { id:'zemin', label:'Zemin', hint:'En × boy (m²)', color:'#6a994e' }
 ];
@@ -5036,7 +5036,7 @@ function renderGlobalAramaResultsHtml(){
         const meta = ARAMA_KIND_META[item.kind] || {label:item.kind, icon:''};
         return `
         <div class="pick-item arama-sonuc-item" data-kind="${item.kind}" data-proj="${item.proj?item.proj.id:''}" data-id="${item.id||''}" data-teklif="${item.teklifId||''}">
-          <div style="width:30px;height:30px;border-radius:8px;background:rgba(47,211,199,0.15);display:flex;align-items:center;justify-content:center;color:var(--aqua-dim);flex-shrink:0;">
+          <div style="width:30px;height:30px;border-radius:8px;background:rgba(47,143,227,0.15);display:flex;align-items:center;justify-content:center;color:var(--aqua-dim);flex-shrink:0;">
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">${meta.icon}</svg>
           </div>
           <div style="display:flex;flex-direction:column;gap:2px;min-width:0;flex:1;">
@@ -5834,7 +5834,7 @@ function svgBarRow(label, value, max, color, valueLabel){
       <div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:${color};"></div></div>
     </div>`;
 }
-const DASHBOARD_PALETTE = ['#2FD3C7','#1C6E8C','#E8776B','#FFB74D','#8E7CC3','#6FCF97','#56CCF2','#F2994A'];
+const DASHBOARD_PALETTE = ['#2F8FE3','#1C5E99','#E8776B','#FFB74D','#8E7CC3','#6FCF97','#56CCF2','#F2994A'];
 
 function renderRaporDashboardTab(main, proj){
   // Üstte tüm projelerin genel özeti; altında seçili projenin dashboard'u
@@ -5910,9 +5910,9 @@ function renderRaporDashboardTab(main, proj){
         <h2 style="font-size:0.92rem;align-self:flex-start;">Personel Durumu</h2>
         ${personelList.length===0 ? `<div class="empty-state">Henüz personel eklenmedi.</div>` : `
         <div style="display:flex;align-items:center;gap:18px;flex-wrap:wrap;justify-content:center;">
-          ${svgDonutChart([{label:'Aktif', value:aktifSayi, color:'#2FD3C7'},{label:'Ayrılmış', value:ayrilmisSayi, color:'#E8776B'}])}
+          ${svgDonutChart([{label:'Aktif', value:aktifSayi, color:'#2F8FE3'},{label:'Ayrılmış', value:ayrilmisSayi, color:'#E8776B'}])}
           <div style="display:flex;flex-direction:column;gap:6px;font-size:0.78rem;">
-            <span><b style="color:#2FD3C7;">●</b> Aktif: ${aktifSayi}</span>
+            <span><b style="color:#2F8FE3;">●</b> Aktif: ${aktifSayi}</span>
             <span><b style="color:#E8776B;">●</b> Ayrılmış: ${ayrilmisSayi}</span>
             <span style="color:var(--ink-soft);">Toplam: ${personelList.length} personel</span>
           </div>
@@ -6057,7 +6057,7 @@ async function exportIcmalPdf(proj){
   `).join('');
 
   const totalsRow = UNITS.filter(u=>sums[u]!==0).map(u=>`
-    <div style="display:inline-flex;flex-direction:column;padding:8px 14px;border:1px solid #1C6E8C;border-radius:8px;margin:4px 6px 0 0;">
+    <div style="display:inline-flex;flex-direction:column;padding:8px 14px;border:1px solid #1C5E99;border-radius:8px;margin:4px 6px 0 0;">
       <span style="font-size:9px;font-weight:700;color:#345264;text-transform:uppercase;">Toplam ${UNIT_LABEL[u]}</span>
       <span style="font-size:14px;font-weight:700;">${fmtNum(sums[u])}</span>
     </div>
@@ -6071,8 +6071,8 @@ async function exportIcmalPdf(proj){
         <col style="width:12%"><col style="width:14%"><col style="width:14%">
       </colgroup>
       <thead>
-        <tr style="background:#EAF6F5;">
-          ${['Uygulama Yeri','İmalat Cinsi','Birim','Satır Sayısı','Toplam (Brüt)','Toplam (Net)'].map(h=>`<th style="text-align:left;padding:7px 5px;border-bottom:1.5px solid #1C6E8C;border-right:1px solid #d5e8e6;">${h}</th>`).join('')}
+        <tr style="background:#EAF1FA;">
+          ${['Uygulama Yeri','İmalat Cinsi','Birim','Satır Sayısı','Toplam (Brüt)','Toplam (Net)'].map(h=>`<th style="text-align:left;padding:7px 5px;border-bottom:1.5px solid #1C5E99;border-right:1px solid #d5e8e6;">${h}</th>`).join('')}
         </tr>
       </thead>
       <tbody>${tableRows || '<tr><td colspan="6" style="padding:10px;text-align:center;color:#345264;">Kayıt yok</td></tr>'}</tbody>
@@ -7068,7 +7068,7 @@ function saveUrun(){
     if(card){
       card.scrollIntoView({ behavior:'smooth', block:'center' });
       card.style.transition = 'background .4s';
-      card.style.background = 'rgba(47,211,199,0.28)';
+      card.style.background = 'rgba(47,143,227,0.28)';
       setTimeout(()=>{ card.style.background = ''; }, 1200);
     }
   });
@@ -7474,7 +7474,7 @@ function saveImalatMalzeme(sistem){
     if(tr){
       tr.scrollIntoView({ behavior:'smooth', block:'center' });
       tr.style.transition = 'background .4s';
-      tr.style.background = 'rgba(47,211,199,0.28)';
+      tr.style.background = 'rgba(47,143,227,0.28)';
       setTimeout(()=>{ tr.style.background = ''; }, 1200);
     } else if(wasEdit){
       const formCard = document.getElementById('imalatMalzemeFormCard');
@@ -8938,7 +8938,7 @@ function prepareCarriersForPoly(carriers, polyPts, minX, minY){
 }
 function buildSemaTipLayersMarkup(ox, oy, W, L, scale, drawData, opts){
   opts = opts || {};
-  if(!drawData) return { markup:'', borderColor:'#1C6E8C', adapt:null };
+  if(!drawData) return { markup:'', borderColor:'#1C5E99', adapt:null };
   const adapt = opts.adapt || semaAdaptProfile(W, L, scale);
   const drawW = W*scale, drawH = L*scale;
   const sm = adapt.strokeMul || 1;
@@ -9110,12 +9110,12 @@ function buildSemaTipLayersMarkup(ox, oy, W, L, scale, drawData, opts){
     const sonItems = opts.sonItems || buildSemaSonParcaItems(W, L, drawData, uygTip);
     s += semaSonParcaEtiketMarkup(ox, oy, W, L, scale, sonItems, { fontSize: opts.sonFontSize });
   }
-  const borderColor = drawData.hasKenar ? imalatUrunTipiColor('kenar') : '#1C6E8C';
+  const borderColor = drawData.hasKenar ? imalatUrunTipiColor('kenar') : '#1C5E99';
   return { markup:s, borderColor, adapt };
 }
 function buildPoligonTipLayersGroup(points, meta, sistem, opts){
   opts = opts || {};
-  if(!sistem || !points || points.length<2 || !meta) return { markup:'', borderColor:'#1C6E8C', drawData:null };
+  if(!sistem || !points || points.length<2 || !meta) return { markup:'', borderColor:'#1C5E99', drawData:null };
   const xs = points.map(p=>p.x), ys = points.map(p=>p.y);
   const minX=Math.min(...xs), maxX=Math.max(...xs), minY=Math.min(...ys), maxY=Math.max(...ys);
   const W = Math.max(maxX-minX, 0.5), H = Math.max(maxY-minY, 0.5);
@@ -9125,7 +9125,7 @@ function buildPoligonTipLayersGroup(points, meta, sistem, opts){
     drawData.hasEkleme || drawData.hasBirlestirici || drawData.hasVida || drawData.hasKenar || drawData.hasTakoz ||
     (drawData.carriers&&drawData.carriers.length)
   );
-  if(!hasAny) return { markup:'', borderColor:'#1C6E8C', drawData };
+  if(!hasAny) return { markup:'', borderColor:'#1C5E99', drawData };
   drawData = Object.assign({}, drawData, {
     carriers: prepareCarriersForPoly(drawData.carriers, points, minX, minY)
   });
@@ -9340,7 +9340,7 @@ function buildPoligonTipLayersGroup(points, meta, sistem, opts){
     });
   }
   s += `</g>`;
-  const borderColor = drawData.hasKenar ? imalatUrunTipiColor('kenar') : '#1C6E8C';
+  const borderColor = drawData.hasKenar ? imalatUrunTipiColor('kenar') : '#1C5E99';
   return { markup:s, borderColor, drawData };
 }
 
@@ -9454,8 +9454,8 @@ function renderLengthSemaSvg(len){
   const lineW = vbW - pad*2;
   return `
     <svg viewBox="0 0 ${vbW} ${vbH}" style="width:100%;max-width:480px;height:auto;display:block;margin:0 auto;">
-      <line x1="${pad}" y1="50" x2="${pad+lineW}" y2="50" stroke="#1C6E8C" stroke-width="3" stroke-linecap="round"/>
-      <circle cx="${pad}" cy="50" r="5" fill="#22A99F"/><circle cx="${pad+lineW}" cy="50" r="5" fill="#E8776B"/>
+      <line x1="${pad}" y1="50" x2="${pad+lineW}" y2="50" stroke="#1C5E99" stroke-width="3" stroke-linecap="round"/>
+      <circle cx="${pad}" cy="50" r="5" fill="#2272C4"/><circle cx="${pad+lineW}" cy="50" r="5" fill="#E8776B"/>
       <text x="${vbW/2}" y="32" text-anchor="middle" font-size="14" font-weight="700" fill="#0B2436">${fmtNum(len)} mt</text>
     </svg>`;
 }
@@ -9476,7 +9476,7 @@ function renderKenarSemaSvg(detay, unit){
         const bw = (d.value/maxV)*barMax;
         return `
           <text x="8" y="${y+14}" font-size="11" fill="#345264">K${d.index+1}</text>
-          <rect x="36" y="${y+2}" width="${bw.toFixed(1)}" height="16" rx="4" fill="rgba(47,211,199,0.55)" stroke="#1C6E8C" stroke-width="1"/>
+          <rect x="36" y="${y+2}" width="${bw.toFixed(1)}" height="16" rx="4" fill="rgba(47,143,227,0.55)" stroke="#1C5E99" stroke-width="1"/>
           <text x="${(36+bw+8).toFixed(1)}" y="${y+14}" font-size="12" font-weight="700" fill="#0B2436">${fmtNum(d.value)} ${unitLbl}</text>`;
       }).join('')}
     </svg>`;
@@ -9882,7 +9882,7 @@ function buildPoligonSvgMarkup(points, meta, sw, vbW, vbH, extra){
   const polyStr = pts.map(p=>`${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(' ');
   const r = Math.max(sw*1.85, 5);
   const fontSize = Math.max(sw*2.4, 11);
-  const borderColor = extra.borderColor || '#1C6E8C';
+  const borderColor = extra.borderColor || '#1C5E99';
   const tipMarkup = extra.tipMarkup || '';
   const maxWidth = extra.maxWidth || 640;
   const labels = [];
@@ -9897,7 +9897,7 @@ function buildPoligonSvgMarkup(points, meta, sw, vbW, vbH, extra){
   }
   const circles = pts.map((p,i)=>{
     const isFirst = i===0, isLast = i===pts.length-1;
-    const fill = isFirst? '#22A99F' : (isLast? '#E8776B' : '#1C6E8C');
+    const fill = isFirst? '#2272C4' : (isLast? '#E8776B' : '#1C5E99');
     const draggable = extra.interactive!==false && i>0 && points[i].srcEdgeIndex>=0;
     return `<circle data-pol-v="${i}" cx="${p.x.toFixed(2)}" cy="${p.y.toFixed(2)}" r="${r.toFixed(3)}" fill="${fill}" stroke="#fff" stroke-width="${Math.max(sw*0.35,1).toFixed(3)}" ${draggable?`data-pol-vertex="${points[i].srcEdgeIndex}" style="cursor:grab;touch-action:none;"`:''}/>`;
   }).join('');
@@ -9905,7 +9905,7 @@ function buildPoligonSvgMarkup(points, meta, sw, vbW, vbH, extra){
   const mahalAttr = extra.mahalId ? ` data-mahal-id="${esc(extra.mahalId)}"` : '';
   return `
     <svg id="${svgId}" viewBox="0 0 ${vbW.toFixed(2)} ${vbH.toFixed(2)}" data-pol-meta='${esc(JSON.stringify(meta))}'${mahalAttr} style="width:100%;max-width:${maxWidth}px;height:auto;background:rgba(255,255,255,0.55);border-radius:12px;display:block;margin:0 auto;touch-action:none;">
-      <polygon data-pol-shape points="${polyStr}" fill="rgba(47,211,199,0.18)" stroke="none"/>
+      <polygon data-pol-shape points="${polyStr}" fill="rgba(47,143,227,0.18)" stroke="none"/>
       ${tipMarkup}
       <polygon data-pol-border points="${polyStr}" fill="none" stroke="${borderColor}" stroke-width="${sw.toFixed(3)}" stroke-linejoin="round"/>
       ${labels.join('')}
@@ -10590,7 +10590,7 @@ function showAnalizSemaModal(kayit){
         <div style="margin-top:12px;">
           ${semalar.map(s=>`
             <div style="margin-bottom:18px;padding-bottom:14px;border-bottom:1px solid rgba(11,36,54,0.08);">
-              <div style="font-size:11px;font-weight:700;color:#1C6E8C;text-align:center;margin-bottom:8px;">${esc(s.ad)}</div>
+              <div style="font-size:11px;font-weight:700;color:#1C5E99;text-align:center;margin-bottom:8px;">${esc(s.ad)}</div>
               <div style="text-align:center;">${s.html}</div>
             </div>
           `).join('')}
@@ -10837,11 +10837,11 @@ function exportAnalizKaydiPdf(kayit){
   const birimMaliyet = computeBirimMaliyet(tryT.toplamTutar, kayit.deger);
   const toplamKutulariHtml = `
       ${birimMaliyet!=null ? `
-      <div style="min-width:180px;border:1.5px solid #1C6E8C55;border-radius:8px;padding:12px 16px;text-align:right;">
+      <div style="min-width:180px;border:1.5px solid #1C5E9955;border-radius:8px;padding:12px 16px;text-align:right;">
         <div style="font-size:10px;color:#345264;font-weight:700;text-transform:uppercase;">Birim Maliyet (TL)</div>
         <div style="font-size:15px;font-weight:800;color:#0B2436;">${fmtMoney(birimMaliyet, 'TRY')} / ${esc(kayit.birim)}</div>
       </div>` : ''}
-      <div style="min-width:220px;border:1.5px solid #1C6E8C;border-radius:8px;padding:12px 16px;text-align:right;">
+      <div style="min-width:220px;border:1.5px solid #1C5E99;border-radius:8px;padding:12px 16px;text-align:right;">
         <div style="font-size:10px;color:#345264;font-weight:700;text-transform:uppercase;">Genel Toplam (TL)</div>
         <div style="font-size:18px;font-weight:800;color:#0B2436;">${fmtMoney(tryT.toplamTutar, 'TRY')}</div>
       </div>`;
@@ -10850,7 +10850,7 @@ function exportAnalizKaydiPdf(kayit){
     : '';
   const html = `
     ${pdfHeaderHtmlSimple('Teklif Analizi', { musteriAd: kayit.musteriAd, musteriTel: kayit.musteriTel })}
-    <div style="font-family:'Outfit',sans-serif;font-weight:700;font-size:15px;letter-spacing:1px;margin-bottom:6px;color:#1C6E8C;text-align:center;">TEKLİF ANALİZİ</div>
+    <div style="font-family:'Outfit',sans-serif;font-weight:700;font-size:15px;letter-spacing:1px;margin-bottom:6px;color:#1C5E99;text-align:center;">TEKLİF ANALİZİ</div>
     <div style="text-align:center;font-size:10px;color:#345264;margin-bottom:4px;">
       ${esc(kayit.sistemAd)} &nbsp;•&nbsp; Hesaplanan Ölçü: ${fmtNum(kayit.deger)} ${esc(kayit.birim)}
     </div>
@@ -10861,11 +10861,11 @@ function exportAnalizKaydiPdf(kayit){
         <col style="width:40%"><col style="width:24%"><col style="width:18%"><col style="width:18%">
       </colgroup>
       <thead>
-        <tr style="background:#EAF6F5;">
-          <th style="text-align:left;padding:7px 6px;border-bottom:1.5px solid #1C6E8C;">Malzeme</th>
-          <th style="text-align:right;padding:7px 6px;border-bottom:1.5px solid #1C6E8C;">Miktar</th>
-          <th style="text-align:right;padding:7px 6px;border-bottom:1.5px solid #1C6E8C;">Birim Fiyat</th>
-          <th style="text-align:right;padding:7px 6px;border-bottom:1.5px solid #1C6E8C;">Tutar</th>
+        <tr style="background:#EAF1FA;">
+          <th style="text-align:left;padding:7px 6px;border-bottom:1.5px solid #1C5E99;">Malzeme</th>
+          <th style="text-align:right;padding:7px 6px;border-bottom:1.5px solid #1C5E99;">Miktar</th>
+          <th style="text-align:right;padding:7px 6px;border-bottom:1.5px solid #1C5E99;">Birim Fiyat</th>
+          <th style="text-align:right;padding:7px 6px;border-bottom:1.5px solid #1C5E99;">Tutar</th>
         </tr>
       </thead>
       <tbody>${tableRows || '<tr><td colspan="4" style="padding:10px;text-align:center;color:#345264;">Kayıt yok</td></tr>'}</tbody>
@@ -10874,7 +10874,7 @@ function exportAnalizKaydiPdf(kayit){
       ${toplamKutulariHtml}
     </div>
     ${kayit.not && kayit.not.trim() ? `
-    <div style="margin-top:20px;padding:12px 14px;background:#F4FBFA;border:1px solid #1C6E8C55;border-radius:8px;font-size:10px;color:#345264;white-space:pre-wrap;">
+    <div style="margin-top:20px;padding:12px 14px;background:#F4FBFA;border:1px solid #1C5E9955;border-radius:8px;font-size:10px;color:#345264;white-space:pre-wrap;">
       <b style="color:#0B2436;">Not:</b> ${esc(kayit.not)}
     </div>` : ''}
     <div style="margin-top:36px;font-size:9px;color:#8096A3;">DNZ Metraj &amp; Teklif Yönetimi ile oluşturulmuştur.</div>
@@ -11934,7 +11934,7 @@ async function exportPersonelPdf(proj, p){
     </tr>`;
   const html = `
     ${pdfHeaderHtml(proj, 'Personel Kartı')}
-    <div style="font-family:'Outfit',sans-serif;font-weight:700;font-size:15px;margin-bottom:10px;color:#1C6E8C;">${esc(p.adSoyad)}
+    <div style="font-family:'Outfit',sans-serif;font-weight:700;font-size:15px;margin-bottom:10px;color:#1C5E99;">${esc(p.adSoyad)}
       <span style="font-size:10px;font-weight:600;color:${st.cls==='aktif'?'#0A5850':'#7A2B22'};margin-left:8px;">(${st.text})</span>
     </div>
     <table style="width:100%;border-collapse:collapse;font-size:11px;max-width:520px;table-layout:fixed;">
@@ -12086,7 +12086,7 @@ function renderPuantajTab(main, proj){
         </div>
       </div>
       <div class="att-legend">
-        <span><b style="background:rgba(47,211,199,0.28);color:#0A5850;">X</b> Tam Gün (1)</span>
+        <span><b style="background:rgba(47,143,227,0.28);color:#0A5850;">X</b> Tam Gün (1)</span>
         <span><b style="background:rgba(255,183,77,0.32);color:#8a5a00;">Y</b> Yarım Gün (0,5)</span>
         <span><b style="background:rgba(232,119,107,0.22);color:#7A2B22;">O</b> Yok/İzinli (0)</span>
         <span>Hücreye dokunarak değer değiştirin. Hafta sonları renkli gösterilir.</span>
@@ -12310,7 +12310,7 @@ async function exportPuantajMesaiPdf(proj){
   const bigStyle = 'border:1px solid #E4EFEF;padding:5px 3px;text-align:center;font-size:11px;width:62px;white-space:nowrap;';
 
   const puantajHead = `
-    <tr style="background:#EAF6F5;">
+    <tr style="background:#EAF1FA;">
       <th style="${nameStyle}">Adı Soyadı</th>
       ${days.map(d=>`<th style="${cellStyle}${isWeekendDay(ym,d)?wkndStyle:''}">${d}</th>`).join('')}
       <th style="${bigStyle}">Toplam</th>
@@ -12334,7 +12334,7 @@ async function exportPuantajMesaiPdf(proj){
   const puantajGrand = puantajDayTotals.reduce((s,v)=>s+v,0);
   const puantajGrandTutar = list.reduce((s,p)=> s + personelPuantajToplam(p, ym) * (parseFloat(p.yevmiye)||0), 0);
   const puantajFoot = `
-    <tr style="background:#EAF6F5;font-weight:700;">
+    <tr style="background:#EAF1FA;font-weight:700;">
       <td style="${nameStyle}">Toplam</td>
       ${puantajDayTotals.map((t,i)=>`<td style="${cellStyle}${isWeekendDay(ym,i+1)?wkndStyle:''}">${t?fmtNum(t):''}</td>`).join('')}
       <td style="${bigStyle}">${fmtNum(puantajGrand)}</td>
@@ -12342,7 +12342,7 @@ async function exportPuantajMesaiPdf(proj){
     </tr>`;
 
   const mesaiHead = `
-    <tr style="background:#EAF6F5;">
+    <tr style="background:#EAF1FA;">
       <th style="${nameStyle}">Adı Soyadı</th>
       ${days.map(d=>`<th style="${cellStyle}${isWeekendDay(ym,d)?wkndStyle:''}">${d}</th>`).join('')}
       <th style="${bigStyle}">Saat</th><th style="${bigStyle}">Tutar</th>
@@ -12369,7 +12369,7 @@ async function exportPuantajMesaiPdf(proj){
   const mesaiGrandHrs = mesaiDayTotals.reduce((s,v)=>s+v,0);
   const mesaiGrandTutar = list.reduce((s,p)=> s + personelMesaiToplam(p, ym) * ((parseFloat(p.yevmiye)||0)/8), 0);
   const mesaiFoot = `
-    <tr style="background:#EAF6F5;font-weight:700;">
+    <tr style="background:#EAF1FA;font-weight:700;">
       <td style="${nameStyle}">Toplam</td>
       ${mesaiDayTotals.map((t,i)=>`<td style="${cellStyle}${isWeekendDay(ym,i+1)?wkndStyle:''}">${t?fmtNum(t):''}</td>`).join('')}
       <td style="${bigStyle}">${fmtNum(mesaiGrandHrs)}</td>
@@ -12378,7 +12378,7 @@ async function exportPuantajMesaiPdf(proj){
 
   const html = `
     ${pdfHeaderHtml(proj, 'Puantaj ve Mesai Cetveli — ' + ayAdi)}
-    <div style="font-family:'Outfit',sans-serif;font-weight:700;font-size:13px;margin-bottom:6px;color:#1C6E8C;">Puantaj Cetveli</div>
+    <div style="font-family:'Outfit',sans-serif;font-weight:700;font-size:13px;margin-bottom:6px;color:#1C5E99;">Puantaj Cetveli</div>
     <table style="width:100%;border-collapse:collapse;font-size:6.5px;table-layout:fixed;margin-bottom:8px;">
       <thead>${puantajHead}</thead>
       <tbody>${puantajRows}</tbody>
@@ -12386,7 +12386,7 @@ async function exportPuantajMesaiPdf(proj){
     </table>
     <div style="font-size:9px;color:#345264;margin-bottom:18px;">Alt Toplam (Adam/Gün): <b>${fmtNum(puantajGrand)}</b> &nbsp;|&nbsp; Alt Toplam Tutar: <b>${fmtMoney(puantajGrandTutar)}</b> &nbsp;|&nbsp; X=Tam Gün(1), Y=Yarım Gün(0,5), O=Yok/İzinli(0)</div>
 
-    <div style="font-family:'Outfit',sans-serif;font-weight:700;font-size:13px;margin-bottom:6px;color:#1C6E8C;">Mesai Cetveli</div>
+    <div style="font-family:'Outfit',sans-serif;font-weight:700;font-size:13px;margin-bottom:6px;color:#1C5E99;">Mesai Cetveli</div>
     <table style="width:100%;border-collapse:collapse;font-size:6.5px;table-layout:fixed;">
       <thead>${mesaiHead}</thead>
       <tbody>${mesaiRows}</tbody>
@@ -12766,7 +12766,7 @@ async function exportGunlukPdf(proj){
   const html = `
     ${pdfHeaderHtml(proj, 'Şantiye Günlüğü — ' + fmtDateStr(start) + ' — ' + fmtDateStr(end))}
     <table style="width:100%;border-collapse:collapse;font-size:9px;table-layout:fixed;">
-      <thead><tr style="background:#EAF6F5;">
+      <thead><tr style="background:#EAF1FA;">
         <th style="${cellStyle}width:10%;">Tarih</th>
         <th style="${cellStyle}width:15%;">Hava / Sıcaklık</th>
         <th style="${cellStyle}width:38%;">Yapılan İşler</th>
@@ -13124,7 +13124,7 @@ async function exportAvansPdf(proj){
   const html = `
     ${pdfHeaderHtml(proj, 'Personel Avans Listesi')}
     <table style="width:100%;border-collapse:collapse;font-size:10px;table-layout:fixed;">
-      <thead><tr style="background:#EAF6F5;">
+      <thead><tr style="background:#EAF1FA;">
         <th style="${cellStyle}">Adı Soyadı</th><th style="${cellStyle}">Tarih</th><th style="${cellStyle}">Ödeme Şekli</th><th style="${cellStyle}">Açıklama</th><th style="${cellStyle}">Para Birimi</th><th style="${cellStyle}text-align:right;">Tutar</th>
       </tr></thead>
       <tbody>
@@ -13141,7 +13141,7 @@ async function exportAvansPdf(proj){
         }).join('')}
       </tbody>
       <tfoot>
-        ${currencies.map((cur,i)=>`<tr style="background:#EAF6F5;font-weight:700;">
+        ${currencies.map((cur,i)=>`<tr style="background:#EAF1FA;font-weight:700;">
           <td style="${cellStyle}" colspan="5">Alt Toplam${currencies.length>1?' ('+esc(CURRENCY_INFO[cur].label)+')':''}</td><td style="${cellStyle}text-align:right;">${fmtMoney(byCurrency[cur], cur)}</td>
         </tr>`).join('')}
       </tfoot>
@@ -13184,7 +13184,7 @@ async function exportZimmetPdf(proj){
   const html = `
     ${pdfHeaderHtml(proj, 'Personel Zimmet Listesi')}
     <table style="width:100%;border-collapse:collapse;font-size:10px;table-layout:fixed;">
-      <thead><tr style="background:#EAF6F5;">
+      <thead><tr style="background:#EAF1FA;">
         <th style="${cellStyle}">Adı Soyadı</th><th style="${cellStyle}">Zimmet Tarihi</th><th style="${cellStyle}">Marka/Model</th><th style="${cellStyle}">Açıklama</th><th style="${cellStyle}">Teslim Tarihi</th>
       </tr></thead>
       <tbody>
@@ -14036,7 +14036,7 @@ async function exportBordroPdf(proj){
   const html = `
     ${pdfHeaderHtml(proj, 'Maaş Bordro Listesi')}
     <table style="width:100%;border-collapse:collapse;font-size:9px;table-layout:fixed;">
-      <thead><tr style="background:#EAF6F5;">
+      <thead><tr style="background:#EAF1FA;">
         <th style="${cellStyle}">Personel</th><th style="${cellStyle}">Dönem</th><th style="${cellStyle}">Ödeme</th>
         <th style="${numStyle}">Brüt</th><th style="${numStyle}">SSK İşçi</th><th style="${numStyle}">SSK İşv.</th>
         <th style="${numStyle}">GV</th><th style="${numStyle}">Avans</th><th style="${numStyle}">Net</th>
@@ -14610,10 +14610,10 @@ async function exportTopluIcmalPdf(proj, p){
 
   const mesaiTablesHtml = monthGridHtml(monthGroups, key=>{
     const val = parseFloat(p.mesai && p.mesai[key]) || 0;
-    return `<td style="${attCellStyle}${val?'font-weight:700;color:#1C6E8C;':''}">${val ? fmtNum(val) : '-'}</td>`;
+    return `<td style="${attCellStyle}${val?'font-weight:700;color:#1C5E99;':''}">${val ? fmtNum(val) : '-'}</td>`;
   });
 
-  const infoBoxStyle = 'flex:1; border:1px solid #1C6E8C; border-radius:10px; padding:14px; background:#f0f7f9;';
+  const infoBoxStyle = 'flex:1; border:1px solid #1C5E99; border-radius:10px; padding:14px; background:#f0f7f9;';
   const labelStyle = 'font-size:9px;font-weight:700;color:#345264;letter-spacing:0.3px;';
   const valueStyle = 'font-size:11px;font-weight:700;color:#0B2436;';
 
@@ -14662,23 +14662,23 @@ async function exportTopluIcmalPdf(proj, p){
       </div>
     </div>
 
-    <div style="font-family:'Outfit',sans-serif; font-weight:700; font-size:11px; margin-bottom:6px; color:#1C6E8C; letter-spacing:0.3px; text-transform:uppercase;">DÖNEM PUANTAJ GÜNLÜK DEVAM ÇİZELGESİ</div>
+    <div style="font-family:'Outfit',sans-serif; font-weight:700; font-size:11px; margin-bottom:6px; color:#1C5E99; letter-spacing:0.3px; text-transform:uppercase;">DÖNEM PUANTAJ GÜNLÜK DEVAM ÇİZELGESİ</div>
     <div style="margin-bottom:20px;">${puantajTablesHtml}</div>
 
-    <div style="font-family:'Outfit',sans-serif; font-weight:700; font-size:11px; margin-bottom:6px; color:#1C6E8C; letter-spacing:0.3px; text-transform:uppercase;">DÖNEM MESAİ (FAZLA ÇALIŞMA) ÇİZELGESİ</div>
+    <div style="font-family:'Outfit',sans-serif; font-weight:700; font-size:11px; margin-bottom:6px; color:#1C5E99; letter-spacing:0.3px; text-transform:uppercase;">DÖNEM MESAİ (FAZLA ÇALIŞMA) ÇİZELGESİ</div>
     <div style="margin-bottom:24px;">${mesaiTablesHtml || `<div style="font-size:10px; color:#8096A3; padding:10px; border:1px dashed #B7C4CC; text-align:center; border-radius:6px;">Bu dönemde işlenmiş mesai kaydı yok.</div>`}</div>
 
     <div style="display:flex; flex-direction:column; gap:20px; margin-bottom:16px;">
       <!-- Dönem Mutabakat Özeti -->
-      <div style="border:2px solid #1C6E8C; border-radius:10px; padding:16px; background:#f0f7f9;">
-        <div style="font-family:'Outfit',sans-serif; font-weight:800; font-size:13px; margin-bottom:12px; color:#1C6E8C; text-transform:uppercase; border-bottom:1px solid #1C6E8C; padding-bottom:6px;">DÖNEM MUTABAKAT ÖZETİ</div>
+      <div style="border:2px solid #1C5E99; border-radius:10px; padding:16px; background:#f0f7f9;">
+        <div style="font-family:'Outfit',sans-serif; font-weight:800; font-size:13px; margin-bottom:12px; color:#1C5E99; text-transform:uppercase; border-bottom:1px solid #1C5E99; padding-bottom:6px;">DÖNEM MUTABAKAT ÖZETİ</div>
         <table style="width:100%; border-collapse:collapse; table-layout:fixed;">
           <colgroup><col style="width:58%"><col style="width:42%"></colgroup>
           ${summaryRow('Toplam Tam Gün (X)', `${det.tam} Gün`)}
           ${summaryRow('Toplam Yarım Gün (Y)', `${det.yarim} Gün`)}
           ${summaryRow('İzinli / Yok (O)', `${det.izin} Gün`)}
-          ${summaryRow('Çalışılan Mesai Saati', `${fmtNum(mesaiSaat)} s`, '#1C6E8C')}
-          ${summaryRow('Hesaplanan Mesai Tutarı', fmtMoney(hakMesai), '#1C6E8C')}
+          ${summaryRow('Çalışılan Mesai Saati', `${fmtNum(mesaiSaat)} s`, '#1C5E99')}
+          ${summaryRow('Hesaplanan Mesai Tutarı', fmtMoney(hakMesai), '#1C5E99')}
           ${summaryRow('Kazanılan Brüt Hakediş (Mesai Dahil)', fmtMoney(hakedis), '#0A8F5B')}
           ${summaryRow('Düşülen Toplam Avans', `-${fmtMoney(toplamAvans)}`, '#C0392B')}
           <tr>
@@ -14690,7 +14690,7 @@ async function exportTopluIcmalPdf(proj, p){
 
       <!-- Dönem İçi Yapılan Ödemeler -->
       <div>
-        <div style="font-family:'Outfit',sans-serif; font-weight:700; font-size:11px; margin-bottom:6px; color:#1C6E8C; text-transform:uppercase;">DÖNEM İÇİ YAPILAN ÖDEMELER</div>
+        <div style="font-family:'Outfit',sans-serif; font-weight:700; font-size:11px; margin-bottom:6px; color:#1C5E99; text-transform:uppercase;">DÖNEM İÇİ YAPILAN ÖDEMELER</div>
         <table style="width:100%; border-collapse:collapse; table-layout:fixed;">
           <colgroup><col style="width:15%"><col style="width:20%"><col style="width:45%"><col style="width:20%"></colgroup>
           <thead>
@@ -14706,7 +14706,7 @@ async function exportTopluIcmalPdf(proj, p){
       </div>
     </div>
 
-    <div style="font-family:'Outfit',sans-serif; font-weight:700; font-size:11px; margin-bottom:6px; color:#1C6E8C; text-transform:uppercase;">ZİMMETİNDE BULUNAN / TESLİM EDİLEN ÜRÜNLER</div>
+    <div style="font-family:'Outfit',sans-serif; font-weight:700; font-size:11px; margin-bottom:6px; color:#1C5E99; text-transform:uppercase;">ZİMMETİNDE BULUNAN / TESLİM EDİLEN ÜRÜNLER</div>
     <table style="width:100%; border-collapse:collapse; table-layout:fixed; margin-bottom:16px;">
       <colgroup><col style="width:15%"><col style="width:25%"><col style="width:40%"><col style="width:20%"></colgroup>
       <thead>
@@ -14795,7 +14795,7 @@ function renderTopluHesapBody(proj){
             </tr>`).join('')}
           </tbody>
           <tfoot>
-            <tr style="font-weight:700;background:rgba(47,211,199,0.14);">
+            <tr style="font-weight:700;background:rgba(47,143,227,0.14);">
               <td colspan="2">GENEL TOPLAM</td>
               <td class="num">${fmtNum(totals.gun)}</td>
               <td class="num">${fmtNum(totals.mesaiSaat)}</td>
@@ -14848,7 +14848,7 @@ async function exportTopluHesapPdf(proj, start, end, rows, totals){
       </tr></thead>
       <tbody>${rowsHtml}</tbody>
       <tfoot>
-        <tr style="background:#EAF6F5;font-weight:700;">
+        <tr style="background:#EAF1FA;font-weight:700;">
           <td style="${td}" colspan="2">GENEL TOPLAM</td>
           <td style="${tdNum}">${fmtNum(totals.gun)}</td>
           <td style="${tdNum}">${fmtNum(totals.mesaiSaat)}</td>
@@ -15125,7 +15125,7 @@ async function exportTahsilatPdf(proj){
   const html = `
     ${pdfHeaderHtml(proj, 'İşveren Ödeme Özeti')}
     <table style="width:100%;border-collapse:collapse;font-size:10px;margin-bottom:16px;table-layout:fixed;">
-      <thead><tr style="background:#EAF6F5;">
+      <thead><tr style="background:#EAF1FA;">
         <th style="${cellStyle}">Tarih</th><th style="${cellStyle}">Ödeme Yapan</th><th style="${cellStyle}">Ödeme Alan</th><th style="${cellStyle}">Ödeme Şekli</th><th style="${cellStyle}">Açıklama</th><th style="${cellStyle}">PB</th><th style="${cellStyle}text-align:right;">Tutar</th>
       </tr></thead>
       <tbody>
@@ -15143,14 +15143,14 @@ async function exportTahsilatPdf(proj){
         </tr>`;
         }).join('')}
       </tbody>
-      <tfoot><tr style="background:#EAF6F5;font-weight:700;">
+      <tfoot><tr style="background:#EAF1FA;font-weight:700;">
         <td style="${cellStyle}" colspan="6">Alınan Ödeme (proje PB, alış kuru)</td><td style="${cellStyle}text-align:right;">${fmtMoney(alinan, projCur)}</td>
       </tr></tfoot>
     </table>
     <table style="width:100%;max-width:420px;border-collapse:collapse;font-size:11px;">
       <tr><td style="padding:6px 4px;font-weight:700;">İşverenden Alınacak</td><td style="padding:6px 4px;text-align:right;">${fmtMoney(toplamAlinacak, projCur)}</td></tr>
       <tr><td style="padding:6px 4px;font-weight:700;">Alınan Ödeme</td><td style="padding:6px 4px;text-align:right;">${fmtMoney(alinan, projCur)}</td></tr>
-      <tr style="border-top:2px solid #1C6E8C;"><td style="padding:6px 4px;font-weight:700;color:#1C6E8C;">Kalan Ödeme</td><td style="padding:6px 4px;text-align:right;font-weight:700;color:#1C6E8C;">${fmtMoney(kalan, projCur)}</td></tr>
+      <tr style="border-top:2px solid #1C5E99;"><td style="padding:6px 4px;font-weight:700;color:#1C5E99;">Kalan Ödeme</td><td style="padding:6px 4px;text-align:right;font-weight:700;color:#1C5E99;">${fmtMoney(kalan, projCur)}</td></tr>
     </table>
     <div style="margin-top:36px;font-size:9px;color:#8096A3;">DNZ Metraj &amp; Teklif Yönetimi ile oluşturulmuştur.</div>
   `;
@@ -15168,7 +15168,7 @@ function makbuzHtml(proj, opts){
   return `
     ${pdfHeaderHtml(proj, 'Ödeme Makbuzu')}
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
-      <div style="font-family:'Outfit',sans-serif;font-weight:700;font-size:16px;letter-spacing:1px;color:#1C6E8C;">${esc(opts.baslik||'ÖDEME MAKBUZU')}</div>
+      <div style="font-family:'Outfit',sans-serif;font-weight:700;font-size:16px;letter-spacing:1px;color:#1C5E99;">${esc(opts.baslik||'ÖDEME MAKBUZU')}</div>
       <div style="font-size:10px;color:#345264;text-align:right;">
         <div><b>Makbuz No:</b> ${esc(opts.makbuzNo)}</div>
         <div><b>Tarih:</b> ${fmtDateStr(opts.tarih)}</div>
@@ -15182,13 +15182,13 @@ function makbuzHtml(proj, opts){
         </tr>`).join('')}
     </table>
     <div style="display:flex;justify-content:flex-end;margin-bottom:30px;">
-      <div style="min-width:220px;border:1.5px solid #1C6E8C;border-radius:8px;padding:12px 16px;text-align:right;">
+      <div style="min-width:220px;border:1.5px solid #1C5E99;border-radius:8px;padding:12px 16px;text-align:right;">
         <div style="font-size:10px;color:#345264;font-weight:700;text-transform:uppercase;">${esc(opts.tutarLabel||'Tutar')}</div>
         <div style="font-size:20px;font-weight:800;color:#0B2436;">${fmtMoney(opts.tutar, opts.paraBirimi)}</div>
       </div>
     </div>
     ${opts.not ? `
-    <div style="margin-bottom:24px;padding:12px 14px;background:#F4FBFA;border:1px solid #1C6E8C55;border-radius:8px;font-size:10px;color:#345264;white-space:pre-wrap;">${esc(opts.not)}</div>` : ''}
+    <div style="margin-bottom:24px;padding:12px 14px;background:#F4FBFA;border:1px solid #1C5E9955;border-radius:8px;font-size:10px;color:#345264;white-space:pre-wrap;">${esc(opts.not)}</div>` : ''}
     <div style="display:flex;justify-content:space-between;margin-top:60px;">
       <div style="text-align:center;width:45%;">
         <div style="border-top:1px solid #0B2436;padding-top:6px;font-size:10px;">${esc(opts.solImzaEtiket||'ÖDEYEN')}<br>${esc(opts.solImzaAd||'')}</div>
@@ -15427,7 +15427,7 @@ async function exportMasrafPdf(proj){
   const html = `
     ${pdfHeaderHtml(proj, 'Masraf Listesi')}
     <table style="width:100%;border-collapse:collapse;font-size:10px;table-layout:fixed;">
-      <thead><tr style="background:#EAF6F5;">
+      <thead><tr style="background:#EAF1FA;">
         <th style="${cellStyle}">Masraf Kalemi</th><th style="${cellStyle}">Tarih</th><th style="${cellStyle}">Ödeme Şekli</th><th style="${cellStyle}">Açıklama</th><th style="${cellStyle}">Para Birimi</th><th style="${cellStyle}text-align:right;">Tutar</th>
       </tr></thead>
       <tbody>
@@ -15444,7 +15444,7 @@ async function exportMasrafPdf(proj){
         }).join('')}
       </tbody>
       <tfoot>
-        ${currencies.map(cur=>`<tr style="background:#EAF6F5;font-weight:700;">
+        ${currencies.map(cur=>`<tr style="background:#EAF1FA;font-weight:700;">
           <td style="${cellStyle}" colspan="5">Alt Toplam${currencies.length>1?' ('+esc(CURRENCY_INFO[cur].label)+')':''}</td><td style="${cellStyle}text-align:right;">${fmtMoney(byCurrency[cur], cur)}</td>
         </tr>`).join('')}
       </tfoot>
@@ -15724,7 +15724,7 @@ async function exportYemekPdf(proj){
   const html = `
     ${pdfHeaderHtml(proj, 'Yemek Cetveli — ' + fmtDateStr(start) + ' — ' + fmtDateStr(end))}
     <table style="width:100%;border-collapse:collapse;font-size:9px;table-layout:fixed;">
-      <thead><tr style="background:#EAF6F5;">
+      <thead><tr style="background:#EAF1FA;">
         <th style="${nameStyle}">Tarih</th>
         <th style="${cellStyle}">Sabah<br>Adet</th><th style="${cellStyle}">Sabah<br>Tutar</th>
         <th style="${cellStyle}">Öğlen<br>Adet</th><th style="${cellStyle}">Öğlen<br>Tutar</th>
@@ -15745,7 +15745,7 @@ async function exportYemekPdf(proj){
           </tr>`;
         }).join('')}
       </tbody>
-      <tfoot><tr style="background:#EAF6F5;font-weight:700;">
+      <tfoot><tr style="background:#EAF1FA;font-weight:700;">
         <td style="${nameStyle}">Toplam</td>
         <td style="${cellStyle}">${grand.sabah}</td><td style="${cellStyle}"></td>
         <td style="${cellStyle}">${grand.ogle}</td><td style="${cellStyle}"></td>
@@ -16105,7 +16105,7 @@ function supportStatusLabel(st){
 }
 function supportStatusStyle(st){
   if(st==='resolved') return 'background:rgba(0,168,150,0.15);color:var(--aqua-dim);';
-  if(st==='replied') return 'background:rgba(47,211,199,0.2);color:var(--aqua-dim);';
+  if(st==='replied') return 'background:rgba(47,143,227,0.2);color:var(--aqua-dim);';
   if(st==='read') return 'background:rgba(11,36,54,0.08);color:var(--ink-soft);';
   return 'background:rgba(199,119,0,0.15);color:#c77700;';
 }
@@ -17086,7 +17086,7 @@ function pdfHeaderHtml(proj, subtitle){
   const detailLines = companyDetailLinesHtml();
   const subLine = subtitle ? `<div style="font-size:11px;color:#345264;">${esc(subtitle)}</div>` : '';
   return `
-  <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #1C6E8C;padding-bottom:14px;margin-bottom:16px;">
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #1C5E99;padding-bottom:14px;margin-bottom:16px;">
     <div style="display:flex;flex-direction:column;align-items:flex-start;gap:6px;">
       ${logo}
       <div>
@@ -17114,7 +17114,7 @@ function pdfHeaderHtmlSimple(subtitle, opts){
   const musteriAd = (opts.musteriAd||'').trim();
   const musteriTel = (opts.musteriTel||'').trim();
   return `
-  <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #1C6E8C;padding-bottom:14px;margin-bottom:16px;">
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #1C5E99;padding-bottom:14px;margin-bottom:16px;">
     <div style="display:flex;flex-direction:column;align-items:flex-start;gap:6px;">
       ${logo}
       <div>
@@ -17700,7 +17700,7 @@ async function exportMetrajPdf(proj){
   `).join('');
 
   const totalsRow = UNITS.filter(u=>sums[u]!==0).map(u=>`
-    <div style="display:inline-flex;flex-direction:column;padding:8px 14px;border:1px solid #1C6E8C;border-radius:8px;margin:4px 6px 0 0;">
+    <div style="display:inline-flex;flex-direction:column;padding:8px 14px;border:1px solid #1C5E99;border-radius:8px;margin:4px 6px 0 0;">
       <span style="font-size:9px;font-weight:700;color:#345264;text-transform:uppercase;">Toplam ${UNIT_LABEL[u]}</span>
       <span style="font-size:14px;font-weight:700;">${fmtNum(sums[u])}</span>
     </div>
@@ -17716,8 +17716,8 @@ async function exportMetrajPdf(proj){
         <col style="width:5%"><col style="width:6%"><col style="width:7%"><col style="width:8%">
       </colgroup>
       <thead>
-        <tr style="background:#EAF6F5;">
-          ${['Blok','Kat','Daire','Mekân','Uyg. Yeri','İmalat Cinsi','Adet','K.Kenar','Uzunluk','Yükseklik','Minha','Birim','Toplam','Alt Toplam'].map(h=>`<th style="text-align:left;padding:5px 3px;border-bottom:1.5px solid #1C6E8C;word-break:break-word;font-size:${fnt.baslik}px;">${h}</th>`).join('')}
+        <tr style="background:#EAF1FA;">
+          ${['Blok','Kat','Daire','Mekân','Uyg. Yeri','İmalat Cinsi','Adet','K.Kenar','Uzunluk','Yükseklik','Minha','Birim','Toplam','Alt Toplam'].map(h=>`<th style="text-align:left;padding:5px 3px;border-bottom:1.5px solid #1C5E99;word-break:break-word;font-size:${fnt.baslik}px;">${h}</th>`).join('')}
         </tr>
       </thead>
       <tbody>${tableRows || `<tr><td colspan="14" style="padding:10px;text-align:center;color:#345264;font-size:${fnt.metin}px;">Kayıt yok</td></tr>`}</tbody>
@@ -17757,7 +17757,7 @@ async function exportTeklifPdf(templateTitle){
   const dosyaAd = aktif.teklifNo || (bagliProje && bagliProje.name) || aktif.musteriAdSoyad || 'teklif';
 
   const html = `
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #1C6E8C;padding-bottom:14px;margin-bottom:16px;gap:16px;">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #1C5E99;padding-bottom:14px;margin-bottom:16px;gap:16px;">
       <div style="display:flex;flex-direction:column;align-items:flex-start;gap:6px;min-width:0;flex:1;">
         ${logo}
         ${nameLine}
@@ -17770,22 +17770,22 @@ async function exportTeklifPdf(templateTitle){
         <div><b>Teklif Geçerlilik Tarihi:</b> ${aktif.gecerlilikTarihi ? fmtDateStr(aktif.gecerlilikTarihi) : '—'}</div>
         <div><b>Müşteri Adı Soyadı:</b> ${aktif.musteriAdSoyad ? esc(aktif.musteriAdSoyad) : '—'}</div>
         ${aktif.musteriTelefon ? `<div><b>Müşteri Tel:</b> ${esc(aktif.musteriTelefon)}</div>` : ''}
-        <div style="margin-top:4px;font-weight:800;color:#0B2436;"><b>Teklif No:</b> <span style="font-family:'JetBrains Mono',monospace;color:#1C6E8C;">${esc(aktif.teklifNo)}</span></div>
+        <div style="margin-top:4px;font-weight:800;color:#0B2436;"><b>Teklif No:</b> <span style="font-family:'JetBrains Mono',monospace;color:#1C5E99;">${esc(aktif.teklifNo)}</span></div>
       </div>
     </div>
-    <div style="font-family:'Outfit',sans-serif;font-weight:700;font-size:15px;letter-spacing:1px;margin-bottom:14px;color:#1C6E8C;text-align:center;">${esc(templateTitle)}</div>
+    <div style="font-family:'Outfit',sans-serif;font-weight:700;font-size:15px;letter-spacing:1px;margin-bottom:14px;color:#1C5E99;text-align:center;">${esc(templateTitle)}</div>
     <table style="width:100%;border-collapse:collapse;font-size:10px;table-layout:fixed;">
       <colgroup>
         <col style="width:46%"><col style="width:12%"><col style="width:12%">
         <col style="width:15%"><col style="width:15%">
       </colgroup>
       <thead>
-        <tr style="background:#EAF6F5;">
-          <th style="text-align:left;padding:7px 6px;border-bottom:1.5px solid #1C6E8C;">Açıklama</th>
-          <th style="text-align:right;padding:7px 6px;border-bottom:1.5px solid #1C6E8C;">Miktar</th>
-          <th style="text-align:left;padding:7px 6px;border-bottom:1.5px solid #1C6E8C;">Birim</th>
-          <th style="text-align:right;padding:7px 6px;border-bottom:1.5px solid #1C6E8C;">Birim Fiyat</th>
-          <th style="text-align:right;padding:7px 6px;border-bottom:1.5px solid #1C6E8C;">Tutar</th>
+        <tr style="background:#EAF1FA;">
+          <th style="text-align:left;padding:7px 6px;border-bottom:1.5px solid #1C5E99;">Açıklama</th>
+          <th style="text-align:right;padding:7px 6px;border-bottom:1.5px solid #1C5E99;">Miktar</th>
+          <th style="text-align:left;padding:7px 6px;border-bottom:1.5px solid #1C5E99;">Birim</th>
+          <th style="text-align:right;padding:7px 6px;border-bottom:1.5px solid #1C5E99;">Birim Fiyat</th>
+          <th style="text-align:right;padding:7px 6px;border-bottom:1.5px solid #1C5E99;">Tutar</th>
         </tr>
       </thead>
       <tbody>${tableRows || '<tr><td colspan="5" style="padding:10px;text-align:center;color:#345264;">Kayıt yok</td></tr>'}</tbody>
@@ -17795,13 +17795,13 @@ async function exportTeklifPdf(templateTitle){
         <tr><td style="padding:4px 10px;text-align:right;color:#345264;">Ara Toplam (KDV Hariç)</td><td style="padding:4px 0 4px 10px;text-align:right;min-width:110px;">${fmtMoney(k.net)}</td></tr>
         <tr><td style="padding:4px 10px;text-align:right;color:#345264;">KDV (%${fmtNum(k.oran)})</td><td style="padding:4px 0 4px 10px;text-align:right;">${fmtMoney(k.kdv)}</td></tr>
         <tr>
-          <td style="padding:10px 10px 4px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;color:#345264;border-top:1.5px solid #1C6E8C;">Genel Toplam (KDV Dahil)</td>
-          <td style="padding:10px 0 4px 10px;text-align:right;font-size:15px;font-weight:800;color:#0B2436;border-top:1.5px solid #1C6E8C;">${fmtMoney(k.brut)}</td>
+          <td style="padding:10px 10px 4px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;color:#345264;border-top:1.5px solid #1C5E99;">Genel Toplam (KDV Dahil)</td>
+          <td style="padding:10px 0 4px 10px;text-align:right;font-size:15px;font-weight:800;color:#0B2436;border-top:1.5px solid #1C5E99;">${fmtMoney(k.brut)}</td>
         </tr>
       </table>
     </div>
     ${aktif.teklifNote && aktif.teklifNote.trim() ? `
-    <div style="margin-top:20px;padding:12px 14px;background:#F4FBFA;border:1px solid #1C6E8C55;border-radius:8px;font-size:10px;color:#345264;white-space:pre-wrap;">
+    <div style="margin-top:20px;padding:12px 14px;background:#F4FBFA;border:1px solid #1C5E9955;border-radius:8px;font-size:10px;color:#345264;white-space:pre-wrap;">
       <b style="color:#0B2436;">Not:</b> ${esc(aktif.teklifNote)}
     </div>` : ''}
     ${aktif.gecerlilikTarihi ? `
@@ -17907,7 +17907,7 @@ function doExportSemaPdf(cfg){
         } else {
           block = renderImalatSemaSvgHtml(sistem, semaParsed, { input: item.input, forceTek: true });
         }
-        return `<div style="margin-bottom:16px;"><div style="font-size:11px;font-weight:700;color:#1C6E8C;text-align:center;margin-bottom:6px;">${esc(label)}</div>${block}</div>`;
+        return `<div style="margin-bottom:16px;"><div style="font-size:11px;font-weight:700;color:#1C5E99;text-align:center;margin-bottom:6px;">${esc(label)}</div>${block}</div>`;
       }).join('');
     } else {
       svgBlock = renderImalatSemaSvgHtml(sistem, parsed);
@@ -17921,7 +17921,7 @@ function doExportSemaPdf(cfg){
   let svgOnly = svgMatches.length > 1
     ? mahalList.map((item,i)=>{
         const label = item.mahal.ad || ((i+1)+'. Şema');
-        return `<div style="margin-bottom:12px;"><div style="font-size:10px;font-weight:700;color:#1C6E8C;text-align:center;margin-bottom:4px;">${esc(label)}</div>${(svgMatches[i]||'').replace(/data-pol-vertex="[^"]*"/g,'').replace(/\sstyle="cursor:grab;touch-action:none;"/g,'').replace(/\sid="poligonSvg[^"]*"/g,'').replace(/max-width:\s*\d+px/g,'max-width:100%')}</div>`;
+        return `<div style="margin-bottom:12px;"><div style="font-size:10px;font-weight:700;color:#1C5E99;text-align:center;margin-bottom:4px;">${esc(label)}</div>${(svgMatches[i]||'').replace(/data-pol-vertex="[^"]*"/g,'').replace(/\sstyle="cursor:grab;touch-action:none;"/g,'').replace(/\sid="poligonSvg[^"]*"/g,'').replace(/max-width:\s*\d+px/g,'max-width:100%')}</div>`;
       }).join('')
     : ((svgBlock.match(/<svg[\s\S]*?<\/svg>/i) || [])[0] || '');
   if(!svgOnly){ showToast('Çizilecek şema yok. Ölçü girin.'); return; }
@@ -17938,11 +17938,11 @@ function doExportSemaPdf(cfg){
   const paperLbl = paperSize.toUpperCase() + (orientation==='l' ? ' Yatay' : ' Dikey');
   const html = `
     ${pdfHeaderHtmlSimple('İmalat Şeması')}
-    <div style="font-family:'Outfit',sans-serif;font-weight:700;font-size:15px;letter-spacing:1px;margin-bottom:4px;color:#1C6E8C;text-align:center;">İMALAT ŞEMASI</div>
+    <div style="font-family:'Outfit',sans-serif;font-weight:700;font-size:15px;letter-spacing:1px;margin-bottom:4px;color:#1C5E99;text-align:center;">İMALAT ŞEMASI</div>
     <div style="text-align:center;font-size:10px;color:#345264;margin-bottom:10px;">
       ${esc(sistem.ad)}${tipLbl?` · ${esc(tipLbl)}`:''} &nbsp;•&nbsp; ${fmtNum(parsed.value)} ${basisLabel} &nbsp;•&nbsp; ${esc(paperLbl)}
     </div>
-    <div style="border:1px solid #1C6E8C55;border-radius:10px;padding:10px 8px 6px;background:#F7FBFA;">
+    <div style="border:1px solid #1C5E9955;border-radius:10px;padding:10px 8px 6px;background:#F7FBFA;">
       <div style="display:flex;justify-content:center;align-items:center;">${svgOnly}</div>
     </div>
     ${legend ? `<div style="margin-top:12px;display:flex;flex-wrap:wrap;gap:10px 18px;justify-content:center;align-items:flex-start;">${legend}</div>` : ''}
@@ -18026,18 +18026,18 @@ async function exportHesapAnalizPdf(){
         <div style="font-size:14px;font-weight:800;color:#E8776B;">−${fmtMoney(t.iskontoTutar, 'TRY')}${iskPct>0?` (%${fmtNum(iskPct)})`:''}</div>
       </div>` : ''}
       ${birimMaliyet!=null ? `
-      <div style="min-width:180px;border:1.5px solid #1C6E8C55;border-radius:8px;padding:12px 16px;text-align:right;">
+      <div style="min-width:180px;border:1.5px solid #1C5E9955;border-radius:8px;padding:12px 16px;text-align:right;">
         <div style="font-size:10px;color:#345264;font-weight:700;text-transform:uppercase;">Birim Maliyet (TL)</div>
         <div style="font-size:15px;font-weight:800;color:#0B2436;">${fmtMoney(birimMaliyet, 'TRY')} / ${basisLabel}</div>
       </div>` : ''}
-      <div style="min-width:220px;border:1.5px solid #1C6E8C;border-radius:8px;padding:12px 16px;text-align:right;">
+      <div style="min-width:220px;border:1.5px solid #1C5E99;border-radius:8px;padding:12px 16px;text-align:right;">
         <div style="font-size:10px;color:#345264;font-weight:700;text-transform:uppercase;">Genel Toplam (TL)</div>
         <div style="font-size:18px;font-weight:800;color:#0B2436;">${fmtMoney(t.toplamTutar, 'TRY')}</div>
       </div>`;
 
   const html = `
     ${pdfHeaderHtmlSimple('Teklif Analizi', { musteriAd: ui.imalatCalcMusteriAd, musteriTel: ui.imalatCalcMusteriTel })}
-    <div style="font-family:'Outfit',sans-serif;font-weight:700;font-size:15px;letter-spacing:1px;margin-bottom:6px;color:#1C6E8C;text-align:center;">TEKLİF ANALİZİ</div>
+    <div style="font-family:'Outfit',sans-serif;font-weight:700;font-size:15px;letter-spacing:1px;margin-bottom:6px;color:#1C5E99;text-align:center;">TEKLİF ANALİZİ</div>
     <div style="text-align:center;font-size:10px;color:#345264;margin-bottom:4px;">
       ${esc(sistem.ad)} &nbsp;•&nbsp; Hesaplanan Ölçü: ${fmtNum(deger)} ${basisLabel}${olcuAciklama? ' &nbsp;('+olcuAciklama+')' : ''}
     </div>
@@ -18047,11 +18047,11 @@ async function exportHesapAnalizPdf(){
         <col style="width:40%"><col style="width:24%"><col style="width:18%"><col style="width:18%">
       </colgroup>
       <thead>
-        <tr style="background:#EAF6F5;">
-          <th style="text-align:left;padding:7px 6px;border-bottom:1.5px solid #1C6E8C;">Malzeme</th>
-          <th style="text-align:right;padding:7px 6px;border-bottom:1.5px solid #1C6E8C;">Miktar</th>
-          <th style="text-align:right;padding:7px 6px;border-bottom:1.5px solid #1C6E8C;">Birim Fiyat</th>
-          <th style="text-align:right;padding:7px 6px;border-bottom:1.5px solid #1C6E8C;">Tutar</th>
+        <tr style="background:#EAF1FA;">
+          <th style="text-align:left;padding:7px 6px;border-bottom:1.5px solid #1C5E99;">Malzeme</th>
+          <th style="text-align:right;padding:7px 6px;border-bottom:1.5px solid #1C5E99;">Miktar</th>
+          <th style="text-align:right;padding:7px 6px;border-bottom:1.5px solid #1C5E99;">Birim Fiyat</th>
+          <th style="text-align:right;padding:7px 6px;border-bottom:1.5px solid #1C5E99;">Tutar</th>
         </tr>
       </thead>
       <tbody>${tableRows || '<tr><td colspan="4" style="padding:10px;text-align:center;color:#345264;">Kayıt yok</td></tr>'}</tbody>
@@ -18060,7 +18060,7 @@ async function exportHesapAnalizPdf(){
       ${toplamKutulariHtml}
     </div>
     ${ui.imalatCalcNot && ui.imalatCalcNot.trim() ? `
-    <div style="margin-top:20px;padding:12px 14px;background:#F4FBFA;border:1px solid #1C6E8C55;border-radius:8px;font-size:10px;color:#345264;white-space:pre-wrap;">
+    <div style="margin-top:20px;padding:12px 14px;background:#F4FBFA;border:1px solid #1C5E9955;border-radius:8px;font-size:10px;color:#345264;white-space:pre-wrap;">
       <b style="color:#0B2436;">Not:</b> ${esc(ui.imalatCalcNot)}
     </div>` : ''}
     <div style="margin-top:36px;font-size:9px;color:#8096A3;">DNZ Metraj &amp; Teklif Yönetimi ile oluşturulmuştur.</div>
