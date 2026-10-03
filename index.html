@@ -4517,8 +4517,8 @@ function projeDurum(p){ return (p.durum && PROJE_DURUM_META[p.durum]) ? p.durum 
 const ANASAYFA_QUICK_ACTIONS = [
   {key:'teklif', label:'Teklif Ver', icon:'<path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/>', go:()=>{ ui.tab='teklif'; }},
   {key:'imalat', label:'İmalat Sistemleri', icon:'<path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/>', go:()=>{ ui.tab='imalat'; }},
-  {key:'projeler', label:'Projeler', icon:'<path d="M3 11l9-8 9 8"/><path d="M5 10v10a1 1 0 001 1h4v-6h4v6h4a1 1 0 001-1V10"/>', go:()=>{ ui.tab='raporlar'; ui.raporTab='projelistesi'; }},
-  {key:'ayarlar', label:'Ayarlar', icon:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 004.6 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.6a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/>', go:()=>{ ui.tab='ayarlar'; }}
+  {key:'projeler', label:'Projeler', icon:'<path d="M3 11l9-8 9 8"/><path d="M5 10v10a1 1 0 001 1h4v-6h4v6h4a1 1 0 001-1V10"/>', go:()=>{ ui.tab='raporlar'; ui.raporTab='projelistesi'; }}
+  // Not: Ayarlar burada kart olarak yok; üst bardaki dişli ikonuyla açılıyor (mükerrer olmasın diye).
 ];
 // Bir proje aktifken Proje Listesi ekranının üstünde çıkan 6 modül kısayolu.
 const PROJE_HIZLI_ISLEMLER = [
@@ -4666,12 +4666,41 @@ function refreshDashboardHavaWidget(){
   el.outerHTML = renderDashboardHavaWidgetHtml();
   wireDashboardHavaWidget();
 }
+// Anasayfa'daki dashboard: biten/devam eden proje sayısı, aktif çalışan sayısı ve tüm
+// projeler toplamında çalışana ödenecek/ödenen/kalan tutar. Tek bir tarih aralığı seçtirmeden
+// her zaman "bugüne kadarki toplam" gösterir; proje dashboard'uyla aynı fonksiyonları kullanır.
+function computeAnasayfaDashboard(){
+  const projects = Object.values(state.projects||{});
+  let biten = 0, devam = 0, calisanAktif = 0, odenecek = 0, odenen = 0;
+  projects.forEach(proj=>{
+    if(projeDurum(proj)==='tamamlandi') biten++; else devam++;
+    (proj.personel||[]).forEach(p=>{ if(personelStatus(p).cls==='aktif') calisanAktif++; });
+    odenecek += projeCalisanaOdenecekToplam(proj);
+    odenen += projeCalisanaOdenenToplam(proj);
+  });
+  return { biten, devam, calisanAktif, odenecek, odenen, kalan: odenecek-odenen };
+}
+// Bugünün tarihiyle girilmiş, notu olan Şantiye Günlüğü kayıtları (tüm projelerde).
+function todayGunlukNotlari(){
+  const today = isoToday();
+  const out = [];
+  Object.values(state.projects||{}).forEach(proj=>{
+    (proj.gunlukKayitlar||[]).forEach(r=>{
+      if(r.tarih===today && (r.notlar||'').trim()){
+        out.push({ proj, rec:r });
+      }
+    });
+  });
+  return out;
+}
 function renderProjelerTab(main){
   // Hava durumu widgetı kendi "card glass" kutusu; ayrıca bir dış karta sarılmıyor
   // (çift kart iç içe geldiğinde çift kenarlık/boşluk oluşup gereksiz yer kaplıyordu).
   const aramaVarMi = normKey(ui.globalAramaQuery||'');
   const headerArama = document.getElementById('headerAramaInput');
   if(headerArama) headerArama.value = ui.globalAramaQuery||'';
+  const dash = computeAnasayfaDashboard();
+  const notlar = todayGunlukNotlari();
   main.innerHTML = `
     ${renderDashboardHavaWidgetHtml()}
     <div class="card glass">
@@ -4685,11 +4714,40 @@ function renderProjelerTab(main){
       </div>
     </div>
     ${aramaVarMi ? `<div class="card glass" id="globalAramaSonucCard"><div id="globalAramaSonuc">${renderGlobalAramaResultsHtml()}</div></div>` : ''}
+    ${notlar.length ? `
+    <div id="anasayfaNotHatirlatma">
+      ${notlar.map(n=>`
+        <div class="backup-banner" data-proj="${n.proj.id}" data-id="${n.rec.id}" style="cursor:pointer;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/><path d="M9 7h7M9 11h7"/></svg>
+          <span><b>${esc(n.proj.name)}</b> — bugün için not: ${esc(n.rec.notlar.length>120 ? n.rec.notlar.slice(0,120)+'…' : n.rec.notlar)}</span>
+        </div>
+      `).join('')}
+    </div>` : ''}
+    <div class="card glass">
+      <h2>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>
+        Dashboard
+      </h2>
+      <div class="totals-strip">
+        <div class="total-chip"><span class="lbl">Biten Proje</span><span class="val">${dash.biten}</span></div>
+        <div class="total-chip"><span class="lbl">Devam Eden Proje</span><span class="val">${dash.devam}</span></div>
+        <div class="total-chip"><span class="lbl">Çalışan Sayısı</span><span class="val">${dash.calisanAktif}</span></div>
+        <div class="total-chip"><span class="lbl">Çalışana Ödenecek</span><span class="val">${fmtMoney(dash.odenecek)}</span></div>
+        <div class="total-chip"><span class="lbl">Ödenen Tutar</span><span class="val">${fmtMoney(dash.odenen)}</span></div>
+        <div class="total-chip"><span class="lbl">Kalan Tutar</span><span class="val">${fmtMoney(dash.kalan)}</span></div>
+      </div>
+    </div>
   `;
   document.getElementById('anasayfaQuickActions').addEventListener('click',(e)=>{
     const btn = e.target.closest('[data-qa]');
     if(!btn) return;
     runQuickAction(ANASAYFA_QUICK_ACTIONS, btn.dataset.qa);
+  });
+  document.getElementById('anasayfaNotHatirlatma')?.addEventListener('click',(e)=>{
+    const item = e.target.closest('[data-proj]');
+    if(!item) return;
+    goToRecord({projId:item.dataset.proj, tab:'gunluk', rowId:item.dataset.id});
+    showToast('Şantiye Günlüğü kaydına gidildi.');
   });
   wireDashboardHavaWidget();
   if(state.dashboardHavaKonum && dashboardHavaState.status==='idle') fetchDashboardHava();
