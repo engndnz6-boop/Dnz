@@ -4476,17 +4476,18 @@ function projeDurum(p){ return (p.durum && PROJE_DURUM_META[p.durum]) ? p.durum 
 // değilse kullanıcıyı uyarıp Proje Listesi'ne odaklar, aksi halde ilgili sekmeye
 // (gerekirse alt sekmesiyle birlikte) geçer.
 const DASHBOARD_QUICK_ACTIONS = [
-  {key:'avans', label:'Avans Ekle', needsProject:true, icon:'<rect x="2" y="6" width="20" height="13" rx="2"/><path d="M2 10h20"/><path d="M6 15h4"/>', go:()=>{ ui.tab='masraflar'; ui.masraflarTab='avanszimmet'; }},
-  {key:'zimmet', label:'Zimmet Ekle', needsProject:true, icon:'<path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/><path d="M3.3 7L12 12l8.7-5M12 22V12"/>', go:()=>{ ui.tab='masraflar'; ui.masraflarTab='avanszimmet'; }},
-  {key:'bordro', label:'Maaş Bordro', needsProject:true, icon:'<path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h5"/>', go:()=>{ ui.tab='masraflar'; ui.masraflarTab='bordro'; }},
-  {key:'personelgider', label:'Personel Gider', needsProject:true, icon:'<path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5"/>', go:()=>{ ui.tab='masraflar'; ui.masraflarTab='personelgider'; }},
-  {key:'tahsilat', label:'Tahsilat Ekle', needsProject:true, icon:'<path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/>', go:()=>{ ui.tab='raporlar'; ui.raporTab='tahsilat'; }},
-  {key:'masraf', label:'Masraf Ekle', needsProject:true, icon:'<path d="M20 12V8H6a2 2 0 010-4h12v4"/><path d="M4 6v12a2 2 0 002 2h14v-4"/><path d="M18 12a2 2 0 000 4h4v-4z"/>', go:()=>{ ui.tab='masraflar'; ui.masraflarTab='masraf'; }},
-  {key:'teklif', label:'Teklif Ekle', needsProject:false, icon:'<path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/>', go:()=>{ ui.tab='teklif'; }},
-  {key:'personel', label:'Personel Ekle', needsProject:true, icon:'<path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/>', go:()=>{ ui.tab='personel'; }},
-  {key:'metraj', label:'Metraj Ekle', needsProject:true, icon:'<path d="M3 3h18v18H3z"/><path d="M9 3v18M15 3v18M3 9h18M3 15h18"/>', go:()=>{ ui.tab='metraj'; }},
-  {key:'gunluk', label:'Şantiye Günlüğü', needsProject:true, icon:'<path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/>', go:()=>{ ui.tab='gunluk'; }},
-  {key:'hesaplama', label:'Hesaplama Paneli', needsProject:false, icon:'<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8M8 11h8M8 15h5"/><path d="M16 15l2 2 3-4"/>', go:()=>{ ui.tab='imalat'; ui.imalatSubTab='hesap'; }}
+  // Anasayfa'daki Hızlı İşlemler, sol menüdeki modüllerle birebir aynı mantıkla listelenir:
+  // Teklif / İmalat Sistemleri / Ayarlar her zaman görünür; Metraj, Personel, Puantaj,
+  // Şantiye Günlüğü, Masraflar, Raporlar yalnızca en az bir proje eklendiğinde görünür.
+  {key:'teklif', label:'Teklif', needsProject:false, icon:'<path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/>', go:()=>{ ui.tab='teklif'; }},
+  {key:'imalat', label:'İmalat Sistemleri', needsProject:false, icon:'<path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/>', go:()=>{ ui.tab='imalat'; }},
+  {key:'metraj', label:'Metraj', needsProject:true, icon:'<path d="M3 3h18v18H3z"/><path d="M9 3v18M15 3v18M3 9h18M3 15h18"/>', go:()=>{ ui.tab='metraj'; }},
+  {key:'personel', label:'Personel', needsProject:true, icon:'<path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/>', go:()=>{ ui.tab='personel'; }},
+  {key:'puantaj', label:'Puantaj', needsProject:true, icon:'<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/>', go:()=>{ ui.tab='puantaj'; }},
+  {key:'gunluk', label:'Şantiye Günlüğü', needsProject:true, icon:'<path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/><path d="M9 7h7M9 11h7"/>', go:()=>{ ui.tab='gunluk'; }},
+  {key:'masraflar', label:'Masraflar', needsProject:true, icon:'<rect x="2" y="6" width="20" height="13" rx="2"/><path d="M2 10h20"/><path d="M6 15h4"/>', go:()=>{ ui.tab='masraflar'; }},
+  {key:'raporlar', label:'Raporlar', needsProject:true, icon:'<path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/>', go:()=>{ ui.tab='raporlar'; }},
+  {key:'ayarlar', label:'Ayarlar', needsProject:false, icon:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 004.6 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.6a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/>', go:()=>{ ui.tab='ayarlar'; }}
 ];
 function runDashboardQuickAction(key){
   const action = DASHBOARD_QUICK_ACTIONS.find(a=>a.key===key);
@@ -4652,7 +4653,7 @@ function renderProjelerTab(main){
       </h2>
       <p class="hint">Aktif proje: <b>${state.activeProjectId && state.projects[state.activeProjectId] ? esc(state.projects[state.activeProjectId].name) : 'seçili değil'}</b>. Proje gerektiren işlemler için önce Raporlar &gt; Proje Listesi'nden bir proje seçin.</p>
       <div class="quick-action-grid" id="dashboardQuickActions">
-        ${DASHBOARD_QUICK_ACTIONS.map(a=>`
+        ${DASHBOARD_QUICK_ACTIONS.filter(a=> !a.needsProject || Object.keys(state.projects||{}).length>0).map(a=>`
           <button class="quick-action-btn ripple-el-host" data-qa="${a.key}">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${a.icon}</svg>
             <span>${esc(a.label)}</span>
