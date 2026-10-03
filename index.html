@@ -4155,6 +4155,15 @@ function renderTabs(){
   // Ayarlar ve "Yeni Proje Ekle" kalır.
   const hasProject = Object.keys(state.projects||{}).length > 0;
   document.getElementById('tabNav')?.classList.toggle('no-project', !hasProject);
+  // Başlangıç (Anasayfa) ekranında açılır menü düğmesi ve üstteki proje adı seçici gizlenir;
+  // bu ekranda gezinme Anasayfa'daki 4 büyük kısayolla yapılır. Diğer sekmelerde ikisi de
+  // normal şekilde görünür (bir proje üzerinde çalışırken hangi projede olduğunuzu görmek
+  // ve menüden başka bir modüle geçmek için).
+  const isHome = ui.tab==='projeler';
+  const menuBtn = document.getElementById('btnMenuToggle');
+  if(menuBtn) menuBtn.style.display = isHome ? 'none' : '';
+  const projSel = document.getElementById('projectSelect');
+  if(projSel) projSel.style.display = isHome ? 'none' : '';
 }
 function goToAnasayfa(){
   ui.tab = 'projeler';
@@ -4475,28 +4484,30 @@ function projeDurum(p){ return (p.durum && PROJE_DURUM_META[p.durum]) ? p.durum 
 // Anasayfa'daki hızlı işlem butonları: aktif proje gerektirenler için proje seçili
 // değilse kullanıcıyı uyarıp Proje Listesi'ne odaklar, aksi halde ilgili sekmeye
 // (gerekirse alt sekmesiyle birlikte) geçer.
-const DASHBOARD_QUICK_ACTIONS = [
-  // Anasayfa'daki Hızlı İşlemler, sol menüdeki modüllerle birebir aynı mantıkla listelenir:
-  // Teklif / İmalat Sistemleri / Ayarlar her zaman görünür; Metraj, Personel, Puantaj,
-  // Şantiye Günlüğü, Masraflar, Raporlar yalnızca en az bir proje eklendiğinde görünür.
-  {key:'teklif', label:'Teklif', needsProject:false, icon:'<path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/>', go:()=>{ ui.tab='teklif'; }},
-  {key:'imalat', label:'İmalat Sistemleri', needsProject:false, icon:'<path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/>', go:()=>{ ui.tab='imalat'; }},
-  {key:'metraj', label:'Metraj', needsProject:true, icon:'<path d="M3 3h18v18H3z"/><path d="M9 3v18M15 3v18M3 9h18M3 15h18"/>', go:()=>{ ui.tab='metraj'; }},
-  {key:'personel', label:'Personel', needsProject:true, icon:'<path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/>', go:()=>{ ui.tab='personel'; }},
-  {key:'puantaj', label:'Puantaj', needsProject:true, icon:'<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/>', go:()=>{ ui.tab='puantaj'; }},
-  {key:'gunluk', label:'Şantiye Günlüğü', needsProject:true, icon:'<path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/><path d="M9 7h7M9 11h7"/>', go:()=>{ ui.tab='gunluk'; }},
-  {key:'masraflar', label:'Masraflar', needsProject:true, icon:'<rect x="2" y="6" width="20" height="13" rx="2"/><path d="M2 10h20"/><path d="M6 15h4"/>', go:()=>{ ui.tab='masraflar'; }},
-  {key:'raporlar', label:'Raporlar', needsProject:true, icon:'<path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/>', go:()=>{ ui.tab='raporlar'; }},
-  {key:'ayarlar', label:'Ayarlar', needsProject:false, icon:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 004.6 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.6a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/>', go:()=>{ ui.tab='ayarlar'; }}
+// Başlangıç (Anasayfa) ekranındaki 4 kısayol: her zaman görünür, proje gerektirmez.
+const ANASAYFA_QUICK_ACTIONS = [
+  {key:'teklif', label:'Teklif Ver', icon:'<path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/>', go:()=>{ ui.tab='teklif'; }},
+  {key:'imalat', label:'İmalat Sistemleri', icon:'<path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/>', go:()=>{ ui.tab='imalat'; }},
+  {key:'projeler', label:'Projeler', icon:'<path d="M3 11l9-8 9 8"/><path d="M5 10v10a1 1 0 001 1h4v-6h4v6h4a1 1 0 001-1V10"/>', go:()=>{ ui.tab='raporlar'; ui.raporTab='projelistesi'; }},
+  {key:'ayarlar', label:'Ayarlar', icon:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 004.6 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.6a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/>', go:()=>{ ui.tab='ayarlar'; }},
+  {key:'arama', label:'Genel Arama', icon:'<circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>', go:()=>{ ui.anasayfaAramaAcik = !ui.anasayfaAramaAcik; }}
 ];
-function runDashboardQuickAction(key){
-  const action = DASHBOARD_QUICK_ACTIONS.find(a=>a.key===key);
+// Bir proje aktifken Proje Listesi ekranının üstünde çıkan 6 modül kısayolu.
+const PROJE_HIZLI_ISLEMLER = [
+  {key:'metraj', label:'Metraj', icon:'<path d="M3 3h18v18H3z"/><path d="M9 3v18M15 3v18M3 9h18M3 15h18"/>', go:()=>{ ui.tab='metraj'; }},
+  {key:'personel', label:'Personel', icon:'<path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/>', go:()=>{ ui.tab='personel'; }},
+  {key:'puantaj', label:'Puantaj', icon:'<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/>', go:()=>{ ui.tab='puantaj'; }},
+  {key:'gunluk', label:'Şantiye Günlüğü', icon:'<path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/><path d="M9 7h7M9 11h7"/>', go:()=>{ ui.tab='gunluk'; }},
+  {key:'masraflar', label:'Masraflar', icon:'<rect x="2" y="6" width="20" height="13" rx="2"/><path d="M2 10h20"/><path d="M6 15h4"/>', go:()=>{ ui.tab='masraflar'; }},
+  {key:'raporlar', label:'Raporlar', icon:'<path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/>', go:()=>{ ui.tab='raporlar'; ui.raporTab='dashboard'; }}
+];
+;
+// Anasayfa'nın 4 kısayolu ve Proje Listesi'ndeki 6 modül kısayolu aynı basit akışı kullanır:
+// proje gerektirmezler (Anasayfa'dakiler) ya da zaten aktif bir proje varken gösterilirler
+// (Proje Listesi'ndekiler), bu yüzden ekstra bir "önce proje seç" kontrolüne gerek yok.
+function runQuickAction(list, key){
+  const action = list.find(a=>a.key===key);
   if(!action) return;
-  if(action.needsProject && !activeProject()){
-    showToast('Önce Raporlar > Proje Listesi\'nden bir proje seçin ya da yeni proje oluşturun.');
-    goToProjeListesi();
-    return;
-  }
   action.go();
   renderTabs();
   renderMain();
@@ -4628,49 +4639,35 @@ function refreshDashboardHavaWidget(){
 function renderProjelerTab(main){
   main.innerHTML = `
     <div class="card glass">
-      <h2>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10a1 1 0 001 1h4v-6h4v6h4a1 1 0 001-1V10"/></svg>
-        Anasayfa
-      </h2>
-      <p class="hint">Yeni proje ekleyin, hızlı işlemlere geçin veya genel arama ile kayıtlara ulaşın. Proje seçimi ve özet raporlar için Raporlar sekmesini kullanın.</p>
-      <div class="btn-row dashboard-toolbar">
-        <button class="btn btn-primary" id="btnNewProject">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
-          Yeni Proje Ekle
-        </button>
-        <div class="field">
-          <input type="text" id="globalAramaInput" value="${esc(ui.globalAramaQuery||'')}" placeholder="Genel arama: personel, metraj, masraf, teklif…">
-        </div>
-        ${renderDashboardHavaWidgetHtml()}
-      </div>
-      <div id="globalAramaSonuc">${renderGlobalAramaResultsHtml()}</div>
-    </div>
-
-    <div class="card glass">
-      <h2>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z"/></svg>
-        Hızlı İşlemler
-      </h2>
-      <p class="hint">Aktif proje: <b>${state.activeProjectId && state.projects[state.activeProjectId] ? esc(state.projects[state.activeProjectId].name) : 'seçili değil'}</b>. Proje gerektiren işlemler için önce Raporlar &gt; Proje Listesi'nden bir proje seçin.</p>
-      <div class="quick-action-grid" id="dashboardQuickActions">
-        ${DASHBOARD_QUICK_ACTIONS.filter(a=> !a.needsProject || Object.keys(state.projects||{}).length>0).map(a=>`
-          <button class="quick-action-btn ripple-el-host" data-qa="${a.key}">
+      ${renderDashboardHavaWidgetHtml()}
+      <div class="quick-action-grid" id="anasayfaQuickActions">
+        ${ANASAYFA_QUICK_ACTIONS.map(a=>`
+          <button class="quick-action-btn ripple-el-host ${a.key==='arama' && ui.anasayfaAramaAcik?'active':''}" data-qa="${a.key}">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${a.icon}</svg>
             <span>${esc(a.label)}</span>
           </button>
         `).join('')}
       </div>
+      ${ui.anasayfaAramaAcik ? `
+      <div style="margin-top:14px;">
+        <div class="field">
+          <input type="text" id="globalAramaInput" value="${esc(ui.globalAramaQuery||'')}" placeholder="Personel, metraj, masraf, teklif…" autofocus>
+        </div>
+        <div id="globalAramaSonuc">${renderGlobalAramaResultsHtml()}</div>
+      </div>` : ''}
     </div>
   `;
-  document.getElementById('btnNewProject').onclick = ()=>openProjectModal(null);
-  document.getElementById('dashboardQuickActions').addEventListener('click',(e)=>{
+  document.getElementById('anasayfaQuickActions').addEventListener('click',(e)=>{
     const btn = e.target.closest('[data-qa]');
     if(!btn) return;
-    runDashboardQuickAction(btn.dataset.qa);
+    runQuickAction(ANASAYFA_QUICK_ACTIONS, btn.dataset.qa);
   });
   wireDashboardHavaWidget();
   if(state.dashboardHavaKonum && dashboardHavaState.status==='idle') fetchDashboardHava();
-  wireGlobalArama();
+  if(ui.anasayfaAramaAcik){
+    wireGlobalArama();
+    document.getElementById('globalAramaInput')?.focus();
+  }
 }
 
 function renderProjeListesiTab(sub){
@@ -4679,17 +4676,36 @@ function renderProjeListesiTab(sub){
   const tamamlananCount = allProjects.filter(p=>projeDurum(p)==='tamamlandi').length;
   if(!['tumu','devam','tamamlandi'].includes(ui.projeDurumFilter)) ui.projeDurumFilter = 'tumu';
   const projects = allProjects.filter(p=> ui.projeDurumFilter==='tumu' || projeDurum(p)===ui.projeDurumFilter);
+  const aktifProj = state.activeProjectId ? state.projects[state.activeProjectId] : null;
   sub.innerHTML = `
+    ${aktifProj ? `
+    <div class="card glass">
+      <h2>Hızlı İşlemler <span style="color:var(--aqua-dim)">— ${esc(aktifProj.name)}</span></h2>
+      <div class="quick-action-grid" id="projeHizliIslemler">
+        ${PROJE_HIZLI_ISLEMLER.map(a=>`
+          <button class="quick-action-btn ripple-el-host" data-qa="${a.key}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${a.icon}</svg>
+            <span>${esc(a.label)}</span>
+          </button>
+        `).join('')}
+      </div>
+    </div>` : ''}
     <div class="card glass">
       <h2>Proje Listesi <span class="badge">${projects.length}/${allProjects.length}</span></h2>
-      <p class="hint">Projeleri seçin, düzenleyin veya durumlarını güncelleyin. Yeni proje eklemek için Anasayfa'daki "Yeni Proje Ekle" butonunu kullanın.</p>
+      <p class="hint">Projeleri seçin, düzenleyin veya durumlarını güncelleyin.</p>
+      <div class="btn-row" style="margin-bottom:10px;">
+        <button class="btn btn-primary" id="btnNewProjectFromList">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+          Yeni Proje Ekle
+        </button>
+      </div>
       <div class="report-subnav" id="projeDurumFilterNav" style="margin-bottom:10px;">
         <button class="report-subtab-btn ripple-el-host ${ui.projeDurumFilter==='tumu'?'active':''}" data-durum="tumu">Tümü <span class="badge">${allProjects.length}</span></button>
         <button class="report-subtab-btn ripple-el-host ${ui.projeDurumFilter==='devam'?'active':''}" data-durum="devam">Devam Eden <span class="badge">${devamCount}</span></button>
         <button class="report-subtab-btn ripple-el-host ${ui.projeDurumFilter==='tamamlandi'?'active':''}" data-durum="tamamlandi">Tamamlanan <span class="badge">${tamamlananCount}</span></button>
       </div>
       <div class="project-list" id="projectList">
-        ${projects.length===0 ? `<div class="empty-state">${allProjects.length===0?'Henüz proje eklenmedi. Anasayfa\'dan yeni proje ekleyebilirsiniz.':'Bu filtreye uyan proje bulunamadı.'}</div>` : projects.map(p=>{
+        ${projects.length===0 ? `<div class="empty-state">${allProjects.length===0?'Henüz proje eklenmedi. Yukarıdaki "Yeni Proje Ekle" ile başlayabilirsiniz.':'Bu filtreye uyan proje bulunamadı.'}</div>` : projects.map(p=>{
           const durum = projeDurum(p);
           const durumMeta = PROJE_DURUM_META[durum];
           return `
@@ -4722,6 +4738,12 @@ function renderProjeListesiTab(sub){
       </div>
     </div>
   `;
+  document.getElementById('btnNewProjectFromList').onclick = ()=>openProjectModal(null);
+  document.getElementById('projeHizliIslemler')?.addEventListener('click',(e)=>{
+    const btn = e.target.closest('[data-qa]');
+    if(!btn) return;
+    runQuickAction(PROJE_HIZLI_ISLEMLER, btn.dataset.qa);
+  });
   document.getElementById('projeDurumFilterNav').addEventListener('click',(e)=>{
     const btn = e.target.closest('[data-durum]');
     if(!btn) return;
