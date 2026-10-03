@@ -1,5 +1,5 @@
 /* DNZ PWA — yalnızca aynı origin (kendi site) GET isteklerini yönetir */
-const CACHE_NAME = 'dnz-cache-v3';
+const CACHE_NAME = 'dnz-cache-v4';
 
 function isSameOrigin(url){
   try{
@@ -35,7 +35,10 @@ self.addEventListener('fetch', (event)=>{
   event.respondWith((async ()=>{
     const cache = await caches.open(CACHE_NAME);
     try{
-      const networkResponse = await fetch(request);
+      // cache:'no-store' — tarayıcının kendi HTTP önbelleği bu isteği karşılamasın;
+      // her seferinde sunucudan gerçekten taze dosya istensin (aksi halde "network-first"
+      // mantığı, tarayıcı diskinde duran eski index.html'i döndürebilir).
+      const networkResponse = await fetch(request, { cache: 'no-store' });
       if(networkResponse && networkResponse.ok){
         try{ await cache.put(request, networkResponse.clone()); }catch(_){}
       }
