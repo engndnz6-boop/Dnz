@@ -1372,6 +1372,22 @@ td.num,th.num{font-family:var(--font-mono);text-align:right;}
 .project-item .pinfo b{display:block;font-family:var(--font-display);font-size:0.92rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .project-item .pinfo .pbadges{display:flex;flex-wrap:wrap;gap:5px;margin:3px 0;}
 .project-item .pinfo span{font-size:0.72rem;color:var(--ink-soft);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;}
+/* Teklif listesi: tıklanan kart "iç içe" (accordion) açılır; .teklif-detay o satırın hemen altına gelir. */
+.teklif-detay{
+  margin:-2px 0 4px 14px;padding:12px 14px 14px;
+  border-left:2px solid var(--aqua-dim);border-radius:0 12px 12px 0;
+  background:rgba(47,143,227,0.06);
+  display:flex;flex-direction:column;gap:14px;
+}
+.teklif-detay-alt{display:flex;flex-direction:column;gap:10px;padding-top:10px;border-top:1px dashed rgba(11,36,54,0.12);}
+.teklif-detay-alt:first-child{padding-top:0;border-top:none;}
+.teklif-detay h3{margin:0;font-family:var(--font-display);font-size:0.88rem;font-weight:700;display:flex;align-items:center;gap:7px;color:var(--ink);}
+.teklif-detay h3 svg{width:16px;height:16px;color:var(--aqua-dim);}
+html[data-theme="dark"] .teklif-detay{background:rgba(47,143,227,0.1);}
+html[data-theme="dark"] .teklif-detay-alt{border-top-color:rgba(255,255,255,0.12);}
+@media (max-width:640px){
+  .teklif-detay{margin-left:6px;padding:10px 10px 12px;}
+}
 
 /* Kaydedilen ürün kart ızgarası */
 .urun-kart-grid{
@@ -4205,8 +4221,11 @@ function renderTabs(){
   const isHome = ui.tab==='projeler';
   const menuBtn = document.getElementById('btnMenuToggle');
   if(menuBtn) menuBtn.style.display = isHome ? 'none' : '';
+  // Teklif, Anasayfa gibi projeden bağımsızdır: üstteki proje adı seçici orada da gizlenir
+  // (teklif bir projeye bağlıysa zaten kendi "Projeye Bağla" alanından görülür).
+  const hideProjeSecici = isHome || ui.tab==='teklif';
   const projSel = document.getElementById('projectSelect');
-  if(projSel) projSel.style.display = isHome ? 'none' : '';
+  if(projSel) projSel.style.display = hideProjeSecici ? 'none' : '';
   // Başlangıç ekranında üst barda proje seçici yerine genel arama kutusu ve Ayarlar
   // kısayolu çıkar (tema ile çıkış simgesi arasında); diğer sekmelerde eskisi gibi
   // proje seçici görünür.
@@ -6222,8 +6241,9 @@ function renderTeklifTab(main){
         ${tumTeklifler.map(t=>{
           const p = t.projectId && state.projects[t.projectId] ? state.projects[t.projectId].name : (t.musteriAdSoyad || null);
           const no = t.teklifNo || (normalizeTeklifNoPrefix(t.teklifNoPrefix)+'-…');
-          return `
-          <div class="project-item ${t.id===aktif.id?'active':''}" data-id="${t.id}">
+          const acikMi = t.id===aktif.id;
+          const satir = `
+          <div class="project-item ${acikMi?'active':''}" data-id="${t.id}">
             <div class="pinfo">
               <b>${esc(no)}</b>
               <span>${p ? esc(p) : 'Projeye/müşteriye bağlı değil'} · ${fmtMoney(teklifKdvliToplam(t).brut)}</span>
@@ -6238,70 +6258,97 @@ function renderTeklifTab(main){
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0l-1 14a2 2 0 01-2 2H7a2 2 0 01-2-2L4 6h16z"/></svg>
             </button>
           </div>`;
-        }).join('')}
-      </div>
-      <div class="field-grid field-grid-single" style="margin-top:6px;">
-        <div class="field"><label>Projeye Bağla (isteğe bağlı)</label>
-          <select id="t-projeBagla">
-            <option value="">— Sadece müşteriye bağlı (proje yok) —</option>
-            ${projeOpts}
-          </select>
-        </div>
-      </div>
-      <div class="field-grid tk-kdv-row" style="grid-template-columns:repeat(3,minmax(160px,1fr));margin-top:6px;">
-        <div class="field"><label>Teklif Tarihi</label>
-          <input type="date" id="t-teklifTarihi" value="${esc(aktif.teklifTarihi||isoToday())}">
-        </div>
-        <div class="field"><label>Teklif Geçerlilik Tarihi</label>
-          <input type="date" id="t-gecerlilikTarihi" value="${esc(aktif.gecerlilikTarihi||'')}">
-        </div>
-        <div class="field"><label>Müşteri Adı Soyadı</label>
-          <input type="text" id="t-musteriAdSoyad" value="${esc(aktif.musteriAdSoyad||'')}" placeholder="Örn: Engin Deniz">
-        </div>
-        <div class="field"><label>Müşteri Telefon</label>
-          <input type="tel" id="t-musteriTelefon" value="${esc(aktif.musteriTelefon||'')}" placeholder="Örn: 0532 000 00 00" inputmode="tel">
-        </div>
-        <div class="field"><label>Teklif No Öneki (3 harf)</label>
-          <div style="display:flex;gap:8px;align-items:center;">
-            <input type="text" id="t-teklifNoPrefix" value="${esc(normalizeTeklifNoPrefix(aktif.teklifNoPrefix))}" maxlength="3" placeholder="DNZ" style="text-transform:uppercase;letter-spacing:2px;font-weight:700;max-width:90px;">
-            <span class="mono" id="t-teklifNoPreview" style="font-size:0.85rem;color:var(--aqua-dim);font-weight:700;">${esc(aktif.teklifNo || (normalizeTeklifNoPrefix(aktif.teklifNoPrefix)+'-'+buildTeklifNoSuffix()))}</span>
-          </div>
-        </div>
-        <label style="display:flex;align-items:center;gap:8px;margin-top:22px;cursor:pointer;font-size:0.85rem;color:var(--ink-soft);">
-          <input type="checkbox" id="t-onay" ${aktif.teklifOnaylandi?'checked':''} ${bagliProje?'':'disabled'} style="width:18px;height:18px;">
-          <span>Bu teklif onaylı${bagliProje?' (bağlı projenin İşverenden Alınacak toplamına dahil)':' (önce bir projeye bağlayın)'}</span>
-        </label>
-      </div>
-    </div>
+          // Yalnızca tıklanan (aktif) teklifin ayrıntıları, tam bu satırın altına "iç içe" açılır.
+          const detay = !acikMi ? '' : `
+          <div class="teklif-detay">
+            <div class="field-grid field-grid-single">
+              <div class="field"><label>Projeye Bağla (isteğe bağlı)</label>
+                <select id="t-projeBagla">
+                  <option value="">— Sadece müşteriye bağlı (proje yok) —</option>
+                  ${projeOpts}
+                </select>
+              </div>
+            </div>
+            <div class="field-grid tk-kdv-row" style="grid-template-columns:repeat(3,minmax(160px,1fr));margin-top:6px;">
+              <div class="field"><label>Teklif Tarihi</label>
+                <input type="date" id="t-teklifTarihi" value="${esc(aktif.teklifTarihi||isoToday())}">
+              </div>
+              <div class="field"><label>Teklif Geçerlilik Tarihi</label>
+                <input type="date" id="t-gecerlilikTarihi" value="${esc(aktif.gecerlilikTarihi||'')}">
+              </div>
+              <div class="field"><label>Müşteri Adı Soyadı</label>
+                <input type="text" id="t-musteriAdSoyad" value="${esc(aktif.musteriAdSoyad||'')}" placeholder="Örn: Engin Deniz">
+              </div>
+              <div class="field"><label>Müşteri Telefon</label>
+                <input type="tel" id="t-musteriTelefon" value="${esc(aktif.musteriTelefon||'')}" placeholder="Örn: 0532 000 00 00" inputmode="tel">
+              </div>
+              <div class="field"><label>Teklif No Öneki (3 harf)</label>
+                <div style="display:flex;gap:8px;align-items:center;">
+                  <input type="text" id="t-teklifNoPrefix" value="${esc(normalizeTeklifNoPrefix(aktif.teklifNoPrefix))}" maxlength="3" placeholder="DNZ" style="text-transform:uppercase;letter-spacing:2px;font-weight:700;max-width:90px;">
+                  <span class="mono" id="t-teklifNoPreview" style="font-size:0.85rem;color:var(--aqua-dim);font-weight:700;">${esc(aktif.teklifNo || (normalizeTeklifNoPrefix(aktif.teklifNoPrefix)+'-'+buildTeklifNoSuffix()))}</span>
+                </div>
+              </div>
+              <label style="display:flex;align-items:center;gap:8px;margin-top:22px;cursor:pointer;font-size:0.85rem;color:var(--ink-soft);">
+                <input type="checkbox" id="t-onay" ${aktif.teklifOnaylandi?'checked':''} ${bagliProje?'':'disabled'} style="width:18px;height:18px;">
+                <span>Bu teklif onaylı${bagliProje?' (bağlı projenin İşverenden Alınacak toplamına dahil)':' (önce bir projeye bağlayın)'}</span>
+              </label>
+            </div>
 
-    <div class="card glass">
-      <h2>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
-        Teklif Kalemi Ekle${aktif.teklifNo ? ` — <span style="color:var(--aqua-dim)">${esc(aktif.teklifNo)}</span>` : ''}
-      </h2>
-      <div class="field-grid" style="grid-template-columns:repeat(2,minmax(140px,1fr));">
-        <div class="field" style="grid-column:span 2;"><label>Açıklama</label>
-          <input type="text" id="t-aciklama" value="${esc(teklifForm.aciklama)}" placeholder="Örn: A Blok, 1.Kat, 1.Daire, Salon, Bölme Duvar İmalatı">
-        </div>
-        <div class="field"><label>Miktar</label><input class="mono" type="number" step="any" id="t-miktar" value="${esc(teklifForm.miktar)}"></div>
-        <div class="field"><label>Birim</label>
-          <select id="t-birim">${UNITS.map(u=>`<option value="${u}" ${u===teklifForm.birim?'selected':''}>${UNIT_LABEL[u]}</option>`).join('')}</select>
-        </div>
-        <div class="field"><label>Birim Fiyat (TL)</label><input class="mono" type="number" step="any" id="t-birimFiyat" value="${esc(teklifForm.birimFiyat)}" style="font-size:0.95rem;"></div>
-        <div class="field"><label>KDV Oranı (%)</label><input class="mono" type="number" step="any" min="0" id="t-kdvOrani" value="${esc(teklifForm.kdvOrani)}" placeholder="0"></div>
-        <div class="field"><label>Tutar (TL)</label><input class="mono" type="text" readonly style="opacity:0.75;font-weight:700;font-size:0.95rem;" id="t-tutarDisplay" value="${fmtMoney((parseFloat(teklifForm.miktar)||0)*(parseFloat(teklifForm.birimFiyat)||0))}"></div>
-      </div>
-      <div class="btn-row">
-        <button class="btn btn-primary" id="btnSaveTeklif">${teklifForm.id?'Kalemi Güncelle':'Kalemi Ekle'}</button>
-        <button class="btn btn-ghost" id="btnClearTeklif">Formu Temizle</button>
-        <button class="btn btn-ghost" id="btnFromMetraj" ${bagliProje?'':'disabled'} title="${bagliProje?'Bağlı projenin metrajından ekle':'Önce bir projeye bağlayın'}">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3h18v18H3z"/></svg>
-          Metrajdan Ekle
-        </button>
-        <button class="btn btn-ghost" id="btnFromAnaliz" title="Kayıtlı teklif analizlerinden kalem ekle">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
-          Analizden Ekle
-        </button>
+            <div class="teklif-detay-alt">
+              <h3>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+                Teklif Kalemi Ekle
+              </h3>
+              <div class="field-grid" style="grid-template-columns:repeat(2,minmax(140px,1fr));">
+                <div class="field" style="grid-column:span 2;"><label>Açıklama</label>
+                  <input type="text" id="t-aciklama" value="${esc(teklifForm.aciklama)}" placeholder="Örn: A Blok, 1.Kat, 1.Daire, Salon, Bölme Duvar İmalatı">
+                </div>
+                <div class="field"><label>Miktar</label><input class="mono" type="number" step="any" id="t-miktar" value="${esc(teklifForm.miktar)}"></div>
+                <div class="field"><label>Birim</label>
+                  <select id="t-birim">${UNITS.map(u=>`<option value="${u}" ${u===teklifForm.birim?'selected':''}>${UNIT_LABEL[u]}</option>`).join('')}</select>
+                </div>
+                <div class="field"><label>Birim Fiyat (TL)</label><input class="mono" type="number" step="any" id="t-birimFiyat" value="${esc(teklifForm.birimFiyat)}" style="font-size:0.95rem;"></div>
+                <div class="field"><label>KDV Oranı (%)</label><input class="mono" type="number" step="any" min="0" id="t-kdvOrani" value="${esc(teklifForm.kdvOrani)}" placeholder="0"></div>
+                <div class="field"><label>Tutar (TL)</label><input class="mono" type="text" readonly style="opacity:0.75;font-weight:700;font-size:0.95rem;" id="t-tutarDisplay" value="${fmtMoney((parseFloat(teklifForm.miktar)||0)*(parseFloat(teklifForm.birimFiyat)||0))}"></div>
+              </div>
+              <div class="btn-row">
+                <button class="btn btn-primary" id="btnSaveTeklif">${teklifForm.id?'Kalemi Güncelle':'Kalemi Ekle'}</button>
+                <button class="btn btn-ghost" id="btnClearTeklif">Formu Temizle</button>
+                <button class="btn btn-ghost" id="btnFromMetraj" ${bagliProje?'':'disabled'} title="${bagliProje?'Bağlı projenin metrajından ekle':'Önce bir projeye bağlayın'}">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3h18v18H3z"/></svg>
+                  Metrajdan Ekle
+                </button>
+                <button class="btn btn-ghost" id="btnFromAnaliz" title="Kayıtlı teklif analizlerinden kalem ekle">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+                  Analizden Ekle
+                </button>
+              </div>
+            </div>
+
+            <div class="teklif-detay-alt">
+              <h3>Teklif Notu</h3>
+              <div class="field-grid field-grid-single">
+                <div class="field">
+                  <textarea id="t-note" rows="3" style="width:100%;padding:9px 10px;border-radius:10px;border:1px solid rgba(11,36,54,0.15);background:rgba(255,255,255,0.6);font-family:var(--font-body);font-size:0.85rem;color:var(--ink);resize:vertical;" placeholder="Örn: Fiyatlarımız 30 gün geçerlidir. KDV hariçtir.">${esc(aktif.teklifNote||'')}</textarea>
+                </div>
+              </div>
+            </div>
+
+            <div class="teklif-detay-alt">
+              <h3>Teklif Kalemleri</h3>
+              <div class="table-scroll" id="teklifTableWrap"></div>
+              <div class="totals-strip" id="teklifTotals"></div>
+              <div class="btn-row">
+                <button class="btn btn-ghost" id="btnMergeTeklif">Aynı Kalemleri Birleştir</button>
+                <button class="btn btn-primary" id="btnTeklifPdf">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg>
+                  Teklif PDF'ini İndir
+                </button>
+              </div>
+            </div>
+          </div>`;
+          return satir + detay;
+        }).join('')}
       </div>
     </div>
 
@@ -6323,28 +6370,6 @@ function renderTeklifTab(main){
         ${imalatFiyatForm.id ? `<button class="btn btn-ghost" id="btnClearImalatFiyat">Vazgeç</button>` : ''}
       </div>
       <div class="table-scroll" id="imalatFiyatTableWrap" style="margin-top:10px;">${renderImalatFiyatTableHtml()}</div>
-    </div>
-
-    <div class="card glass">
-      <h2>Teklif Notu</h2>
-      <div class="field-grid field-grid-single">
-        <div class="field">
-          <textarea id="t-note" rows="3" style="width:100%;padding:9px 10px;border-radius:10px;border:1px solid rgba(11,36,54,0.15);background:rgba(255,255,255,0.6);font-family:var(--font-body);font-size:0.85rem;color:var(--ink);resize:vertical;" placeholder="Örn: Fiyatlarımız 30 gün geçerlidir. KDV hariçtir.">${esc(aktif.teklifNote||'')}</textarea>
-        </div>
-      </div>
-    </div>
-
-    <div class="card glass">
-      <h2>Teklif Kalemleri${aktif.teklifNo ? ` — <span style="color:var(--aqua-dim)">${esc(aktif.teklifNo)}</span>` : ''}</h2>
-      <div class="table-scroll" id="teklifTableWrap"></div>
-      <div class="totals-strip" id="teklifTotals"></div>
-      <div class="btn-row">
-        <button class="btn btn-ghost" id="btnMergeTeklif">Aynı Kalemleri Birleştir</button>
-        <button class="btn btn-primary" id="btnTeklifPdf">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg>
-          Teklif PDF'ini İndir
-        </button>
-      </div>
     </div>
   `;
   ['aciklama','miktar','birim','birimFiyat','kdvOrani'].forEach(k=>{
