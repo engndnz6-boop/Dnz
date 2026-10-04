@@ -3306,7 +3306,12 @@ function teklifBostMu(t){
 // teklifi açmak için değil (bkz. goToRecord), her zaman boş/yeni bir teklif panoda görünsün diye.
 function enterTeklifTab(){
   const mevcut = tumTeklifKayitlari().find(t=>t.id===ui.aktifTeklifKayitId);
-  if(!teklifBostMu(mevcut)){
+  // "mevcut" yoksa (aktifTeklifKayitId boş/geçersiz — ör. uygulama yeni açıldığında henüz
+  // Teklif'e hiç girilmemişse) bunu "zaten boş" sayıp hiçbir şey yapmazsak, az sonra
+  // ensureAktifTeklifKaydi() geçersiz id'yi EN ESKİ kayıtlı tekliфe (listedeki ilk/dolu kayda)
+  // düşürüyordu — "dolu teklifle karşılama" hatasının asıl kaynağı buydu. Artık mevcut yoksa
+  // da (dolu olup olmadığına bakılmaksızın) yeni boş bir teklif açılıyor.
+  if(!mevcut || !teklifBostMu(mevcut)){
     yeniTeklifEkleGlobal();
     saveState();
   }
