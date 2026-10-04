@@ -976,11 +976,10 @@ header.topbar{
   margin:10px auto 0;
   padding:12px 16px;
   display:flex;align-items:center;gap:12px;flex-wrap:wrap;
-  max-width:1180px;
   width:calc(100% - 20px);
   box-sizing:border-box;
 }
-.brand{display:flex;align-items:center;gap:10px;min-width:0;flex-shrink:0;}
+.brand{display:flex;align-items:flex-start;gap:10px;min-width:0;flex-shrink:0;}
 .brand-mark{
   width:104px;height:38px;border-radius:10px;flex-shrink:0;
   background:#FFFFFF;
@@ -991,7 +990,11 @@ header.topbar{
 .brand-mark svg{width:22px;height:22px;}
 .brand-mark img{width:100%;height:100%;object-fit:contain;display:block;}
 .brand-text{display:flex;flex-direction:column;line-height:1.05;min-width:0;max-width:52vw;}
-.brand-text b{font-family:var(--font-display);font-weight:800;font-size:1.15rem;letter-spacing:0.5px;color:var(--ink);white-space:normal;overflow-wrap:break-word;line-height:1.15;}
+.brand-text b{
+  font-family:var(--font-display);font-weight:800;font-size:1.15rem;letter-spacing:0.5px;color:var(--ink);
+  white-space:normal;overflow-wrap:break-word;line-height:1.2;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+}
 .brand-text span{font-size:0.68rem;color:var(--ink-soft);font-weight:500;letter-spacing:0.3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 
 .project-picker{
@@ -1061,7 +1064,7 @@ nav.tabs::-webkit-scrollbar-thumb{background:rgba(11,36,54,0.2);border-radius:10
 }
 .tab-btn:not(.active):hover{background:rgba(255,255,255,0.5);color:var(--ink);}
 
-main{flex:1;min-width:0;width:100%;padding:0 10px 40px 10px;display:flex;flex-direction:column;gap:14px;max-width:1180px;margin:0 auto;width:100%;}
+main{flex:1;min-width:0;width:100%;padding:0 10px 40px 10px;display:flex;flex-direction:column;gap:14px;margin:0 auto;width:100%;}
 
 .card{padding:18px;display:flex;flex-direction:column;gap:14px;min-width:0;}
 .card h2{margin:0;font-family:var(--font-display);font-size:1.05rem;font-weight:700;display:flex;align-items:center;gap:8px;}
@@ -1803,7 +1806,7 @@ header.topbar{
 }
 main{
   overflow-x:hidden;
-  max-width:min(1180px, 100%);
+  max-width:100%;
 }
 .card,.glass{max-width:100%;}
 .btn-row{max-width:100%;}
@@ -2003,17 +2006,11 @@ main{
       <button type="button" class="icon-btn ripple-el-host" id="headerAyarlarBtn" title="Ayarlar" style="display:none;">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 004.6 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.6a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
       </button>
-      <button type="button" class="icon-btn ripple-el-host" id="dnzLogoutBtn" onclick="if(confirm('Çıkış yapmak istediğinize emin misiniz?')) dnzLogout();" title="Çıkış Yap">
+      <button type="button" class="icon-btn ripple-el-host" id="dnzLogoutBtn" onclick="handleLogoutClick();" title="Çıkış Yap">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>
       </button>
     </div>
   </header>
-
-  <div id="backupBanner" class="backup-banner" style="display:none;">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4M12 17h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
-    <span>Kaydedilmemiş yedeğiniz var. Verilerinizi kaybetmemek için Ayarlar &gt; "Yedeği İndir" ile yedek alın.</span>
-    <button class="btn btn-sm btn-primary" id="bannerBackupBtn">Şimdi Yedekle</button>
-  </div>
 
   <div class="nav-backdrop" id="navBackdrop"></div>
   <nav class="tabs glass" id="tabNav">
@@ -3297,6 +3294,24 @@ function yeniTeklifEkleGlobal(){
   ui.aktifTeklifKayitId = t.id;
   return t;
 }
+// Bir teklif hiç dokunulmamış (boş) mı? Teklif sekmesine her girişte yeni bir teklif açmak
+// isteniyor; ama zaten boş bir teklif aktifse (ör. az önce girilip hiçbir şey yazılmadan
+// çıkılmışsa) gereksiz boş kayıt birikmesin diye o tekrar kullanılır.
+function teklifBostMu(t){
+  if(!t) return true;
+  return !(t.musteriAdSoyad||'').trim() && !(t.musteriTelefon||'').trim() && !t.projectId &&
+    (!t.teklifRows || t.teklifRows.length===0) && !(t.teklifNote||'').trim() && !t.teklifOnaylandi;
+}
+// Teklif sekmesine GENEL bir giriş noktasından (Anasayfa/menü) girilirken çağrılır: belirli bir
+// teklifi açmak için değil (bkz. goToRecord), her zaman boş/yeni bir teklif panoda görünsün diye.
+function enterTeklifTab(){
+  const mevcut = tumTeklifKayitlari().find(t=>t.id===ui.aktifTeklifKayitId);
+  if(!teklifBostMu(mevcut)){
+    yeniTeklifEkleGlobal();
+    saveState();
+  }
+  ui.tab = 'teklif';
+}
 // Projedeki TÜM bağlı teklifler (state.teklifKayitlari üzerinden).
 function projeTumTeklifler(proj){
   if(!proj) return [];
@@ -3811,14 +3826,29 @@ function fmtBackupDate(ts){
   return `${pad(d.getDate())}.${pad(d.getMonth()+1)}.${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 function updateBackupBanner(){
-  const el = document.getElementById('backupBanner');
-  if(!el) return;
-  if(needsBackupWarning()){
-    el.style.display = 'flex';
-  } else {
-    el.style.display = 'none';
-  }
+  // Kalıcı/sürekli bir yedekleme uyarısı artık ekranda gösterilmiyor; kullanıcı Ayarlar >
+  // "Yedeği İndir" ile istediğinde yedek alabilir. Kaydedilmemiş veri varsa yalnızca
+  // uygulamadan çıkarken (handleLogoutClick / beforeunload) soruluyor.
 }
+// Çıkış (Çıkış Yap) düğmesi: kaydedilmemiş veri varsa önce bunu sorar, yoksa doğrudan
+// eskisi gibi basit bir onay ister.
+function handleLogoutClick(){
+  if(needsBackupWarning()){
+    const cikOnayi = confirm('Kaydedilmemiş değişiklikleriniz var. Yedek almadan çıkmak istediğinize emin misiniz?\n\nTamam: Yedeksiz çık\nVazgeç: Önce yedek indir');
+    if(cikOnayi){ dnzLogout(); } else { exportBackupFile(); }
+    return;
+  }
+  if(confirm('Çıkış yapmak istediğinize emin misiniz?')) dnzLogout();
+}
+// Sekme/pencere kapatılırken (gerçek "uygulamadan çıkış"): kaydedilmemiş veri varsa
+// tarayıcının kendi "ayrılmak istediğinize emin misiniz?" uyarısını tetikler.
+window.addEventListener('beforeunload', (e)=>{
+  if(needsBackupWarning()){
+    e.preventDefault();
+    e.returnValue = 'Kaydedilmemiş bir yedeğiniz var.';
+    return e.returnValue;
+  }
+});
 
 /* ======================= HELPERS ======================= */
 function activeProject(){
@@ -4257,7 +4287,8 @@ document.getElementById('tabNav').addEventListener('click',(e)=>{
   if(actBtn){ closeNav(); openProjectModal(null); return; }
   const btn = e.target.closest('.tab-btn');
   if(!btn || !btn.dataset.tab) return;
-  ui.tab = btn.dataset.tab;
+  if(btn.dataset.tab==='teklif') enterTeklifTab();
+  else ui.tab = btn.dataset.tab;
   renderTabs();
   renderMain();
   pushAppHistory();
@@ -4274,7 +4305,6 @@ document.getElementById('headerAyarlarBtn').addEventListener('click', ()=>{
   renderMain();
   pushAppHistory();
 });
-document.getElementById('bannerBackupBtn').addEventListener('click', exportBackupFile);
 
 /* ======================= AÇIK / KOYU MOD ======================= */
 // Tercih, hesaba değil bu tarayıcıya bağlı basit bir ayar olduğu için localStorage'da
@@ -4564,7 +4594,7 @@ function projeDurum(p){ return (p.durum && PROJE_DURUM_META[p.durum]) ? p.durum 
 // (gerekirse alt sekmesiyle birlikte) geçer.
 // Başlangıç (Anasayfa) ekranındaki 4 kısayol: her zaman görünür, proje gerektirmez.
 const ANASAYFA_QUICK_ACTIONS = [
-  {key:'teklif', label:'Teklif Ver', icon:'<path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/>', go:()=>{ ui.tab='teklif'; }},
+  {key:'teklif', label:'Teklif Ver', icon:'<path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/>', go:()=>{ enterTeklifTab(); }},
   {key:'imalat', label:'İmalat Sistemleri', icon:'<path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/>', go:()=>{ ui.tab='imalat'; }},
   {key:'projeler', label:'Projeler', icon:'<path d="M3 11l9-8 9 8"/><path d="M5 10v10a1 1 0 001 1h4v-6h4v6h4a1 1 0 001-1V10"/>', go:()=>{ ui.tab='raporlar'; ui.raporTab='projelistesi'; }}
   // Not: Ayarlar burada kart olarak yok; üst bardaki dişli ikonuyla açılıyor (mükerrer olmasın diye).
@@ -17312,7 +17342,11 @@ async function buildPdfDoc(html, orientation, opts){
     root.innerHTML = '';
     root.style.cssText = savedRootCss;
   }
-  const imgData = canvas.toDataURL('image/png');
+  // PNG (kayıpsız) yerine JPEG kullanılıyor: html2canvas ile alınan tam sayfa görüntüsü PNG'de
+  // birkaç MB'a çıkabiliyordu (7 MB'a kadar); aynı görüntü %90 kaliteli JPEG'de, düz/beyaz
+  // zeminli bir teklif/rapor sayfası için görsel farkı neredeyse hissedilmeden çok daha küçük
+  // çıkıyor (hedef: ~100-160 KB civarı).
+  const imgData = canvas.toDataURL('image/jpeg', 0.90);
   const { jsPDF } = window.jspdf;
   const pdf = new jsPDF(orientation,'mm', paperSize);
   const pageWidth = orientation==='l' ? paper.l[0] : paper.p[0];
@@ -17329,18 +17363,21 @@ async function buildPdfDoc(html, orientation, opts){
     }
     const x = (pageWidth - imgW) / 2;
     const y = (pageHeight - imgH) / 2;
-    pdf.addImage(imgData,'PNG',x,y,imgW,imgH);
+    pdf.addImage(imgData,'JPEG',x,y,imgW,imgH,'pdfPageImg');
   } else {
+    // Aynı 'alias' ile çağrılan addImage, jsPDF'e aynı görüntü verisini her sayfada yeniden
+    // kodlayıp gömmek yerine (çok sayfalı çıktılarda dosyayı sayfa sayısı kadar şişirmemek için)
+    // önbellekten tekrar kullanmasını söyler.
     const imgWidth = pageWidth;
     const imgHeight = canvas.height * imgWidth / canvas.width;
     let heightLeft = imgHeight;
     let position = 0;
-    pdf.addImage(imgData,'PNG',0,position,imgWidth,imgHeight);
+    pdf.addImage(imgData,'JPEG',0,position,imgWidth,imgHeight,'pdfPageImg');
     heightLeft -= pageHeight;
     while(heightLeft > 0){
       position = heightLeft - imgHeight;
       pdf.addPage();
-      pdf.addImage(imgData,'PNG',0,position,imgWidth,imgHeight);
+      pdf.addImage(imgData,'JPEG',0,position,imgWidth,imgHeight,'pdfPageImg');
       heightLeft -= pageHeight;
     }
   }
@@ -17441,17 +17478,22 @@ async function sharePreparedPdf(prepared, shareOpts){
     candidates.push({ files:[file] });
   }
 
-  let shareData = candidates[0] || null;
+  // ÖNEMLİ: navigator.canShare varsa onun kararına uyulur. Daha önce canShare HİÇBİR
+  // aday için "evet" demese bile kod yine de candidates[0]'ı (dosyalı) deneyip her seferinde
+  // başarısız oluyordu — bazı Android WebView/PWA bağlamlarında dosya paylaşımı gerçekten
+  // desteklenmiyor ve canShare bunu doğru bildiriyor. Artık canShare "hayır" derse dosyalı
+  // paylaşım hiç denenmiyor, doğrudan indirmeye düşülüyor (yanıltıcı "tekrar dene" döngüsü yok).
+  let shareData = null;
   if(typeof navigator.canShare === 'function'){
     for(const c of candidates){
       try{
         if(navigator.canShare(c)){ shareData = c; break; }
       }catch(_){}
     }
-  } else if(text && candidates.length >= 2){
-    // canShare yoksa metinli payload yerine daha güvenli seçenek (metinsiz)
-    // ile tek deneme yap.
-    shareData = candidates[1];
+  } else {
+    // canShare yoksa (eski tarayıcı) iyimser ol: metinli adayı değil, daha geniş
+    // desteklenen metinsiz dosya adayını dene.
+    shareData = candidates[(text && candidates.length>=2) ? 1 : 0] || null;
   }
 
   if(!shareData) return 'unavailable';
@@ -17680,13 +17722,12 @@ function showPdfPreview(html, filename, orientation, opts){
     try{
       const result = await doShareAttempt(btn.__prepared);
       reportShareResult(result);
-      if(result==='unavailable') downloadPrepared(btn.__prepared);
-      if(result==='shared' || result==='downloaded'){
-        btn.onclick = firstShareClick;
-        btn.innerHTML = pvShareOriginalHtml;
-      } else {
-        btn.textContent = 'Tekrar Paylaş';
-      }
+      // İkinci denemede de paylaşılamazsa artık tekrar tekrar denetmiyoruz (yanıltıcı bir
+      // döngüye girmesin diye): her durumda elinde PDF kalsın diye indiriyoruz ve butonu
+      // normale döndürüyoruz.
+      if(result==='unavailable' || result==='share_failed') downloadPrepared(btn.__prepared);
+      btn.onclick = firstShareClick;
+      btn.innerHTML = pvShareOriginalHtml;
     }catch(err){
       console.error(err);
       showToast('Paylaşım sırasında bir sorun oluştu.');
