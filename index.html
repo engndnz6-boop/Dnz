@@ -1065,6 +1065,14 @@ nav.tabs::-webkit-scrollbar-thumb{background:rgba(11,36,54,0.2);border-radius:10
 .tab-btn:not(.active):hover{background:rgba(255,255,255,0.5);color:var(--ink);}
 
 main{flex:1;min-width:0;width:100%;padding:0 10px 40px 10px;display:flex;flex-direction:column;gap:14px;margin:0 auto;width:100%;}
+/* İmalat/Raporlar/Masraflar sekmeleri, kartlarını önce boş bir "alt içerik" kutusunun (ör.
+   #imalatSubContent) İÇİNE basıyor; main'in flex gap'i yalnızca main'in DOĞRUDAN çocukları
+   arasında çalıştığı için bu kutunun içindeki kartlar (PC'de özellikle göze çarpacak şekilde)
+   birbirine yapışık görünüyordu. Kutuyu da aynı boşlukla kendi flex-column'u yapıyoruz.
+   max-width/overflow da main'in kendisiyle aynı: içerik ekrandan taşmasın.*/
+#imalatSubContent,#reportSubContent,#masraflarSubContent{
+  display:flex;flex-direction:column;gap:14px;min-width:0;max-width:100%;
+}
 
 .card{padding:18px;display:flex;flex-direction:column;gap:14px;min-width:0;}
 .card h2{margin:0;font-family:var(--font-display);font-size:1.05rem;font-weight:700;display:flex;align-items:center;gap:8px;}
@@ -4255,9 +4263,9 @@ function renderTabs(){
   const isHome = ui.tab==='projeler';
   const menuBtn = document.getElementById('btnMenuToggle');
   if(menuBtn) menuBtn.style.display = isHome ? 'none' : '';
-  // Teklif, Anasayfa gibi projeden bağımsızdır: üstteki proje adı seçici orada da gizlenir
-  // (teklif bir projeye bağlıysa zaten kendi "Projeye Bağla" alanından görülür).
-  const hideProjeSecici = isHome || ui.tab==='teklif';
+  // Teklif ve İmalat Sistemleri, Anasayfa gibi projeden bağımsızdır: üstteki proje adı seçici
+  // orada da gizlenir (projeye bağlıysa zaten kendi "Projeye Bağla" alanından görülür).
+  const hideProjeSecici = isHome || ui.tab==='teklif' || ui.tab==='imalat';
   const projSel = document.getElementById('projectSelect');
   if(projSel) projSel.style.display = hideProjeSecici ? 'none' : '';
   // Başlangıç ekranında üst barda proje seçici yerine genel arama kutusu ve Ayarlar
@@ -4267,6 +4275,11 @@ function renderTabs(){
   if(headerArama) headerArama.style.display = isHome ? '' : 'none';
   const headerAyarlar = document.getElementById('headerAyarlarBtn');
   if(headerAyarlar) headerAyarlar.style.display = isHome ? '' : 'none';
+  // Gece/gündüz modu ve Çıkış Yap simgeleri de artık yalnızca Anasayfa'da görünür.
+  const headerTema = document.getElementById('dnzThemeBtn');
+  if(headerTema) headerTema.style.display = isHome ? '' : 'none';
+  const headerCikis = document.getElementById('dnzLogoutBtn');
+  if(headerCikis) headerCikis.style.display = isHome ? '' : 'none';
 }
 function goToAnasayfa(){
   ui.tab = 'projeler';
@@ -4810,7 +4823,7 @@ function renderProjelerTab(main){
     <div class="card glass">
       <h2>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>
-        Dashboard
+        Projeler Sonuç Paneli
       </h2>
       <div class="totals-strip">
         <div class="total-chip"><span class="lbl">Biten Proje</span><span class="val">${dash.biten}</span></div>
