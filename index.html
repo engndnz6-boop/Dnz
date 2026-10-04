@@ -6303,26 +6303,6 @@ function renderTeklifTab(main){
     </div>
 
     <div class="card glass">
-      <h2>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
-        İmalat Cinsi Fiyat Listesi
-      </h2>
-      <div class="field-grid" style="grid-template-columns:repeat(2,minmax(140px,1fr));">
-        <div class="field" style="grid-column:span 2;"><label>İmalat Adı</label>
-          <input type="text" id="if-ad" value="${esc(imalatFiyatForm.ad)}" placeholder="Örn: Bölme Duvar İmalatı">
-        </div>
-        <div class="field" style="grid-column:span 2;"><label>Birim Fiyat (TL)</label>
-          <input class="mono" type="number" step="any" id="if-fiyat" value="${esc(imalatFiyatForm.fiyat)}">
-        </div>
-      </div>
-      <div class="btn-row">
-        <button class="btn btn-primary ripple-el-host" id="btnSaveImalatFiyat">${imalatFiyatForm.id?'Güncelle':'Kaydet'}</button>
-        ${imalatFiyatForm.id ? `<button class="btn btn-ghost" id="btnClearImalatFiyat">Vazgeç</button>` : ''}
-      </div>
-      <div class="table-scroll" id="imalatFiyatTableWrap" style="margin-top:10px;">${renderImalatFiyatTableHtml()}</div>
-    </div>
-
-    <div class="card glass">
       <h2>Teklif Notu</h2>
       <div class="field-grid field-grid-single">
         <div class="field">
@@ -6368,6 +6348,26 @@ function renderTeklifTab(main){
           </div>`;
         }).join('')}
       </div>
+    </div>
+
+    <div class="card glass">
+      <h2>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+        İmalat Cinsi Fiyat Listesi
+      </h2>
+      <div class="field-grid" style="grid-template-columns:repeat(2,minmax(140px,1fr));">
+        <div class="field" style="grid-column:span 2;"><label>İmalat Adı</label>
+          <input type="text" id="if-ad" value="${esc(imalatFiyatForm.ad)}" placeholder="Örn: Bölme Duvar İmalatı">
+        </div>
+        <div class="field" style="grid-column:span 2;"><label>Birim Fiyat (TL)</label>
+          <input class="mono" type="number" step="any" id="if-fiyat" value="${esc(imalatFiyatForm.fiyat)}">
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary ripple-el-host" id="btnSaveImalatFiyat">${imalatFiyatForm.id?'Güncelle':'Kaydet'}</button>
+        ${imalatFiyatForm.id ? `<button class="btn btn-ghost" id="btnClearImalatFiyat">Vazgeç</button>` : ''}
+      </div>
+      <div class="table-scroll" id="imalatFiyatTableWrap" style="margin-top:10px;">${renderImalatFiyatTableHtml()}</div>
     </div>
   `;
   ['aciklama','miktar','birim','birimFiyat','kdvOrani'].forEach(k=>{
@@ -17602,6 +17602,17 @@ function showPdfPreview(html, filename, orientation, opts){
   const previewNode = document.getElementById('pdfPreviewNode');
   const scaleWrap = document.getElementById('pdfPreviewScaleWrap');
   let previewResizeObs = null;
+  // "Paylaş"a dokunulduğu an navigator.share() gecikmesiz çağrılsın diye PDF'i önizleme
+  // açılır açılmaz, arka planda, kullanıcı henüz Paylaş'a basmadan önce hazırlıyoruz.
+  // (PDF üretimi -özellikle html2canvas ile sayfanın resme dönüştürülmesi- yüz(lerce)
+  // milisaniye sürebiliyor; bu süre navigator.share'den ÖNCE beklenirse mobil
+  // tarayıcılar "kullanıcı jesti" bağlantısını kaybedip paylaşım menüsünü sessizce
+  // açmadan direkt indirmeye düşebiliyor. Dosya önceden hazır olunca paylaş anındaki
+  // bekleme neredeyse sıfıra iner ve jest korunur.)
+  let preparedPdfPromise = preparePdfFile(html, filename, orientation, opts).catch(e=>{
+    console.error('PDF ön hazırlık hatası', e);
+    return null;
+  });
   // Dar ekranlarda (mobil) sabit genişlikli (794/1123px) belgeyi modal genişliğine
   // sığdırmak için ölçekliyoruz; böylece yatay kaydırmadan tüm sayfa görülebiliyor.
   const fitScale = ()=>{
@@ -17650,33 +17661,72 @@ function showPdfPreview(html, filename, orientation, opts){
   document.getElementById('modalBackdrop').addEventListener('click',(e)=>{ if(e.target.id==='modalBackdrop') cleanupAndClose(); });
   document.getElementById('pvClose').onclick = cleanupAndClose;
   document.getElementById('pvExcel').onclick = ()=> exportHtmlTablesToExcel(previewNode, filename);
-  document.getElementById('pvShare').onclick = async (e)=>{
+  const pvShareBtn = document.getElementById('pvShare');
+  const pvShareOriginalHtml = pvShareBtn.innerHTML;
+  const doShareAttempt = (prepared)=> sharePreparedPdf(prepared, {
+    title: opts.shareTitle || filename,
+    text: shareTextDefault,
+    allowDownloadFallback: true
+  });
+  const downloadPrepared = (prepared)=>{
+    if(prepared.blob) triggerBlobDownload(prepared.blob, prepared.filename || filename);
+    else if(prepared.pdf){ try{ prepared.pdf.save(prepared.filename || filename); }catch(_){} }
+  };
+  // İkinci (yeniden) dokunuş: kullanıcının BU dokunuşu tarayıcı için tamamen yeni ve geçerli
+  // bir jesttir, bu yüzden navigator.share burada hiç beklemeden tekrar denenir.
+  const retryShareClick = async (e)=>{
     const btn = e.currentTarget;
-    const originalHtml = btn.innerHTML;
+    btn.disabled = true;
+    try{
+      const result = await doShareAttempt(btn.__prepared);
+      reportShareResult(result);
+      if(result==='unavailable') downloadPrepared(btn.__prepared);
+      if(result==='shared' || result==='downloaded'){
+        btn.onclick = firstShareClick;
+        btn.innerHTML = pvShareOriginalHtml;
+      } else {
+        btn.textContent = 'Tekrar Paylaş';
+      }
+    }catch(err){
+      console.error(err);
+      showToast('Paylaşım sırasında bir sorun oluştu.');
+    }finally{
+      btn.disabled = false;
+    }
+  };
+  // İlk dokunuş: arka planda önceden hazırlanmış PDF'i paylaşmayı dener (genelde hazırdır,
+  // bekleme neredeyse sıfır, dokunuş geçerliliği korunur). Eğer yine de (bazı Android/WebView
+  // sürümlerinde olduğu gibi) tarayıcı bu çağrıyı "dokunuşla bağlantılı değil" sayıp paylaşımı
+  // sessizce reddederse ('share_failed'), DNZ Defter'de de işe yarayan aynı çözümü uyguluyoruz:
+  // dosyayı indirmek yerine butonu "Tekrar Paylaş"a çeviriyoruz — ikinci dokunuş yeni bir jest
+  // sayıldığından paylaşım bu kez açılır.
+  const firstShareClick = async (e)=>{
+    const btn = e.currentTarget;
     btn.disabled = true;
     btn.textContent = 'Hazırlanıyor…';
     try{
-      const prepared = await preparePdfFile(html, filename, orientation, opts);
-      const result = await sharePreparedPdf(prepared, {
-        title: opts.shareTitle || filename,
-        text: shareTextDefault,
-        allowDownloadFallback: true
-      });
-      reportShareResult(result);
-      // 'share_failed' (mobilde gerçek bir paylaşım hatası) veya 'unavailable' durumunda
-      // sharePreparedPdf kendiliğinden indirmez; burada elle indirerek kullanıcı eli boş kalmasın.
-      if(result==='unavailable' || result==='share_failed'){
-        if(prepared.blob) triggerBlobDownload(prepared.blob, prepared.filename || filename);
-        else if(prepared.pdf){ try{ prepared.pdf.save(prepared.filename || filename); }catch(_){} }
+      let prepared = await preparedPdfPromise;
+      if(!prepared) prepared = await preparePdfFile(html, filename, orientation, opts);
+      const result = await doShareAttempt(prepared);
+      if(result==='share_failed'){
+        showToast('PDF hazır — paylaşmak için butona bir kez daha dokunun.');
+        btn.textContent = 'Tekrar Paylaş';
+        btn.__prepared = prepared;
+        btn.onclick = retryShareClick;
+        btn.disabled = false;
+        return;
       }
+      reportShareResult(result);
+      if(result==='unavailable') downloadPrepared(prepared);
     }catch(err){
       console.error(err);
       showToast('PDF hazırlanırken bir sorun oluştu.');
     }finally{
       btn.disabled = false;
-      btn.innerHTML = originalHtml;
+      if(btn.textContent==='Hazırlanıyor…') btn.innerHTML = pvShareOriginalHtml;
     }
   };
+  pvShareBtn.onclick = firstShareClick;
   document.getElementById('pvDownload').onclick = async ()=>{
     const btn = document.getElementById('pvDownload');
     btn.disabled = true; btn.textContent = 'Hazırlanıyor…';
