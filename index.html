@@ -1372,7 +1372,8 @@ td.num,th.num{font-family:var(--font-mono);text-align:right;}
 .project-item .pinfo b{display:block;font-family:var(--font-display);font-size:0.92rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .project-item .pinfo .pbadges{display:flex;flex-wrap:wrap;gap:5px;margin:3px 0;}
 .project-item .pinfo span{font-size:0.72rem;color:var(--ink-soft);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;}
-/* Teklif listesi: kart değil, sade/ince bir liste. Satıra tıklayınca aç/kapa (toggle); .teklif-detay o satırın hemen altına "iç içe" gelir. */
+/* Teklif listesi: kart değil, sade/ince bir liste. Satır tıklanınca "Yeni Teklif" panosundaki
+   teklif değişir (o teklif panoda görüntülenir); liste kendisi her zaman sade/kapalı kalır. */
 .teklif-list{display:flex;flex-direction:column;}
 .teklif-row{
   display:flex;align-items:center;gap:8px;padding:9px 6px;cursor:pointer;
@@ -1385,25 +1386,7 @@ td.num,th.num{font-family:var(--font-mono);text-align:right;}
 .teklif-row .pinfo b{display:block;font-family:var(--font-display);font-size:0.88rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .teklif-row .pinfo span{font-size:0.72rem;color:var(--ink-soft);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;}
 .teklif-row .icon-btn{width:30px;height:30px;flex-shrink:0;}
-.teklif-chevron{width:16px;height:16px;flex-shrink:0;color:var(--ink-soft);transition:transform 160ms ease;}
-.teklif-row.active .teklif-chevron{transform:rotate(180deg);color:var(--aqua-dim);}
 html[data-theme="dark"] .teklif-row{border-bottom-color:rgba(255,255,255,0.1);}
-/* Teklif detay paneli: "iç içe" (accordion) açılır, .teklif-detay o satırın hemen altına gelir. */
-.teklif-detay{
-  margin:-2px 0 4px 14px;padding:12px 14px 14px;
-  border-left:2px solid var(--aqua-dim);border-radius:0 12px 12px 0;
-  background:rgba(47,143,227,0.06);
-  display:flex;flex-direction:column;gap:14px;
-}
-.teklif-detay-alt{display:flex;flex-direction:column;gap:10px;padding-top:10px;border-top:1px dashed rgba(11,36,54,0.12);}
-.teklif-detay-alt:first-child{padding-top:0;border-top:none;}
-.teklif-detay h3{margin:0;font-family:var(--font-display);font-size:0.88rem;font-weight:700;display:flex;align-items:center;gap:7px;color:var(--ink);}
-.teklif-detay h3 svg{width:16px;height:16px;color:var(--aqua-dim);}
-html[data-theme="dark"] .teklif-detay{background:rgba(47,143,227,0.1);}
-html[data-theme="dark"] .teklif-detay-alt{border-top-color:rgba(255,255,255,0.12);}
-@media (max-width:640px){
-  .teklif-detay{margin-left:6px;padding:10px 10px 12px;}
-}
 
 /* Kaydedilen ürün kart ızgarası */
 .urun-kart-grid{
@@ -3381,7 +3364,6 @@ let ui = {
   metrajEditId:null,
   teklifEditId:null,
   aktifTeklifKayitId:null,
-  teklifPanelAcik:true, // Teklif listesinde o an açık (genişletilmiş) kartın gösterilip gösterilmeyeceği
   filters:{blok:'',kat:'',daire:'',mekan:'',eleman:'',imalat:'',minha:''},
   icmalFilters:{blok:'',kat:'',daire:'',mekan:''},
   puantajAy: currentYm(),
@@ -6240,7 +6222,8 @@ function findImalatFiyat(imalatAdi){
 function renderTeklifTab(main){
   const aktif = ensureAktifTeklifKaydi();
   ensureTeklifNo(aktif);
-  const tumTeklifler = tumTeklifKayitlari();
+  // Eski Teklifler listesi varsayılan olarak yeniden eskiye sıralanır.
+  const tumTeklifler = tumTeklifKayitlari().slice().sort((a,b)=>(b.olusturmaTarihi||0)-(a.olusturmaTarihi||0));
   tumTeklifler.forEach(t=>ensureTeklifNo(t));
   const bagliProje = aktif.projectId && state.projects[aktif.projectId] ? state.projects[aktif.projectId] : null;
   const projeOpts = Object.values(state.projects||{}).slice().sort((a,b)=>(a.name||'').localeCompare(b.name||'','tr'))
@@ -6249,122 +6232,73 @@ function renderTeklifTab(main){
     <div class="card glass">
       <h2>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"/></svg>
-        Teklifler
+        Yeni Teklif${aktif.teklifNo ? ` — <span style="color:var(--aqua-dim)">${esc(aktif.teklifNo)}</span>` : ''}
         <button class="icon-btn ripple-el-host" id="btnYeniTeklif" title="Yeni Teklif" style="margin-left:auto;">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
         </button>
       </h2>
-      <div class="teklif-list" id="teklifListesi">
-        ${tumTeklifler.map(t=>{
-          const p = t.projectId && state.projects[t.projectId] ? state.projects[t.projectId].name : (t.musteriAdSoyad || null);
-          const no = t.teklifNo || (normalizeTeklifNoPrefix(t.teklifNoPrefix)+'-…');
-          const acikMi = t.id===aktif.id && ui.teklifPanelAcik;
-          const satir = `
-          <div class="teklif-row ${acikMi?'active':''}" data-id="${t.id}">
-            <div class="pinfo">
-              <b>${esc(no)}</b>
-              <span>${p ? esc(p) : 'Projeye/müşteriye bağlı değil'} · ${fmtMoney(teklifKdvliToplam(t).brut)}</span>
-            </div>
-            ${acikMi ? `
-            <button class="icon-btn" data-act="copy" title="Kopyala">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
-            </button>
-            <button class="icon-btn danger" data-act="delete" ${tumTeklifler.length<2?'disabled':''} title="${tumTeklifler.length<2?'En az bir teklif kalmalı':'Sil'}">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0l-1 14a2 2 0 01-2 2H7a2 2 0 01-2-2L4 6h16z"/></svg>
-            </button>` : ''}
-            <svg class="teklif-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
-          </div>`;
-          // Yalnızca tıklanan (açık) teklifin ayrıntıları, tam bu satırın altına "iç içe" açılır.
-          const detay = !acikMi ? '' : `
-          <div class="teklif-detay">
-            <div class="field-grid field-grid-single">
-              <div class="field"><label>Projeye Bağla (isteğe bağlı)</label>
-                <select id="t-projeBagla">
-                  <option value="">— Sadece müşteriye bağlı (proje yok) —</option>
-                  ${projeOpts}
-                </select>
-              </div>
-            </div>
-            <div class="field-grid tk-kdv-row" style="grid-template-columns:repeat(3,minmax(160px,1fr));margin-top:6px;">
-              <div class="field"><label>Teklif Tarihi</label>
-                <input type="date" id="t-teklifTarihi" value="${esc(aktif.teklifTarihi||isoToday())}">
-              </div>
-              <div class="field"><label>Teklif Geçerlilik Tarihi</label>
-                <input type="date" id="t-gecerlilikTarihi" value="${esc(aktif.gecerlilikTarihi||'')}">
-              </div>
-              <div class="field"><label>Müşteri Adı Soyadı</label>
-                <input type="text" id="t-musteriAdSoyad" value="${esc(aktif.musteriAdSoyad||'')}" placeholder="Örn: Engin Deniz">
-              </div>
-              <div class="field"><label>Müşteri Telefon</label>
-                <input type="tel" id="t-musteriTelefon" value="${esc(aktif.musteriTelefon||'')}" placeholder="Örn: 0532 000 00 00" inputmode="tel">
-              </div>
-              <div class="field"><label>Teklif No Öneki (3 harf)</label>
-                <div style="display:flex;gap:8px;align-items:center;">
-                  <input type="text" id="t-teklifNoPrefix" value="${esc(normalizeTeklifNoPrefix(aktif.teklifNoPrefix))}" maxlength="3" placeholder="DNZ" style="text-transform:uppercase;letter-spacing:2px;font-weight:700;max-width:90px;">
-                  <span class="mono" id="t-teklifNoPreview" style="font-size:0.85rem;color:var(--aqua-dim);font-weight:700;">${esc(aktif.teklifNo || (normalizeTeklifNoPrefix(aktif.teklifNoPrefix)+'-'+buildTeklifNoSuffix()))}</span>
-                </div>
-              </div>
-              <label style="display:flex;align-items:center;gap:8px;margin-top:22px;cursor:pointer;font-size:0.85rem;color:var(--ink-soft);">
-                <input type="checkbox" id="t-onay" ${aktif.teklifOnaylandi?'checked':''} ${bagliProje?'':'disabled'} style="width:18px;height:18px;">
-                <span>Bu teklif onaylı${bagliProje?' (bağlı projenin İşverenden Alınacak toplamına dahil)':' (önce bir projeye bağlayın)'}</span>
-              </label>
-            </div>
+      <div class="field-grid field-grid-single">
+        <div class="field"><label>Projeye Bağla (isteğe bağlı)</label>
+          <select id="t-projeBagla">
+            <option value="">— Sadece müşteriye bağlı (proje yok) —</option>
+            ${projeOpts}
+          </select>
+        </div>
+      </div>
+      <div class="field-grid tk-kdv-row" style="grid-template-columns:repeat(3,minmax(160px,1fr));margin-top:6px;">
+        <div class="field"><label>Teklif Tarihi</label>
+          <input type="date" id="t-teklifTarihi" value="${esc(aktif.teklifTarihi||isoToday())}">
+        </div>
+        <div class="field"><label>Teklif Geçerlilik Tarihi</label>
+          <input type="date" id="t-gecerlilikTarihi" value="${esc(aktif.gecerlilikTarihi||'')}">
+        </div>
+        <div class="field"><label>Müşteri Adı Soyadı</label>
+          <input type="text" id="t-musteriAdSoyad" value="${esc(aktif.musteriAdSoyad||'')}" placeholder="Örn: Engin Deniz">
+        </div>
+        <div class="field"><label>Müşteri Telefon</label>
+          <input type="tel" id="t-musteriTelefon" value="${esc(aktif.musteriTelefon||'')}" placeholder="Örn: 0532 000 00 00" inputmode="tel">
+        </div>
+        <div class="field"><label>Teklif No Öneki (3 harf)</label>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <input type="text" id="t-teklifNoPrefix" value="${esc(normalizeTeklifNoPrefix(aktif.teklifNoPrefix))}" maxlength="3" placeholder="DNZ" style="text-transform:uppercase;letter-spacing:2px;font-weight:700;max-width:90px;">
+            <span class="mono" id="t-teklifNoPreview" style="font-size:0.85rem;color:var(--aqua-dim);font-weight:700;">${esc(aktif.teklifNo || (normalizeTeklifNoPrefix(aktif.teklifNoPrefix)+'-'+buildTeklifNoSuffix()))}</span>
+          </div>
+        </div>
+        <label style="display:flex;align-items:center;gap:8px;margin-top:22px;cursor:pointer;font-size:0.85rem;color:var(--ink-soft);">
+          <input type="checkbox" id="t-onay" ${aktif.teklifOnaylandi?'checked':''} ${bagliProje?'':'disabled'} style="width:18px;height:18px;">
+          <span>Bu teklif onaylı${bagliProje?' (bağlı projenin İşverenden Alınacak toplamına dahil)':' (önce bir projeye bağlayın)'}</span>
+        </label>
+      </div>
+    </div>
 
-            <div class="teklif-detay-alt">
-              <h3>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
-                Teklif Kalemi Ekle
-              </h3>
-              <div class="field-grid" style="grid-template-columns:repeat(2,minmax(140px,1fr));">
-                <div class="field" style="grid-column:span 2;"><label>Açıklama</label>
-                  <input type="text" id="t-aciklama" value="${esc(teklifForm.aciklama)}" placeholder="Örn: A Blok, 1.Kat, 1.Daire, Salon, Bölme Duvar İmalatı">
-                </div>
-                <div class="field"><label>Miktar</label><input class="mono" type="number" step="any" id="t-miktar" value="${esc(teklifForm.miktar)}"></div>
-                <div class="field"><label>Birim</label>
-                  <select id="t-birim">${UNITS.map(u=>`<option value="${u}" ${u===teklifForm.birim?'selected':''}>${UNIT_LABEL[u]}</option>`).join('')}</select>
-                </div>
-                <div class="field"><label>Birim Fiyat (TL)</label><input class="mono" type="number" step="any" id="t-birimFiyat" value="${esc(teklifForm.birimFiyat)}" style="font-size:0.95rem;"></div>
-                <div class="field"><label>KDV Oranı (%)</label><input class="mono" type="number" step="any" min="0" id="t-kdvOrani" value="${esc(teklifForm.kdvOrani)}" placeholder="0"></div>
-                <div class="field"><label>Tutar (TL)</label><input class="mono" type="text" readonly style="opacity:0.75;font-weight:700;font-size:0.95rem;" id="t-tutarDisplay" value="${fmtMoney((parseFloat(teklifForm.miktar)||0)*(parseFloat(teklifForm.birimFiyat)||0))}"></div>
-              </div>
-              <div class="btn-row">
-                <button class="btn btn-primary" id="btnSaveTeklif">${teklifForm.id?'Kalemi Güncelle':'Kalemi Ekle'}</button>
-                <button class="btn btn-ghost" id="btnClearTeklif">Formu Temizle</button>
-                <button class="btn btn-ghost" id="btnFromMetraj" ${bagliProje?'':'disabled'} title="${bagliProje?'Bağlı projenin metrajından ekle':'Önce bir projeye bağlayın'}">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3h18v18H3z"/></svg>
-                  Metrajdan Ekle
-                </button>
-                <button class="btn btn-ghost" id="btnFromAnaliz" title="Kayıtlı teklif analizlerinden kalem ekle">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
-                  Analizden Ekle
-                </button>
-              </div>
-            </div>
-
-            <div class="teklif-detay-alt">
-              <h3>Teklif Notu</h3>
-              <div class="field-grid field-grid-single">
-                <div class="field">
-                  <textarea id="t-note" rows="3" style="width:100%;padding:9px 10px;border-radius:10px;border:1px solid rgba(11,36,54,0.15);background:rgba(255,255,255,0.6);font-family:var(--font-body);font-size:0.85rem;color:var(--ink);resize:vertical;" placeholder="Örn: Fiyatlarımız 30 gün geçerlidir. KDV hariçtir.">${esc(aktif.teklifNote||'')}</textarea>
-                </div>
-              </div>
-            </div>
-
-            <div class="teklif-detay-alt">
-              <h3>Teklif Kalemleri</h3>
-              <div class="table-scroll" id="teklifTableWrap"></div>
-              <div class="totals-strip" id="teklifTotals"></div>
-              <div class="btn-row">
-                <button class="btn btn-ghost" id="btnMergeTeklif">Aynı Kalemleri Birleştir</button>
-                <button class="btn btn-primary" id="btnTeklifPdf">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg>
-                  Teklif PDF'ini İndir
-                </button>
-              </div>
-            </div>
-          </div>`;
-          return satir + detay;
-        }).join('')}
+    <div class="card glass">
+      <h2>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+        Teklif Kalemi Ekle
+      </h2>
+      <div class="field-grid" style="grid-template-columns:repeat(2,minmax(140px,1fr));">
+        <div class="field" style="grid-column:span 2;"><label>Açıklama</label>
+          <input type="text" id="t-aciklama" value="${esc(teklifForm.aciklama)}" placeholder="Örn: A Blok, 1.Kat, 1.Daire, Salon, Bölme Duvar İmalatı">
+        </div>
+        <div class="field"><label>Miktar</label><input class="mono" type="number" step="any" id="t-miktar" value="${esc(teklifForm.miktar)}"></div>
+        <div class="field"><label>Birim</label>
+          <select id="t-birim">${UNITS.map(u=>`<option value="${u}" ${u===teklifForm.birim?'selected':''}>${UNIT_LABEL[u]}</option>`).join('')}</select>
+        </div>
+        <div class="field"><label>Birim Fiyat (TL)</label><input class="mono" type="number" step="any" id="t-birimFiyat" value="${esc(teklifForm.birimFiyat)}" style="font-size:0.95rem;"></div>
+        <div class="field"><label>KDV Oranı (%)</label><input class="mono" type="number" step="any" min="0" id="t-kdvOrani" value="${esc(teklifForm.kdvOrani)}" placeholder="0"></div>
+        <div class="field"><label>Tutar (TL)</label><input class="mono" type="text" readonly style="opacity:0.75;font-weight:700;font-size:0.95rem;" id="t-tutarDisplay" value="${fmtMoney((parseFloat(teklifForm.miktar)||0)*(parseFloat(teklifForm.birimFiyat)||0))}"></div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary" id="btnSaveTeklif">${teklifForm.id?'Kalemi Güncelle':'Kalemi Ekle'}</button>
+        <button class="btn btn-ghost" id="btnClearTeklif">Formu Temizle</button>
+        <button class="btn btn-ghost" id="btnFromMetraj" ${bagliProje?'':'disabled'} title="${bagliProje?'Bağlı projenin metrajından ekle':'Önce bir projeye bağlayın'}">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3h18v18H3z"/></svg>
+          Metrajdan Ekle
+        </button>
+        <button class="btn btn-ghost" id="btnFromAnaliz" title="Kayıtlı teklif analizlerinden kalem ekle">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+          Analizden Ekle
+        </button>
       </div>
     </div>
 
@@ -6387,43 +6321,86 @@ function renderTeklifTab(main){
       </div>
       <div class="table-scroll" id="imalatFiyatTableWrap" style="margin-top:10px;">${renderImalatFiyatTableHtml()}</div>
     </div>
-  `;
-  // Aşağıdaki alanlar yalnızca o an açık (genişletilmiş) teklifin panelinde vardır;
-  // panel kapalıyken (ui.teklifPanelAcik===false) hiçbiri DOM'da olmaz, bu yüzden
-  // tüm bağlama/dinleyici kurulumu bu korumanın içinde yapılır.
-  if(ui.teklifPanelAcik){
-    ['aciklama','miktar','birim','birimFiyat','kdvOrani'].forEach(k=>{
-      document.getElementById('t-'+k).addEventListener('input', ()=>{
-        teklifForm[k] = document.getElementById('t-'+k).value;
-        document.getElementById('t-tutarDisplay').value = fmtMoney((parseFloat(teklifForm.miktar)||0)*(parseFloat(teklifForm.birimFiyat)||0));
-      });
-    });
-    document.getElementById('btnSaveTeklif').onclick = ()=>saveTeklifRow();
-    document.getElementById('btnClearTeklif').onclick = ()=>{ teklifForm = emptyTeklifForm(); renderMain(); };
-    document.getElementById('btnFromMetraj').onclick = ()=>{
-      if(!bagliProje){ showToast('Metrajdan eklemek için önce bir projeye bağlayın.'); return; }
-      openMetrajPickModal(bagliProje);
-    };
-    document.getElementById('btnFromAnaliz').onclick = ()=> openAnalizKayitPickModal();
-    document.getElementById('btnTeklifPdf').onclick = ()=>openTeklifTemplateModal();
-    document.getElementById('btnMergeTeklif').onclick = ()=>{
-      const before = aktif.teklifRows.length;
-      mergeAllTeklifRows(aktif);
-      const after = aktif.teklifRows.length;
-      saveState();
-      renderMain();
-      if(before===after){ showToast('Birleştirilecek aynı kalem bulunamadı.'); }
-      else { showToast(`${before-after} kalem birleştirildi, ${after} satır kaldı.`); }
-    };
-    let noteSaveTimer = null;
-    document.getElementById('t-note').addEventListener('input',(e)=>{
-      aktif.teklifNote = e.target.value;
-      clearTimeout(noteSaveTimer);
-      noteSaveTimer = setTimeout(()=>saveState(), 500);
-    });
-  }
 
-  // ---- Teklif listesi: satıra tıklayınca aç/kapa (toggle), kopyala, sil ----
+    <div class="card glass">
+      <h2>Teklif Notu</h2>
+      <div class="field-grid field-grid-single">
+        <div class="field">
+          <textarea id="t-note" rows="3" style="width:100%;padding:9px 10px;border-radius:10px;border:1px solid rgba(11,36,54,0.15);background:rgba(255,255,255,0.6);font-family:var(--font-body);font-size:0.85rem;color:var(--ink);resize:vertical;" placeholder="Örn: Fiyatlarımız 30 gün geçerlidir. KDV hariçtir.">${esc(aktif.teklifNote||'')}</textarea>
+        </div>
+      </div>
+    </div>
+
+    <div class="card glass">
+      <h2>Teklif Kalemleri${aktif.teklifNo ? ` — <span style="color:var(--aqua-dim)">${esc(aktif.teklifNo)}</span>` : ''}</h2>
+      <div class="table-scroll" id="teklifTableWrap"></div>
+      <div class="totals-strip" id="teklifTotals"></div>
+      <div class="btn-row">
+        <button class="btn btn-ghost" id="btnMergeTeklif">Aynı Kalemleri Birleştir</button>
+        <button class="btn btn-primary" id="btnTeklifPdf">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg>
+          Teklif PDF'ini İndir
+        </button>
+      </div>
+    </div>
+
+    <div class="card glass">
+      <h2>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 106 5.3L3 8"/><path d="M12 7v5l4 2"/></svg>
+        Eski Teklifler
+      </h2>
+      <div class="teklif-list" id="teklifListesi">
+        ${tumTeklifler.map(t=>{
+          const p = t.projectId && state.projects[t.projectId] ? state.projects[t.projectId].name : (t.musteriAdSoyad || null);
+          const no = t.teklifNo || (normalizeTeklifNoPrefix(t.teklifNoPrefix)+'-…');
+          return `
+          <div class="teklif-row ${t.id===aktif.id?'active':''}" data-id="${t.id}">
+            <div class="pinfo">
+              <b>${esc(no)}</b>
+              <span>${p ? esc(p) : 'Projeye/müşteriye bağlı değil'} · ${fmtMoney(teklifKdvliToplam(t).brut)}</span>
+            </div>
+            <button class="icon-btn" data-act="copy" title="Kopyala">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+            </button>
+            <button class="icon-btn danger" data-act="delete" ${tumTeklifler.length<2?'disabled':''} title="${tumTeklifler.length<2?'En az bir teklif kalmalı':'Sil'}">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0l-1 14a2 2 0 01-2 2H7a2 2 0 01-2-2L4 6h16z"/></svg>
+            </button>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>
+  `;
+  ['aciklama','miktar','birim','birimFiyat','kdvOrani'].forEach(k=>{
+    document.getElementById('t-'+k).addEventListener('input', ()=>{
+      teklifForm[k] = document.getElementById('t-'+k).value;
+      document.getElementById('t-tutarDisplay').value = fmtMoney((parseFloat(teklifForm.miktar)||0)*(parseFloat(teklifForm.birimFiyat)||0));
+    });
+  });
+  document.getElementById('btnSaveTeklif').onclick = ()=>saveTeklifRow();
+  document.getElementById('btnClearTeklif').onclick = ()=>{ teklifForm = emptyTeklifForm(); renderMain(); };
+  document.getElementById('btnFromMetraj').onclick = ()=>{
+    if(!bagliProje){ showToast('Metrajdan eklemek için önce bir projeye bağlayın.'); return; }
+    openMetrajPickModal(bagliProje);
+  };
+  document.getElementById('btnFromAnaliz').onclick = ()=> openAnalizKayitPickModal();
+  document.getElementById('btnTeklifPdf').onclick = ()=>openTeklifTemplateModal();
+  document.getElementById('btnMergeTeklif').onclick = ()=>{
+    const before = aktif.teklifRows.length;
+    mergeAllTeklifRows(aktif);
+    const after = aktif.teklifRows.length;
+    saveState();
+    renderMain();
+    if(before===after){ showToast('Birleştirilecek aynı kalem bulunamadı.'); }
+    else { showToast(`${before-after} kalem birleştirildi, ${after} satır kaldı.`); }
+  };
+  let noteSaveTimer = null;
+  document.getElementById('t-note').addEventListener('input',(e)=>{
+    aktif.teklifNote = e.target.value;
+    clearTimeout(noteSaveTimer);
+    noteSaveTimer = setTimeout(()=>saveState(), 500);
+  });
+
+  // ---- Eski Teklifler listesi: satıra tıklayınca o teklife geç (yukarıdaki panoyu doldurur), kopyala, sil ----
   document.getElementById('teklifListesi').addEventListener('click',(e)=>{
     const item = e.target.closest('.teklif-row');
     if(!item) return;
@@ -6431,7 +6408,6 @@ function renderTeklifTab(main){
     const act = e.target.closest('[data-act]')?.dataset.act;
     if(act==='copy'){
       const copy = kopyalaTeklif(id);
-      ui.teklifPanelAcik = true;
       saveState();
       teklifForm = emptyTeklifForm();
       renderMain();
@@ -6450,87 +6426,82 @@ function renderTeklifTab(main){
         showToast('Teklif silindi.');
       });
     } else {
-      // İkon dışında, satırın herhangi bir yerine tıklanınca: açıksa kapat, kapalıysa (ve gerekirse
-      // başka bir teklifi kapatıp) bu teklifi aç.
-      if(ui.aktifTeklifKayitId===id && ui.teklifPanelAcik){
-        ui.teklifPanelAcik = false;
-      } else {
+      if(ui.aktifTeklifKayitId!==id){
         ui.aktifTeklifKayitId = id;
-        ui.teklifPanelAcik = true;
+        saveState();
+        teklifForm = emptyTeklifForm();
+        renderMain();
+        window.scrollTo({top:0, behavior:'smooth'});
       }
-      saveState();
-      teklifForm = emptyTeklifForm();
-      renderMain();
     }
   });
   document.getElementById('btnYeniTeklif').onclick = ()=>{
     yeniTeklifEkleGlobal();
-    ui.teklifPanelAcik = true;
     saveState();
     teklifForm = emptyTeklifForm();
     renderMain();
     showToast('Yeni teklif oluşturuldu.');
+    window.scrollTo({top:0, behavior:'smooth'});
   };
-  if(ui.teklifPanelAcik){
-    document.getElementById('t-projeBagla').addEventListener('change',(e)=>{
-      const pid = e.target.value || null;
-      aktif.projectId = pid;
-      if(!pid) aktif.teklifOnaylandi = false;
-      else if(state.projects[pid]) state.projects[pid].aktifTeklifId = aktif.id;
-      saveState();
-      renderMain();
-      showToast(pid ? 'Teklif projeye bağlandı.' : 'Teklif yalnızca müşteriye bağlı bırakıldı.');
-    });
-    document.getElementById('t-gecerlilikTarihi').addEventListener('change',(e)=>{
-      aktif.gecerlilikTarihi = e.target.value;
-      saveState();
-    });
-    document.getElementById('t-teklifTarihi').addEventListener('change',(e)=>{
-      aktif.teklifTarihi = e.target.value || isoToday();
-      saveState();
-    });
-    document.getElementById('t-musteriAdSoyad').addEventListener('input',(e)=>{
-      aktif.musteriAdSoyad = e.target.value;
-    });
-    document.getElementById('t-musteriAdSoyad').addEventListener('change',()=> saveState());
-    document.getElementById('t-musteriTelefon').addEventListener('input',(e)=>{
-      aktif.musteriTelefon = e.target.value;
-    });
-    document.getElementById('t-musteriTelefon').addEventListener('change',()=> saveState());
-    const prefixInput = document.getElementById('t-teklifNoPrefix');
-    const noPreview = document.getElementById('t-teklifNoPreview');
-    const refreshNoPreview = ()=>{
-      const prefix = normalizeTeklifNoPrefix(prefixInput.value);
-      prefixInput.value = prefix;
-      aktif.teklifNoPrefix = prefix;
-      if(aktif.teklifNo){
-        ensureTeklifNo(aktif);
-        noPreview.textContent = aktif.teklifNo;
-      } else {
-        noPreview.textContent = prefix + '-' + buildTeklifNoSuffix();
-      }
-    };
-    prefixInput.addEventListener('input', ()=>{
-      // Sadece harfe çevir ve 3 karakterle sınırla; burada DNZ dolgusu UYGULAMIYORUZ.
-      // (Aksi halde her tuş vuruşunda eksik kalan harfler DNZ ile tamamlanır ve
-      // kullanıcı kendi önekini hiç yazamaz.) DNZ sadece boş bırakılırsa (change/blur'da) öneri olarak eklenir.
-      prefixInput.value = prefixInput.value.toUpperCase().replace(/[^A-Z]/g,'').slice(0,3);
-      const previewPrefix = prefixInput.value || 'DNZ';
-      const suffixPart = aktif.teklifNo ? (aktif.teklifNo.split('-')[1] || buildTeklifNoSuffix()) : buildTeklifNoSuffix();
-      noPreview.textContent = previewPrefix + '-' + suffixPart;
-    });
-    prefixInput.addEventListener('change', ()=>{
-      // Alan tamamlanmamışsa/boşsa burada normalize edilip DNZ ile tamamlanır.
-      refreshNoPreview();
-      saveState();
-    });
-    document.getElementById('t-onay').addEventListener('change',(e)=>{
-      aktif.teklifOnaylandi = e.target.checked;
-      saveState();
-    });
-    renderTeklifTable();
-    renderTeklifTotals();
-  }
+  document.getElementById('t-projeBagla').addEventListener('change',(e)=>{
+    const pid = e.target.value || null;
+    aktif.projectId = pid;
+    if(!pid) aktif.teklifOnaylandi = false;
+    else if(state.projects[pid]) state.projects[pid].aktifTeklifId = aktif.id;
+    saveState();
+    renderMain();
+    showToast(pid ? 'Teklif projeye bağlandı.' : 'Teklif yalnızca müşteriye bağlı bırakıldı.');
+  });
+  document.getElementById('t-gecerlilikTarihi').addEventListener('change',(e)=>{
+    aktif.gecerlilikTarihi = e.target.value;
+    saveState();
+  });
+  document.getElementById('t-teklifTarihi').addEventListener('change',(e)=>{
+    aktif.teklifTarihi = e.target.value || isoToday();
+    saveState();
+  });
+  document.getElementById('t-musteriAdSoyad').addEventListener('input',(e)=>{
+    aktif.musteriAdSoyad = e.target.value;
+  });
+  document.getElementById('t-musteriAdSoyad').addEventListener('change',()=> saveState());
+  document.getElementById('t-musteriTelefon').addEventListener('input',(e)=>{
+    aktif.musteriTelefon = e.target.value;
+  });
+  document.getElementById('t-musteriTelefon').addEventListener('change',()=> saveState());
+  const prefixInput = document.getElementById('t-teklifNoPrefix');
+  const noPreview = document.getElementById('t-teklifNoPreview');
+  const refreshNoPreview = ()=>{
+    const prefix = normalizeTeklifNoPrefix(prefixInput.value);
+    prefixInput.value = prefix;
+    aktif.teklifNoPrefix = prefix;
+    if(aktif.teklifNo){
+      ensureTeklifNo(aktif);
+      noPreview.textContent = aktif.teklifNo;
+    } else {
+      noPreview.textContent = prefix + '-' + buildTeklifNoSuffix();
+    }
+  };
+  prefixInput.addEventListener('input', ()=>{
+    // Sadece harfe çevir ve 3 karakterle sınırla; burada DNZ dolgusu UYGULAMIYORUZ.
+    // (Aksi halde her tuş vuruşunda eksik kalan harfler DNZ ile tamamlanır ve
+    // kullanıcı kendi önekini hiç yazamaz.) DNZ sadece boş bırakılırsa (change/blur'da) öneri olarak eklenir.
+    prefixInput.value = prefixInput.value.toUpperCase().replace(/[^A-Z]/g,'').slice(0,3);
+    const previewPrefix = prefixInput.value || 'DNZ';
+    const suffixPart = aktif.teklifNo ? (aktif.teklifNo.split('-')[1] || buildTeklifNoSuffix()) : buildTeklifNoSuffix();
+    noPreview.textContent = previewPrefix + '-' + suffixPart;
+  });
+  prefixInput.addEventListener('change', ()=>{
+    // Alan tamamlanmamışsa/boşsa burada normalize edilip DNZ ile tamamlanır.
+    refreshNoPreview();
+    saveState();
+  });
+  document.getElementById('t-onay').addEventListener('change',(e)=>{
+    aktif.teklifOnaylandi = e.target.checked;
+    saveState();
+  });
+
+  renderTeklifTable();
+  renderTeklifTotals();
   bindImalatFiyatListesiEvents();
 }
 
@@ -17616,7 +17587,6 @@ function showPdfPreview(html, filename, orientation, opts){
             <div id="pdfPreviewNode" style="${pdfBaseStyles(width)}">${html}</div>
           </div>
         </div>
-        <div id="pvSharePanel" style="display:none;margin-top:12px;padding:12px;border-radius:12px;border:1px solid rgba(28,110,140,0.25);background:rgba(234,246,245,0.55);"></div>
         <div class="btn-row" id="pvMainActions" style="margin-top:14px;justify-content:flex-end;flex-wrap:wrap;">
           <button class="btn btn-ghost" id="pvClose">Kapat</button>
           <button class="btn btn-ghost" id="pvExcel">Excel'e Aktar</button>
@@ -17631,8 +17601,6 @@ function showPdfPreview(html, filename, orientation, opts){
   `;
   const previewNode = document.getElementById('pdfPreviewNode');
   const scaleWrap = document.getElementById('pdfPreviewScaleWrap');
-  const sharePanel = document.getElementById('pvSharePanel');
-  const mainActions = document.getElementById('pvMainActions');
   let previewResizeObs = null;
   // Dar ekranlarda (mobil) sabit genişlikli (794/1123px) belgeyi modal genişliğine
   // sığdırmak için ölçekliyoruz; böylece yatay kaydırmadan tüm sayfa görülebiliyor.
@@ -17668,143 +17636,47 @@ function showPdfPreview(html, filename, orientation, opts){
     closeModal();
   };
 
-  const hideSharePanel = ()=>{
-    sharePanel.style.display = 'none';
-    sharePanel.innerHTML = '';
-    mainActions.style.display = '';
-  };
-
+  // Paylaşım sonucuna göre kısa bir bilgi mesajı; hangi uygulamanın seçileceğini
+  // varsaymıyoruz, seçim tamamen sistemin paylaşım menüsünde kullanıcıya ait.
   const reportShareResult = (result)=>{
-    if(result==='shared') showToast('Paylaşım menüsü açıldı — listeden WhatsApp’ı seçin.');
+    if(result==='shared') showToast('Paylaşım menüsü açıldı.');
     else if(result==='cancelled') showToast('Paylaşım iptal edildi.');
     else if(result==='downloaded') showToast('PDF indirildi.');
     else if(result==='unavailable' || result==='share_failed'){
-      showToast(isLikelyMobileDevice()
-        ? 'Paylaşım menüsü açılamadı. PDF indirildi; WhatsApp’tan ekleyebilirsiniz.'
-        : 'Bu tarayıcı dosya paylaşımını desteklemiyor; PDF indirildi.');
-    }
-  };
-
-  // Paylaşım başarısızsa: PDF’i indir + isteğe bağlı WhatsApp sohbeti aç.
-  const fallbackShareMobile = (prepared, phone)=>{
-    if(prepared && prepared.blob){
-      triggerBlobDownload(prepared.blob, prepared.filename || filename);
-    } else if(prepared && prepared.pdf){
-      try{ prepared.pdf.save(prepared.filename || filename); }catch(_){}
-    }
-    if(phone) openWhatsAppChat(phone, shareTextDefault);
-    else if(isLikelyMobileDevice()) openWhatsAppChat('', shareTextDefault);
-  };
-
-  const openSharePanel = async ()=>{
-    mainActions.style.display = 'none';
-    sharePanel.style.display = 'block';
-    sharePanel.innerHTML = `<div class="hint" style="margin:0 0 10px;">PDF hazırlanıyor…</div>`;
-    let prepared;
-    try{
-      prepared = await preparePdfFile(html, filename, orientation, opts);
-    }catch(e){
-      console.error(e);
-      showToast('PDF hazırlanırken bir sorun oluştu.');
-      hideSharePanel();
-      return;
-    }
-
-    const phoneLabel = sharePhone ? esc(formatPhoneDisplay(sharePhone)) : '';
-    const nameBit = shareName ? esc(shareName)+' · ' : '';
-    const hasPhone = !!normalizePhoneDigits(sharePhone);
-    const msgText = shareTextDefault;
-    const canWebShare = typeof navigator.share === 'function';
-
-    sharePanel.innerHTML = `
-      <div style="font-family:var(--font-display);font-weight:700;margin-bottom:6px;">PDF paylaş</div>
-      <p class="hint" style="margin:0 0 10px;">${hasPhone
-        ? `Müşteri: ${nameBit}${phoneLabel}. Aşağıdaki butona basınca paylaşım menüsü açılır — <b>WhatsApp</b>’ı seçin.`
-        : 'Aşağıdaki butona basınca paylaşım menüsü açılır. Listeden <b>WhatsApp</b>’ı seçerek PDF’i gönderebilirsiniz.'}</p>
-      <div class="btn-row" style="flex-direction:column;align-items:stretch;gap:8px;">
-        <button class="btn btn-primary btn-block" id="pvShareWa" ${canWebShare?'':'disabled'}>WhatsApp ile gönder</button>
-        ${hasPhone ? `<button class="btn btn-ghost btn-block" id="pvShareSms">Mesaj (SMS) ile gönder</button>` : ''}
-        <button class="btn btn-ghost btn-block" id="pvShareOther" ${canWebShare?'':'disabled'}>Diğer uygulamalarla paylaş</button>
-        <button class="btn btn-ghost btn-block" id="pvShareDlWa">PDF indir + WhatsApp aç</button>
-        <button class="btn btn-ghost btn-block" id="pvShareCancel">Vazgeç</button>
-      </div>
-      <p class="hint" style="margin:10px 0 0;">${canWebShare
-        ? 'Önemli: Butona basınca hemen paylaşım menüsü açılır (ek onay kutusu yok — mobilde gerekli).'
-        : 'Bu tarayıcı sistem paylaşımını desteklemiyor. “PDF indir + WhatsApp aç” kullanın.'}</p>
-    `;
-
-    document.getElementById('pvShareCancel').onclick = hideSharePanel;
-
-    // ÖNEMLİ: window.confirm KULLANMA — mobilde jesti bozar, navigator.share engellenir.
-    const shareNow = async (btn, label, phoneHint)=>{
-      if(!prepared || !prepared.file){
-        showToast('PDF dosyası hazır değil. “PDF indir + WhatsApp aç” deneyin.');
-        fallbackShareMobile(prepared, sharePhone);
-        return;
-      }
-      btn.disabled = true; btn.textContent = 'Açılıyor…';
-      try{
-        const result = await sharePreparedPdf(prepared, {
-          title: opts.shareTitle || filename,
-          text: msgText,
-          allowDownloadFallback: !isLikelyMobileDevice()
-        });
-        reportShareResult(result);
-        if(result==='shared'){
-          if(phoneHint) showToast('WhatsApp’ı seçin → '+phoneHint);
-        } else if(result!=='cancelled'){
-          fallbackShareMobile(prepared, sharePhone);
-        }
-      }finally{
-        btn.disabled = false; btn.textContent = label;
-      }
-    };
-
-    document.getElementById('pvShareWa').onclick = (e)=>{
-      shareNow(e.currentTarget, 'WhatsApp ile gönder', hasPhone ? formatPhoneDisplay(sharePhone) : '');
-    };
-
-    document.getElementById('pvShareOther').onclick = (e)=>{
-      shareNow(e.currentTarget, 'Diğer uygulamalarla paylaş', '');
-    };
-
-    document.getElementById('pvShareDlWa').onclick = ()=>{
-      fallbackShareMobile(prepared, sharePhone);
-      showToast(hasPhone
-        ? 'PDF indirildi. WhatsApp açılıyor — sohbete PDF ekleyin.'
-        : 'PDF indirildi. WhatsApp açılıyor — kişiyi seçip PDF ekleyin.');
-    };
-
-    const smsBtn = document.getElementById('pvShareSms');
-    if(smsBtn){
-      smsBtn.onclick = async (e)=>{
-        const btn = e.currentTarget;
-        btn.disabled = true; btn.textContent = 'Açılıyor…';
-        try{
-          const result = await sharePreparedPdf(prepared, {
-            title: opts.shareTitle || filename,
-            text: msgText,
-            allowDownloadFallback: false
-          });
-          reportShareResult(result);
-          if(result==='shared'){
-            showToast('Mesaj uygulamasını seçin → '+formatPhoneDisplay(sharePhone));
-          } else if(result!=='cancelled'){
-            if(prepared.blob) triggerBlobDownload(prepared.blob, prepared.filename || filename);
-            openSmsCompose(sharePhone, msgText);
-            showToast('PDF indirildi; Mesaj taslağı açıldı.');
-          }
-        }finally{
-          btn.disabled = false; btn.textContent = 'Mesaj (SMS) ile gönder';
-        }
-      };
+      showToast('Paylaşım menüsü açılamadı; PDF indirildi.');
     }
   };
 
   document.getElementById('modalBackdrop').addEventListener('click',(e)=>{ if(e.target.id==='modalBackdrop') cleanupAndClose(); });
   document.getElementById('pvClose').onclick = cleanupAndClose;
   document.getElementById('pvExcel').onclick = ()=> exportHtmlTablesToExcel(previewNode, filename);
-  document.getElementById('pvShare').onclick = ()=> openSharePanel();
+  document.getElementById('pvShare').onclick = async (e)=>{
+    const btn = e.currentTarget;
+    const originalHtml = btn.innerHTML;
+    btn.disabled = true;
+    btn.textContent = 'Hazırlanıyor…';
+    try{
+      const prepared = await preparePdfFile(html, filename, orientation, opts);
+      const result = await sharePreparedPdf(prepared, {
+        title: opts.shareTitle || filename,
+        text: shareTextDefault,
+        allowDownloadFallback: true
+      });
+      reportShareResult(result);
+      // 'share_failed' (mobilde gerçek bir paylaşım hatası) veya 'unavailable' durumunda
+      // sharePreparedPdf kendiliğinden indirmez; burada elle indirerek kullanıcı eli boş kalmasın.
+      if(result==='unavailable' || result==='share_failed'){
+        if(prepared.blob) triggerBlobDownload(prepared.blob, prepared.filename || filename);
+        else if(prepared.pdf){ try{ prepared.pdf.save(prepared.filename || filename); }catch(_){} }
+      }
+    }catch(err){
+      console.error(err);
+      showToast('PDF hazırlanırken bir sorun oluştu.');
+    }finally{
+      btn.disabled = false;
+      btn.innerHTML = originalHtml;
+    }
+  };
   document.getElementById('pvDownload').onclick = async ()=>{
     const btn = document.getElementById('pvDownload');
     btn.disabled = true; btn.textContent = 'Hazırlanıyor…';
