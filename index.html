@@ -3,13 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
-<title>DNZ</title>
+<title>Dnz Hesap</title>
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#123A5C">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="DNZ">
+<meta name="apple-mobile-web-app-title" content="Dnz Hesap">
 <link rel="apple-touch-icon" href="icon-192.png">
 <link rel="icon" href="icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -1936,7 +1936,7 @@ main{
 <body>
 <div id="authGate" style="position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;background:linear-gradient(160deg,#123A5C,#0A1F3D);font-family:'Inter',sans-serif;padding:16px;">
   <div style="width:100%;max-width:340px;background:rgba(234,246,245,0.96);border-radius:18px;padding:28px 24px;box-shadow:0 8px 32px rgba(178,24,24,0.35);box-sizing:border-box;">
-    <div style="font-family:'Outfit',sans-serif;font-weight:800;font-size:1.3rem;color:#0B2436;margin-bottom:4px;text-align:center;">DNZ</div>
+    <div style="font-family:'Outfit',sans-serif;font-weight:800;font-size:1.3rem;color:#0B2436;margin-bottom:4px;text-align:center;">Dnz Hesap</div>
     <div style="font-size:0.8rem;color:#345264;text-align:center;margin-bottom:18px;">Devam etmek için giriş yapın</div>
     <input id="authEmail" type="email" placeholder="E-posta" autocomplete="username" style="width:100%;padding:11px 12px;margin-bottom:10px;border:1px solid rgba(11,36,54,0.2);border-radius:10px;font-size:0.9rem;box-sizing:border-box;">
     <input id="authPass" type="password" placeholder="Şifre" autocomplete="current-password" style="width:100%;padding:11px 12px;margin-bottom:14px;border:1px solid rgba(11,36,54,0.2);border-radius:10px;font-size:0.9rem;box-sizing:border-box;">
@@ -2079,7 +2079,7 @@ main{
 
   <main id="mainContent"></main>
 
-  <footer class="appfoot">DNZ — cihazınızda ve hesabınızda güvenle saklanır</footer>
+  <footer class="appfoot">Dnz Hesap — cihazınızda ve hesabınızda güvenle saklanır</footer>
 </div>
 
 <div id="modalRoot"></div>
@@ -4263,9 +4263,10 @@ function renderTabs(){
   const isHome = ui.tab==='projeler';
   const menuBtn = document.getElementById('btnMenuToggle');
   if(menuBtn) menuBtn.style.display = isHome ? 'none' : '';
-  // Teklif ve İmalat Sistemleri, Anasayfa gibi projeden bağımsızdır: üstteki proje adı seçici
-  // orada da gizlenir (projeye bağlıysa zaten kendi "Projeye Bağla" alanından görülür).
-  const hideProjeSecici = isHome || ui.tab==='teklif' || ui.tab==='imalat';
+  // Teklif, İmalat Sistemleri ve Ayarlar, Anasayfa gibi projeden bağımsızdır: üstteki proje
+  // adı seçici orada da gizlenir (projeye bağlıysa zaten kendi "Projeye Bağla" alanından
+  // görülür; proje listesi/seçimi artık Ayarlar'daki "Projeler" kartından yapılır).
+  const hideProjeSecici = isHome || ui.tab==='teklif' || ui.tab==='imalat' || ui.tab==='ayarlar';
   const projSel = document.getElementById('projectSelect');
   if(projSel) projSel.style.display = hideProjeSecici ? 'none' : '';
   // Başlangıç ekranında üst barda proje seçici yerine genel arama kutusu ve Ayarlar
@@ -16497,6 +16498,19 @@ function renderAyarlarTab(main){
   main.innerHTML = `
     <div class="card glass">
       <h2>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 11l9-8 9 8"/><path d="M5 10v10a1 1 0 001 1h4v-6h4v6h4a1 1 0 001-1V10"/></svg>
+        Projeler
+      </h2>
+      <p class="hint">Proje listesi, ekleme ve seçim buradan yapılır. Ayarlar da Teklif ve İmalat Sistemleri gibi belirli bir projeye bağlı değildir.</p>
+      <div class="btn-row">
+        <button class="btn btn-primary" id="btnAyarlarProjeler">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 11l9-8 9 8"/><path d="M5 10v10a1 1 0 001 1h4v-6h4v6h4a1 1 0 001-1V10"/></svg>
+          Proje Listesine Git
+        </button>
+      </div>
+    </div>
+    <div class="card glass">
+      <h2>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/></svg>
         Firma Bilgileri
       </h2>
@@ -16780,6 +16794,7 @@ function renderAyarlarTab(main){
     </div>
     ` : ''}
   `;
+  document.getElementById('btnAyarlarProjeler').onclick = ()=> goToProjeListesi();
   document.getElementById('btnSaveCompany').onclick = ()=>{
     state.company.name = document.getElementById('s-companyName').value.trim();
     state.company.vergiDairesi = document.getElementById('s-companyVergiDairesi').value.trim();

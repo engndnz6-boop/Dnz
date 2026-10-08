@@ -1,6 +1,6 @@
 {
-  "name": "DNZ — Metraj & Teklif",
-  "short_name": "DNZ Metraj",
+  "name": "Dnz Hesap",
+  "short_name": "Dnz Hesap",
   "description": "Metraj ve teklif yönetimi uygulaması",
   "start_url": "./index.html",
   "scope": "./",
