@@ -3593,6 +3593,11 @@ function normalizeImalatCatalogState(s){
     if(!u.id) u.id = uid();
     if(!u.paraBirimi || !CURRENCY_INFO[u.paraBirimi]) u.paraBirimi = 'TRY';
     if(u.kur===undefined || u.kur===null) u.kur = null;
+    // Ebat/kg/uzunluk/kalınlık: eski kayıtlarda bulunmayabilir, hepsi isteğe bağlıdır.
+    if(u.ebat===undefined) u.ebat = '';
+    if(u.kg===undefined) u.kg = '';
+    if(u.uzunluk===undefined) u.uzunluk = '';
+    if(u.kalinlik===undefined) u.kalinlik = '';
   });
 }
 function imalatCatalogHasData(catalog){
@@ -7170,7 +7175,7 @@ let imalatMalzemeForm = emptyImalatMalzemeForm();
 // ortaktır — imalatSistemleri ile aynı mantık). Bir sisteme malzeme eklerken "Malzeme Adı"
 // kutusuna bu listeden bir ürün seçilirse, Alış Fiyatı ve Satış Fiyatı otomatik doldurulur;
 // kullanıcı dilerse bu fiyatları elle değiştirebilir.
-function emptyUrunForm(){ return {id:null, ad:'', birim:'', alisFiyat:'', satisFiyat:'', paraBirimi:'TRY', kur:''}; }
+function emptyUrunForm(){ return {id:null, ad:'', birim:'', ebat:'', kg:'', uzunluk:'', kalinlik:'', alisFiyat:'', satisFiyat:'', paraBirimi:'TRY', kur:''}; }
 let urunForm = emptyUrunForm();
 function urunParaBirimi(u){
   return (u && u.paraBirimi && CURRENCY_INFO[u.paraBirimi]) ? u.paraBirimi : 'TRY';
@@ -7196,6 +7201,10 @@ function renderImalatTab(main){
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M8 6h8M8 10h8M8 14h5"/></svg>
           Hesaplama Paneli
         </button>
+        <button class="report-subtab-btn ripple-el-host ${ui.imalatSubTab==='urun'?'active':''}" data-isub="urun">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+          Ürün Ekle
+        </button>
       </div>
     </div>
     <div id="imalatSubContent"></div>
@@ -7209,6 +7218,7 @@ function renderImalatTab(main){
   });
   const sub = document.getElementById('imalatSubContent');
   if(ui.imalatSubTab==='tanim') renderImalatTanimSection(sub);
+  else if(ui.imalatSubTab==='urun') renderImalatUrunSection(sub);
   else renderImalatHesapSection(sub);
 }
 
@@ -7257,59 +7267,6 @@ function renderImalatTanimSection(sub){
         </button>
         ${imalatSistemForm.id? `<button class="btn btn-ghost" id="btnClearSistem">Vazgeç</button>` : ''}
       </div>
-    </div>
-    <div class="card glass" id="urunFiyatFormCard">
-      <h2>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
-        Ürün Ekle
-      </h2>
-      <p class="hint">Kullandığınız ürünleri (ör. "Alçıpan Levha 12.5mm") birimi, para birimi, alış/satış fiyatı ve (dövizse) kuruyla kaydedin. Bu liste tüm imalat sistemlerinde ortaktır; malzeme eklerken ürün seçince fiyat, para birimi ve kur otomatik gelir.</p>
-      <div class="field-grid">
-        <div class="field" style="grid-column:span 2;"><label>Ürün Adı</label>
-          <input type="text" id="ur-ad" value="${esc(urunForm.ad)}" placeholder="Örn: Alçıpan Levha 12.5mm">
-        </div>
-        <div class="field"><label>Birim</label>
-          <select id="ur-birim">
-            <option value="">— Seçiniz —</option>
-            ${IMALAT_UNITS.map(u=>`<option value="${u}" ${(urunForm.birim||'')===u?'selected':''}>${esc(UNIT_LABEL[u]||u)}</option>`).join('')}
-          </select>
-        </div>
-        <div class="field"><label>Para Birimi</label>
-          <select id="ur-paraBirimi">
-            ${Object.keys(CURRENCY_INFO).map(code=>`<option value="${code}" ${(urunForm.paraBirimi||'TRY')===code?'selected':''}>${esc(CURRENCY_INFO[code].name)}</option>`).join('')}
-          </select>
-        </div>
-        ${(()=>{
-          const cur = (urunForm.paraBirimi && CURRENCY_INFO[urunForm.paraBirimi]) ? urunForm.paraBirimi : 'TRY';
-          if(cur==='TRY') return '';
-          const kurOneri = urunForm.kur || kurFieldValue(cur, 'satis') || '';
-          return `<div class="field"><label>Satış Kuru (1 ${esc(CURRENCY_INFO[cur].label)} = ? TL)</label>
-            <input class="mono" type="number" step="any" min="0" id="ur-kur" value="${esc(kurOneri)}" placeholder="Örn: 34.20">
-          </div>`;
-        })()}
-        <div class="field"><label>Alış Fiyatı</label><input class="mono" type="number" step="any" id="ur-alisFiyat" value="${esc(urunForm.alisFiyat)}"></div>
-        <div class="field"><label>Satış Fiyatı</label><input class="mono" type="number" step="any" id="ur-satisFiyat" value="${esc(urunForm.satisFiyat)}"></div>
-      </div>
-      <div class="btn-row">
-        <button class="btn btn-primary ripple-el-host" id="btnSaveUrun">${urunForm.id? 'Ürünü Güncelle':'Ürünü Kaydet'}</button>
-        ${urunForm.id? `<button class="btn btn-ghost" id="btnClearUrun">Vazgeç</button>` : ''}
-      </div>
-    </div>
-    <div class="card glass" id="urunListCard">
-      <h2>Kaydedilen Ürünler <span class="badge">${(state.urunler||[]).length}</span></h2>
-      <p class="hint" style="margin-top:0;">Ürün kartına tıklayınca tüm kayıtlı ürünler açılır; düzenle / sil buradan yapılır.</p>
-      <div class="project-list" id="urunListToggle">
-        <div class="project-item ${ui.imalatUrunListOpen?'active':''}" data-act="toggle-urun-list" role="button" tabindex="0">
-          <div class="pinfo">
-            <b>Ürün</b>
-            <span>${(state.urunler||[]).length} ürün kaydı · ${ui.imalatUrunListOpen?'liste açık — kapatmak için tıklayın':'listeyi açmak için tıklayın'}</span>
-          </div>
-          <button type="button" class="icon-btn" data-act="toggle-urun-list" title="${ui.imalatUrunListOpen?'Listeyi Kapat':'Listeyi Aç'}" aria-label="Ürün listesini aç/kapat">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="transition:transform .2s;${ui.imalatUrunListOpen?'transform:rotate(90deg)':''}"><path d="M9 18l6-6-6-6"/></svg>
-          </button>
-        </div>
-      </div>
-      ${ui.imalatUrunListOpen ? `<div id="urunTableWrap" style="margin-top:12px;">${renderUrunTableHtml()}</div>` : `<div id="urunTableWrap" hidden></div>`}
     </div>
     <div class="card glass">
       <h2>Tanımlı İmalat Sistemleri <span class="badge">${allSistemler.length}</span></h2>
@@ -7381,7 +7338,6 @@ function renderImalatTanimSection(sub){
   document.getElementById('btnSaveSistem').onclick = ()=>saveImalatSistem();
   const clearBtn = document.getElementById('btnClearSistem');
   if(clearBtn) clearBtn.onclick = ()=>{ imalatSistemForm = emptyImalatSistemForm(); renderImalatTab(document.getElementById('mainContent')); };
-  bindUrunFiyatEvents();
   document.getElementById('sistemTipFilter').addEventListener('click', e=>{
     const btn = e.target.closest('[data-tip-filter]');
     if(!btn) return;
@@ -7438,6 +7394,84 @@ function renderImalatTanimSection(sub){
   if(selected) bindImalatMalzemeSectionEvents(selected);
 }
 
+/* ---- Bölüm: Ürün Ekle (Sistem & Malzeme Tanımı ile Hesaplama Paneli'nin yanında, kendi
+   başlığı olan ayrı bir sayfa). Burada kaydedilen ürünler "Kaydedilen Ürünler" listesinde
+   (state.urunler) birikir; bu liste tüm imalat sistemlerinde ortak kullanılır — bir sisteme
+   malzeme eklerken ürün adı seçilince fiyat, para birimi ve kur otomatik gelir. Ürün adı,
+   birim ve fiyatların yanına ürünün fiziksel ölçülerini (ebat, kg, uzunluk, kalınlık)
+   tanımlamak için isteğe bağlı alanlar eklenmiştir; hepsi boş bırakılabilir. ---- */
+function renderImalatUrunSection(sub){
+  normalizeImalatCatalogState(state);
+  sub.innerHTML = `
+    <div class="card glass" id="urunFiyatFormCard">
+      <h2>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+        ${urunForm.id? 'Ürünü Düzenle':'Ürün Ekle'}
+      </h2>
+      <p class="hint">Kullandığınız ürünleri (ör. "Alçıpan Levha 12.5mm") adı, ebatı, ağırlığı, uzunluğu, kalınlığı ve fiyatıyla kaydedin. Bu liste tüm imalat sistemlerinde ortaktır; malzeme eklerken ürün seçince fiyat, para birimi ve kur otomatik gelir.</p>
+      <div class="field-grid">
+        <div class="field" style="grid-column:span 2;"><label>Ürün Adı</label>
+          <input type="text" id="ur-ad" value="${esc(urunForm.ad)}" placeholder="Örn: Alçıpan Levha 12.5mm">
+        </div>
+        <div class="field"><label>Birim</label>
+          <select id="ur-birim">
+            <option value="">— Seçiniz —</option>
+            ${IMALAT_UNITS.map(u=>`<option value="${u}" ${(urunForm.birim||'')===u?'selected':''}>${esc(UNIT_LABEL[u]||u)}</option>`).join('')}
+          </select>
+        </div>
+        <div class="field"><label>Ebat</label>
+          <input type="text" id="ur-ebat" value="${esc(urunForm.ebat)}" placeholder="Örn: 1.2x2.5">
+        </div>
+        <div class="field"><label>Ağırlık (kg)</label>
+          <input class="mono" type="text" id="ur-kg" value="${esc(urunForm.kg)}" placeholder="Örn: 25">
+        </div>
+        <div class="field"><label>Uzunluk</label>
+          <input type="text" id="ur-uzunluk" value="${esc(urunForm.uzunluk)}" placeholder="Örn: 3mt">
+        </div>
+        <div class="field"><label>Kalınlık</label>
+          <input type="text" id="ur-kalinlik" value="${esc(urunForm.kalinlik)}" placeholder="Örn: 12.5mm">
+        </div>
+        <div class="field"><label>Para Birimi</label>
+          <select id="ur-paraBirimi">
+            ${Object.keys(CURRENCY_INFO).map(code=>`<option value="${code}" ${(urunForm.paraBirimi||'TRY')===code?'selected':''}>${esc(CURRENCY_INFO[code].name)}</option>`).join('')}
+          </select>
+        </div>
+        ${(()=>{
+          const cur = (urunForm.paraBirimi && CURRENCY_INFO[urunForm.paraBirimi]) ? urunForm.paraBirimi : 'TRY';
+          if(cur==='TRY') return '';
+          const kurOneri = urunForm.kur || kurFieldValue(cur, 'satis') || '';
+          return `<div class="field"><label>Satış Kuru (1 ${esc(CURRENCY_INFO[cur].label)} = ? TL)</label>
+            <input class="mono" type="number" step="any" min="0" id="ur-kur" value="${esc(kurOneri)}" placeholder="Örn: 34.20">
+          </div>`;
+        })()}
+        <div class="field"><label>Alış Fiyatı</label><input class="mono" type="number" step="any" id="ur-alisFiyat" value="${esc(urunForm.alisFiyat)}"></div>
+        <div class="field"><label>Satış Fiyatı</label><input class="mono" type="number" step="any" id="ur-satisFiyat" value="${esc(urunForm.satisFiyat)}"></div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary ripple-el-host" id="btnSaveUrun">${urunForm.id? 'Ürünü Güncelle':'Ürünü Kaydet'}</button>
+        ${urunForm.id? `<button class="btn btn-ghost" id="btnClearUrun">Vazgeç</button>` : ''}
+      </div>
+    </div>
+    <div class="card glass" id="urunListCard">
+      <h2>Kaydedilen Ürünler <span class="badge">${(state.urunler||[]).length}</span></h2>
+      <p class="hint" style="margin-top:0;">Ürün kartına tıklayınca tüm kayıtlı ürünler açılır; düzenle / sil buradan yapılır.</p>
+      <div class="project-list" id="urunListToggle">
+        <div class="project-item ${ui.imalatUrunListOpen?'active':''}" data-act="toggle-urun-list" role="button" tabindex="0">
+          <div class="pinfo">
+            <b>Ürün</b>
+            <span>${(state.urunler||[]).length} ürün kaydı · ${ui.imalatUrunListOpen?'liste açık — kapatmak için tıklayın':'listeyi açmak için tıklayın'}</span>
+          </div>
+          <button type="button" class="icon-btn" data-act="toggle-urun-list" title="${ui.imalatUrunListOpen?'Listeyi Kapat':'Listeyi Aç'}" aria-label="Ürün listesini aç/kapat">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="transition:transform .2s;${ui.imalatUrunListOpen?'transform:rotate(90deg)':''}"><path d="M9 18l6-6-6-6"/></svg>
+          </button>
+        </div>
+      </div>
+      ${ui.imalatUrunListOpen ? `<div id="urunTableWrap" style="margin-top:12px;">${renderUrunTableHtml()}</div>` : `<div id="urunTableWrap" hidden></div>`}
+    </div>
+  `;
+  bindUrunFiyatEvents();
+}
+
 // Kaydedilen ürünleri kart ızgarası olarak üretir (Ürün kartı açılınca görünür).
 function renderUrunTableHtml(){
   const list = (state.urunler||[]).slice().sort((a,b)=>a.ad.localeCompare(b.ad,'tr'));
@@ -7449,6 +7483,15 @@ function renderUrunTableHtml(){
           <div class="urun-kart-body">
             <b class="urun-kart-ad">${esc(u.ad)}</b>
             <span class="urun-kart-meta">${esc(UNIT_LABEL[u.birim]||u.birim||'Birim yok')} · ${esc(CURRENCY_INFO[urunParaBirimi(u)].label)}</span>
+            ${(()=>{
+              const olcu = [
+                u.ebat ? `Ebat: ${esc(u.ebat)}` : '',
+                u.uzunluk ? `Uzunluk: ${esc(u.uzunluk)}` : '',
+                u.kalinlik ? `Kalınlık: ${esc(u.kalinlik)}` : '',
+                u.kg ? `${esc(u.kg)} kg` : ''
+              ].filter(Boolean).join(' · ');
+              return olcu ? `<span class="urun-kart-meta">${olcu}</span>` : '';
+            })()}
             <div class="urun-kart-fiyat">
               <span>Alış <strong>${fmtMoney(u.alisFiyat, urunParaBirimi(u))}</strong></span>
               <span>Satış <strong>${fmtMoney(u.satisFiyat, urunParaBirimi(u))}</strong></span>
@@ -7472,12 +7515,20 @@ function renderUrunTableHtml(){
 function bindUrunFiyatEvents(){
   const adEl = document.getElementById('ur-ad');
   const birimEl = document.getElementById('ur-birim');
+  const ebatEl = document.getElementById('ur-ebat');
+  const kgEl = document.getElementById('ur-kg');
+  const uzunlukEl = document.getElementById('ur-uzunluk');
+  const kalinlikEl = document.getElementById('ur-kalinlik');
   const alisEl = document.getElementById('ur-alisFiyat');
   const satisEl = document.getElementById('ur-satisFiyat');
   const paraEl = document.getElementById('ur-paraBirimi');
   const kurEl = document.getElementById('ur-kur');
   if(adEl) adEl.addEventListener('input', ()=>{ urunForm.ad = adEl.value; });
   if(birimEl) birimEl.addEventListener('change', ()=>{ urunForm.birim = birimEl.value; });
+  if(ebatEl) ebatEl.addEventListener('input', ()=>{ urunForm.ebat = ebatEl.value; });
+  if(kgEl) kgEl.addEventListener('input', ()=>{ urunForm.kg = kgEl.value; });
+  if(uzunlukEl) uzunlukEl.addEventListener('input', ()=>{ urunForm.uzunluk = uzunlukEl.value; });
+  if(kalinlikEl) kalinlikEl.addEventListener('input', ()=>{ urunForm.kalinlik = kalinlikEl.value; });
   if(alisEl) alisEl.addEventListener('input', ()=>{ urunForm.alisFiyat = alisEl.value; });
   if(satisEl) satisEl.addEventListener('input', ()=>{ urunForm.satisFiyat = satisEl.value; });
   if(kurEl) kurEl.addEventListener('input', ()=>{ urunForm.kur = kurEl.value; });
@@ -7528,6 +7579,7 @@ function bindUrunFiyatEvents(){
         if(u){
           urunForm = {
             id:u.id, ad:u.ad, birim:u.birim||'',
+            ebat:u.ebat||'', kg:u.kg||'', uzunluk:u.uzunluk||'', kalinlik:u.kalinlik||'',
             alisFiyat:u.alisFiyat!=null?String(u.alisFiyat):'',
             satisFiyat:u.satisFiyat!=null?String(u.satisFiyat):'',
             paraBirimi: urunParaBirimi(u),
@@ -7558,6 +7610,10 @@ function saveUrun(){
   if(!assertCanEditImalatCatalog()) return;
   const ad = (urunForm.ad||'').trim();
   const birim = urunForm.birim || '';
+  const ebat = (urunForm.ebat||'').trim();
+  const kg = (urunForm.kg||'').trim();
+  const uzunluk = (urunForm.uzunluk||'').trim();
+  const kalinlik = (urunForm.kalinlik||'').trim();
   const alisFiyat = parseFloat(String(urunForm.alisFiyat).replace(',','.')) || 0;
   const satisFiyat = parseFloat(String(urunForm.satisFiyat).replace(',','.')) || 0;
   const paraBirimi = (urunForm.paraBirimi && CURRENCY_INFO[urunForm.paraBirimi]) ? urunForm.paraBirimi : 'TRY';
@@ -7570,7 +7626,8 @@ function saveUrun(){
   }
   if(!state.urunler) state.urunler = [];
   const applyFields = (u)=>{
-    u.ad = ad; u.birim = birim; u.alisFiyat = alisFiyat; u.satisFiyat = satisFiyat;
+    u.ad = ad; u.birim = birim; u.ebat = ebat; u.kg = kg; u.uzunluk = uzunluk; u.kalinlik = kalinlik;
+    u.alisFiyat = alisFiyat; u.satisFiyat = satisFiyat;
     u.paraBirimi = paraBirimi; u.kur = kur;
   };
   if(urunForm.id){
@@ -7582,7 +7639,7 @@ function saveUrun(){
     const key = normKey(ad);
     const existing = state.urunler.find(x=>normKey(x.ad)===key);
     if(existing) applyFields(existing);
-    else state.urunler.push({id:uid(), ad, birim, alisFiyat, satisFiyat, paraBirimi, kur});
+    else state.urunler.push({id:uid(), ad, birim, ebat, kg, uzunluk, kalinlik, alisFiyat, satisFiyat, paraBirimi, kur});
   }
   const savedUrunId = urunForm.id || null;
   const savedUrunAd = ad;
