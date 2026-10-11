@@ -2011,6 +2011,7 @@ main{
       </button>
       <input type="text" id="headerAramaInput" class="header-arama-input" placeholder="Personel, metraj, masraf, teklif…" style="display:none;">
       <select id="projectSelect" class="proj-select ripple-el-host"></select>
+      <div id="projelerBaslikHeader" style="display:none;flex:1;min-width:0;font-family:var(--font-display,inherit);font-weight:800;font-size:0.95rem;color:var(--ink);padding:9px 12px;">Projeler</div>
       <button type="button" class="icon-btn ripple-el-host" id="headerAyarlarBtn" title="Ayarlar" style="display:none;">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 004.6 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.6a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
       </button>
@@ -3212,6 +3213,7 @@ function newProject(name, employer){
     yemekFiyat:{ sabah:MEAL_PRICES.sabah, ogle:MEAL_PRICES.ogle, aksam:MEAL_PRICES.aksam },
     gunlukKayitlar:[],
     havaKonum:null,
+    customShortcuts:[],
     memory:{ blok:[], kat:[], daire:[], mekan:[], eleman:[], imalat:[] }
   };
 }
@@ -3414,6 +3416,9 @@ let ui = {
   gunlukFilterEnd: isoToday(),
   yemekEditId:null,
   raporTab:'projelistesi',
+  projeRaporPeriyot:'ay', // 'hafta' | 'ay' | '3ay' | '6ay' | 'yil' | 'ozel' — Proje sayfası > Raporlar tarih filtresi
+  projeRaporBaslangic: isoMonthStart(),
+  projeRaporBitis: isoToday(),
   masraflarTab:'avanszimmet',
   imalatSubTab:'tanim',
   imalatSelectedId:null,
@@ -4263,12 +4268,17 @@ function renderTabs(){
   const isHome = ui.tab==='projeler';
   const menuBtn = document.getElementById('btnMenuToggle');
   if(menuBtn) menuBtn.style.display = isHome ? 'none' : '';
+  // "Projeler" ekranı (Raporlar > Proje Listesi) artık ayrı, kendi başlığı olan bir sayfa
+  // gibi davranır: burada üstteki proje adı seçici yerine sabit "Projeler" başlığı görünür.
+  const isProjelerSayfasi = ui.tab==='raporlar' && ui.raporTab==='projelistesi';
   // Teklif, İmalat Sistemleri ve Ayarlar, Anasayfa gibi projeden bağımsızdır: üstteki proje
   // adı seçici orada da gizlenir (projeye bağlıysa zaten kendi "Projeye Bağla" alanından
   // görülür; proje listesi/seçimi artık Ayarlar'daki "Projeler" kartından yapılır).
-  const hideProjeSecici = isHome || ui.tab==='teklif' || ui.tab==='imalat' || ui.tab==='ayarlar';
+  const hideProjeSecici = isHome || ui.tab==='teklif' || ui.tab==='imalat' || ui.tab==='ayarlar' || isProjelerSayfasi;
   const projSel = document.getElementById('projectSelect');
   if(projSel) projSel.style.display = hideProjeSecici ? 'none' : '';
+  const projelerBaslik = document.getElementById('projelerBaslikHeader');
+  if(projelerBaslik) projelerBaslik.style.display = isProjelerSayfasi ? '' : 'none';
   // Başlangıç ekranında üst barda proje seçici yerine genel arama kutusu ve Ayarlar
   // kısayolu çıkar (tema ile çıkış simgesi arasında); diğer sekmelerde eskisi gibi
   // proje seçici görünür.
@@ -4484,7 +4494,7 @@ function renderMain(){
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 7h5l2 2h11v9a2 2 0 01-2 2H3z"/></svg>
           <div>Devam etmek için önce bir proje seçin ya da oluşturun.</div>
           <div class="btn-row" style="justify-content:center;margin-top:12px;">
-            <button class="btn btn-primary" id="goProjeler">Proje Listesi'ne git</button>
+            <button class="btn btn-primary" id="goProjeler">Projeler'e git</button>
           </div>
         </div>
       </div>`;
@@ -4496,11 +4506,14 @@ function renderMain(){
   if(ui.tab==='puantaj') return renderPuantajTab(main, proj);
   if(ui.tab==='gunluk') return renderSantiyeGunluguTab(main, proj);
   if(ui.tab==='masraflar') return renderMasraflarTab(main, proj);
+  if(ui.tab==='projeDetay') return renderProjeDetayTab(main, proj);
+  if(ui.tab==='projeRapor') return renderProjeRaporTab(main, proj);
 }
 
 /* ======================= RAPORLAR (Proje Listesi / Dashboard / Proje Panosu / İcmal / Personeller / Toplu Hesap / Tahsilat) ======================= */
 const RAPOR_SUBTABS = [
-  {key:'projelistesi', label:'Proje Listesi', icon:'<path d="M3 11l9-8 9 8"/><path d="M5 10v10a1 1 0 001 1h4v-6h4v6h4a1 1 0 001-1V10"/>', needsProject:false},
+  // 'projelistesi' artık burada değil: "Projeler" kendi başlığı olan ayrı bir ekrandır
+  // (bkz. renderRaporlarTab içindeki erken dönüş ve renderProjeListesiTab).
   {key:'dashboard', label:'Dashboard', icon:'<rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/>', needsProject:false},
   {key:'projepanosu', label:'Proje Panosu', icon:'<path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/><path d="M14 3h7v7"/>', needsProject:true},
   {key:'icmal', label:'İcmal', icon:'<path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/>', needsProject:true},
@@ -4511,10 +4524,24 @@ const RAPOR_SUBTABS = [
 function renderRaporlarTab(main, proj){
   // Eski "Genel Özet" sekmesi Dashboard'a taşındı
   if(ui.raporTab==='genelozet') ui.raporTab = 'dashboard';
-  if(!ui.raporTab || !RAPOR_SUBTABS.some(t=>t.key===ui.raporTab)) ui.raporTab = 'projelistesi';
+  if(!ui.raporTab) ui.raporTab = 'projelistesi';
+  // "Projeler": artık Raporlar hub'ının bir alt sekmesi değil, kendi başlığı ("Projeler")
+  // ve proje seçici yerine o başlığı gösteren üst barıyla ayrı, bağımsız bir ekran.
+  // renderTabs() bu ekranda proje seçiciyi gizleyip "Projeler" başlığını gösterir; bunun
+  // doğru çalışması için sekme/alt sekme her değiştiğinde renderTabs() tekrar çağrılır.
+  if(ui.raporTab==='projelistesi'){
+    renderTabs();
+    return renderProjeListesiTab(main);
+  }
+  if(!RAPOR_SUBTABS.some(t=>t.key===ui.raporTab)) ui.raporTab = 'dashboard';
   const aktifMeta = RAPOR_SUBTABS.find(t=>t.key===ui.raporTab);
   // Proje gerektiren bir alt sekmedeyken proje yoksa Proje Listesi'ne düş
-  if(aktifMeta && aktifMeta.needsProject && !proj) ui.raporTab = 'projelistesi';
+  if(aktifMeta && aktifMeta.needsProject && !proj){
+    ui.raporTab = 'projelistesi';
+    renderTabs();
+    return renderProjeListesiTab(main);
+  }
+  renderTabs();
   const baslikEk = proj ? ` — <span style="color:var(--aqua-dim)">${esc(proj.name)}</span>` : '';
   main.innerHTML = `
     <div class="card glass">
@@ -4522,7 +4549,7 @@ function renderRaporlarTab(main, proj){
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/></svg>
         Raporlar${baslikEk}
       </h2>
-      <p class="hint">Proje listesi, dashboard (genel özet dahil), proje panosu, icmal, personeller, toplu hesap ve tahsilat raporlarına buradan ulaşabilirsiniz. Proje gerektiren raporlar için önce Proje Listesi'nden bir proje seçin.</p>
+      <p class="hint">Dashboard (genel özet dahil), proje panosu, icmal, personeller, toplu hesap ve tahsilat raporlarına buradan ulaşabilirsiniz. Proje gerektiren raporlar için önce Projeler'den bir proje seçin.</p>
       <div class="report-subnav" id="reportSubnav">
         ${RAPOR_SUBTABS.map(t=>`
           <button class="report-subtab-btn ripple-el-host ${ui.raporTab===t.key?'active':''}" data-rap="${t.key}">
@@ -4539,7 +4566,7 @@ function renderRaporlarTab(main, proj){
     if(!btn) return;
     const meta = RAPOR_SUBTABS.find(t=>t.key===btn.dataset.rap);
     if(meta && meta.needsProject && !activeProject()){
-      showToast('Önce Proje Listesi\'nden bir proje seçin.');
+      showToast('Önce Projeler\'den bir proje seçin.');
       ui.raporTab = 'projelistesi';
       renderRaporlarTab(main, activeProject());
       pushAppHistory();
@@ -4550,8 +4577,7 @@ function renderRaporlarTab(main, proj){
     pushAppHistory();
   });
   const sub = document.getElementById('reportSubContent');
-  if(ui.raporTab==='projelistesi') renderProjeListesiTab(sub);
-  else if(ui.raporTab==='dashboard') renderRaporDashboardTab(sub, proj);
+  if(ui.raporTab==='dashboard') renderRaporDashboardTab(sub, proj);
   else if(ui.raporTab==='projepanosu'){ sub.innerHTML = renderProjeBilgiPanosuHtml(proj); }
   else if(ui.raporTab==='icmal') renderIcmalTab(sub, proj);
   else if(ui.raporTab==='topluicmal') renderTopluIcmalTab(sub, proj);
@@ -4618,19 +4644,13 @@ const ANASAYFA_QUICK_ACTIONS = [
   {key:'projeler', label:'Projeler', icon:'<path d="M3 11l9-8 9 8"/><path d="M5 10v10a1 1 0 001 1h4v-6h4v6h4a1 1 0 001-1V10"/>', go:()=>{ ui.tab='raporlar'; ui.raporTab='projelistesi'; }}
   // Not: Ayarlar burada kart olarak yok; üst bardaki dişli ikonuyla açılıyor (mükerrer olmasın diye).
 ];
-// Bir proje aktifken Proje Listesi ekranının üstünde çıkan 6 modül kısayolu.
-const PROJE_HIZLI_ISLEMLER = [
-  {key:'metraj', label:'Metraj', icon:'<path d="M3 3h18v18H3z"/><path d="M9 3v18M15 3v18M3 9h18M3 15h18"/>', go:()=>{ ui.tab='metraj'; }},
-  {key:'personel', label:'Personel', icon:'<path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/>', go:()=>{ ui.tab='personel'; }},
-  {key:'puantaj', label:'Puantaj', icon:'<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/>', go:()=>{ ui.tab='puantaj'; }},
-  {key:'gunluk', label:'Şantiye Günlüğü', icon:'<path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/><path d="M9 7h7M9 11h7"/>', go:()=>{ ui.tab='gunluk'; }},
-  {key:'masraflar', label:'Masraflar', icon:'<rect x="2" y="6" width="20" height="13" rx="2"/><path d="M2 10h20"/><path d="M6 15h4"/>', go:()=>{ ui.tab='masraflar'; }},
-  {key:'raporlar', label:'Raporlar', icon:'<path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/>', go:()=>{ ui.tab='raporlar'; ui.raporTab='dashboard'; }}
-];
-;
-// Anasayfa'nın 4 kısayolu ve Proje Listesi'ndeki 6 modül kısayolu aynı basit akışı kullanır:
-// proje gerektirmezler (Anasayfa'dakiler) ya da zaten aktif bir proje varken gösterilirler
-// (Proje Listesi'ndekiler), bu yüzden ekstra bir "önce proje seç" kontrolüne gerek yok.
+// Not: Eski "PROJE_HIZLI_ISLEMLER" (Proje Listesi ekranının üstünde çıkan 6 modül kısayolu)
+// kaldırıldı; bu kısayollar artık bir proje seçildiğinde açılan kendi sayfasında
+// (bkz. PROJE_DETAY_TILES ve renderProjeDetayTab) gösteriliyor.
+// Anasayfa'nın 3 kısayolu ve bir projenin kendi sayfasındaki modül kısayolları aynı basit
+// akışı kullanır: proje gerektirmezler (Anasayfa'dakiler) ya da zaten aktif bir proje
+// varken gösterilirler (Proje Detay'dakiler), bu yüzden ekstra bir "önce proje seç"
+// kontrolüne gerek yok.
 function runQuickAction(list, key){
   const action = list.find(a=>a.key===key);
   if(!action) return;
@@ -4878,32 +4898,20 @@ function refreshAnasayfaAramaSonuc(){
 }
 
 function renderProjeListesiTab(sub){
-  const allProjects = Object.values(state.projects).sort((a,b)=>b.createdAt-a.createdAt);
+  // A-Z (Türkçe alfabe sırasına göre) — üstteki proje seçici dropdown ile aynı sıralama.
+  const allProjects = Object.values(state.projects).sort((a,b)=> a.name.localeCompare(b.name,'tr'));
   const devamCount = allProjects.filter(p=>projeDurum(p)==='devam').length;
   const tamamlananCount = allProjects.filter(p=>projeDurum(p)==='tamamlandi').length;
   if(!['tumu','devam','tamamlandi'].includes(ui.projeDurumFilter)) ui.projeDurumFilter = 'tumu';
   const projects = allProjects.filter(p=> ui.projeDurumFilter==='tumu' || projeDurum(p)===ui.projeDurumFilter);
-  const aktifProj = state.activeProjectId ? state.projects[state.activeProjectId] : null;
   sub.innerHTML = `
-    ${aktifProj ? `
     <div class="card glass">
-      <h2>Hızlı İşlemler <span style="color:var(--aqua-dim)">— ${esc(aktifProj.name)}</span></h2>
-      <div class="quick-action-grid" id="projeHizliIslemler">
-        ${PROJE_HIZLI_ISLEMLER.map(a=>`
-          <button class="quick-action-btn ripple-el-host" data-qa="${a.key}">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${a.icon}</svg>
-            <span>${esc(a.label)}</span>
-          </button>
-        `).join('')}
-      </div>
-    </div>` : ''}
-    <div class="card glass">
-      <h2>Proje Listesi <span class="badge">${projects.length}/${allProjects.length}</span></h2>
-      <p class="hint">Projeleri seçin, düzenleyin veya durumlarını güncelleyin.</p>
+      <h2>Projeler <span class="badge">${projects.length}/${allProjects.length}</span></h2>
+      <p class="hint">Projeler A'dan Z'ye sıralanır. Bir projeye tıklayınca o projenin sayfası açılır.</p>
       <div class="btn-row" style="margin-bottom:10px;">
         <button class="btn btn-primary" id="btnNewProjectFromList">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
-          Yeni Proje Ekle
+          Proje Ekle
         </button>
       </div>
       <div class="report-subnav" id="projeDurumFilterNav" style="margin-bottom:10px;">
@@ -4912,7 +4920,7 @@ function renderProjeListesiTab(sub){
         <button class="report-subtab-btn ripple-el-host ${ui.projeDurumFilter==='tamamlandi'?'active':''}" data-durum="tamamlandi">Tamamlanan <span class="badge">${tamamlananCount}</span></button>
       </div>
       <div class="project-list" id="projectList">
-        ${projects.length===0 ? `<div class="empty-state">${allProjects.length===0?'Henüz proje eklenmedi. Yukarıdaki "Yeni Proje Ekle" ile başlayabilirsiniz.':'Bu filtreye uyan proje bulunamadı.'}</div>` : projects.map(p=>{
+        ${projects.length===0 ? `<div class="empty-state">${allProjects.length===0?'Henüz proje eklenmedi. Yukarıdaki "Proje Ekle" ile başlayabilirsiniz.':'Bu filtreye uyan proje bulunamadı.'}</div>` : projects.map(p=>{
           const durum = projeDurum(p);
           const durumMeta = PROJE_DURUM_META[durum];
           return `
@@ -4931,7 +4939,7 @@ function renderProjeListesiTab(sub){
                 ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 6L9 17l-5-5"/></svg>'
                 : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>'}
             </button>
-            <button class="icon-btn" data-act="select" title="Seç">
+            <button class="icon-btn" data-act="select" title="Projeye Git">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
             </button>
             <button class="icon-btn" data-act="edit" title="Güncelle">
@@ -4946,11 +4954,6 @@ function renderProjeListesiTab(sub){
     </div>
   `;
   document.getElementById('btnNewProjectFromList').onclick = ()=>openProjectModal(null);
-  document.getElementById('projeHizliIslemler')?.addEventListener('click',(e)=>{
-    const btn = e.target.closest('[data-qa]');
-    if(!btn) return;
-    runQuickAction(PROJE_HIZLI_ISLEMLER, btn.dataset.qa);
-  });
   document.getElementById('projeDurumFilterNav').addEventListener('click',(e)=>{
     const btn = e.target.closest('[data-durum]');
     if(!btn) return;
@@ -4963,8 +4966,14 @@ function renderProjeListesiTab(sub){
     const id = item.dataset.id;
     const act = e.target.closest('[data-act]')?.dataset.act || 'select';
     if(act==='select'){
-      state.activeProjectId = id; saveState(); renderAll();
-      showToast(`"${state.projects[id].name}" aktif proje olarak seçildi.`);
+      // Projeye tıklamak hem o projeyi aktif proje yapar hem de o projenin kendi
+      // sayfasına (hızlı menü butonlarının olduğu Proje Detay ekranına) götürür.
+      state.activeProjectId = id;
+      ui.tab = 'projeDetay';
+      saveState();
+      renderAll();
+      pushAppHistory();
+      window.scrollTo({top:0, behavior:'smooth'});
     } else if(act==='edit'){
       openProjectModal(state.projects[id]);
     } else if(act==='toggleDurum'){
@@ -4986,6 +4995,296 @@ function renderProjeListesiTab(sub){
   });
 }
 
+/* ======================= PROJE DETAY (seçilen projenin hızlı menü sayfası) ======================= */
+// Projeler listesinden bir projeye tıklandığında açılan sayfa. Sabit 8 modül kısayolunun
+// yanında kullanıcı "+" ile Dashboard, Proje Panosu, İcmal, Personeller, Toplu Hesap ve
+// Projeyi Düzenle gibi ek kısayollar da ekleyebilir (proj.customShortcuts içinde saklanır).
+const PROJE_DETAY_TILES = [
+  {key:'metraj', label:'Metraj', icon:'<path d="M3 3h18v18H3z"/><path d="M9 3v18M15 3v18M3 9h18M3 15h18"/>', go:()=>{ ui.tab='metraj'; }},
+  {key:'puantaj', label:'Puantaj', icon:'<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/>', go:()=>{ ui.tab='puantaj'; }},
+  {key:'personel', label:'Personel', icon:'<path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/>', go:()=>{ ui.tab='personel'; }},
+  {key:'masraflar', label:'Masraflar', icon:'<rect x="2" y="6" width="20" height="13" rx="2"/><path d="M2 10h20"/><path d="M6 15h4"/>', go:()=>{ ui.tab='masraflar'; }},
+  {key:'raporlar', label:'Raporlar', icon:'<path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/>', go:()=>{ ui.tab='projeRapor'; }},
+  {key:'odemeler', label:'Ödemeler', icon:'<path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 014-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 01-4 4H3"/>', go:()=>{ ui.tab='raporlar'; ui.raporTab='tahsilat'; }},
+  {key:'tahsilat', label:'Tahsilat', icon:'<path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/>', go:()=>{ ui.tab='raporlar'; ui.raporTab='tahsilat'; }},
+  {key:'gunluk', label:'Şantiye Günlüğü', icon:'<path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/><path d="M9 7h7M9 11h7"/>', go:()=>{ ui.tab='gunluk'; }}
+];
+// "+" ile eklenebilecek ek kısayollar kataloğu.
+const PROJE_EK_KISAYOL_KATALOG = [
+  {key:'dashboard', label:'Dashboard', icon:'<rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/>'},
+  {key:'projepanosu', label:'Proje Panosu', icon:'<path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/><path d="M14 3h7v7"/>'},
+  {key:'icmal', label:'İcmal', icon:'<path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/>'},
+  {key:'topluicmal', label:'Personeller', icon:'<path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/>'},
+  {key:'topluhesap', label:'Toplu Hesap', icon:'<path d="M3 3v18h18"/><path d="M7 16l4-6 4 4 5-8"/>'},
+  {key:'projeduzenle', label:'Projeyi Düzenle', icon:'<path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/>'}
+];
+function projeEkKisayolGit(key, proj){
+  if(key==='projeduzenle'){ openProjectModal(proj); return; }
+  ui.tab = 'raporlar';
+  ui.raporTab = key; // dashboard | projepanosu | icmal | topluicmal | topluhesap
+}
+function renderProjeDetayTab(main, proj){
+  const ekKisayollar = (proj.customShortcuts||[]).map(k=>PROJE_EK_KISAYOL_KATALOG.find(x=>x.key===k)).filter(Boolean);
+  main.innerHTML = `
+    <div class="card glass">
+      <h2>${esc(proj.name)}</h2>
+      <p class="hint">${proj.employer? 'İşveren: '+esc(proj.employer) : 'İşveren belirtilmedi'}${(proj.baslangicTarihi||proj.bitisTarihi) ? ' · '+(proj.baslangicTarihi?'Başlangıç: '+fmtDateStr(proj.baslangicTarihi):'')+(proj.bitisTarihi?' · Bitiş: '+fmtDateStr(proj.bitisTarihi):'') : ''}</p>
+      <div class="quick-action-grid" id="projeDetayGrid">
+        ${PROJE_DETAY_TILES.map(a=>`
+          <button class="quick-action-btn ripple-el-host" data-qa="${a.key}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${a.icon}</svg>
+            <span>${esc(a.label)}</span>
+          </button>
+        `).join('')}
+        ${ekKisayollar.map(a=>`
+          <button class="quick-action-btn ripple-el-host" data-ek="${a.key}" style="position:relative;">
+            <span data-ek-remove="${a.key}" title="Kaldır" style="position:absolute;top:3px;right:3px;width:16px;height:16px;display:flex;align-items:center;justify-content:center;color:var(--ink-soft);">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+            </span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${a.icon}</svg>
+            <span>${esc(a.label)}</span>
+          </button>
+        `).join('')}
+        <button class="quick-action-btn ripple-el-host" id="btnProjeKisayolEkle" title="Kısayol Ekle">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+          <span>Ekle</span>
+        </button>
+      </div>
+    </div>
+  `;
+  document.getElementById('projeDetayGrid').addEventListener('click',(e)=>{
+    const removeBtn = e.target.closest('[data-ek-remove]');
+    if(removeBtn){
+      e.stopPropagation();
+      proj.customShortcuts = (proj.customShortcuts||[]).filter(k=>k!==removeBtn.dataset.ekRemove);
+      saveState(); renderProjeDetayTab(main, proj);
+      return;
+    }
+    const qaBtn = e.target.closest('[data-qa]');
+    if(qaBtn){ runQuickAction(PROJE_DETAY_TILES, qaBtn.dataset.qa); return; }
+    const ekBtn = e.target.closest('[data-ek]');
+    if(ekBtn){
+      projeEkKisayolGit(ekBtn.dataset.ek, proj);
+      renderTabs(); renderMain(); pushAppHistory();
+      window.scrollTo({top:0, behavior:'smooth'});
+    }
+  });
+  document.getElementById('btnProjeKisayolEkle').onclick = ()=> openProjeKisayolEkleModal(proj, main);
+}
+function openProjeKisayolEkleModal(proj, main){
+  const mevcut = proj.customShortcuts||[];
+  const secenekler = PROJE_EK_KISAYOL_KATALOG.filter(k=>!mevcut.includes(k.key));
+  const modalRoot = document.getElementById('modalRoot');
+  modalRoot.innerHTML = `
+    <div class="modal-backdrop" id="modalBackdrop">
+      <div class="modal glass-strong glass">
+        <h3>Kısayol Ekle</h3>
+        <p class="hint">Bu projenin hızlı menüsüne eklemek istediğiniz bölümü seçin.</p>
+        <div class="pick-list">
+          ${secenekler.length===0 ? `<div class="empty-state">Eklenebilecek başka kısayol kalmadı.</div>` : secenekler.map(k=>`
+          <div class="pick-item" data-ek-pick="${k.key}" style="cursor:pointer;">
+            <div style="width:30px;height:30px;border-radius:8px;background:rgba(47,143,227,0.15);display:flex;align-items:center;justify-content:center;color:var(--aqua-dim);flex-shrink:0;">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">${k.icon}</svg>
+            </div>
+            <b style="font-size:0.85rem;">${esc(k.label)}</b>
+          </div>`).join('')}
+        </div>
+        <div class="btn-row" style="margin-top:10px;justify-content:flex-end;">
+          <button class="btn btn-ghost" id="ekKisayolCancel">Kapat</button>
+        </div>
+      </div>
+    </div>`;
+  document.getElementById('ekKisayolCancel').onclick = closeModal;
+  document.getElementById('modalBackdrop').addEventListener('click',(e)=>{ if(e.target.id==='modalBackdrop') closeModal(); });
+  modalRoot.querySelectorAll('[data-ek-pick]').forEach(el=>{
+    el.addEventListener('click',()=>{
+      if(!proj.customShortcuts) proj.customShortcuts = [];
+      proj.customShortcuts.push(el.dataset.ekPick);
+      saveState(); closeModal(); renderProjeDetayTab(main, proj);
+    });
+  });
+}
+
+/* ======================= PROJE RAPORLARI (Proje Detay > Raporlar) =======================
+   Dönem filtresine (haftalık/aylık/3 aylık/6 aylık/yıllık/iki tarih arası) göre bu projeye
+   bağlı personel/puantaj dışı tüm tarihli kayıtları (teklif, masraf, avans/zimmet, bordro,
+   personel gideri, tahsilat/ödeme, yemek, şantiye günlüğü, personel) tek bir listede gösterir;
+   altında da projenin tüm zamanlar genel özeti (Proje Dashboard ile aynı hesap) yer alır. */
+const PROJE_RAPOR_PERIYOTLAR = [
+  {key:'hafta', label:'Haftalık'},
+  {key:'ay', label:'Aylık'},
+  {key:'3ay', label:'3 Aylık'},
+  {key:'6ay', label:'6 Aylık'},
+  {key:'yil', label:'Yıllık'},
+  {key:'ozel', label:'İki Tarih Arası'}
+];
+function projeRaporPeriyotAralik(periyot, ozelStart, ozelEnd){
+  const end = isoToday();
+  function isoDaysAgo(n){
+    const x = new Date(); x.setDate(x.getDate()-n);
+    return `${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,'0')}-${String(x.getDate()).padStart(2,'0')}`;
+  }
+  switch(periyot){
+    case 'hafta': return {start:isoDaysAgo(6), end};
+    case '3ay': return {start:isoDaysAgo(89), end};
+    case '6ay': return {start:isoDaysAgo(179), end};
+    case 'yil': return {start:isoDaysAgo(364), end};
+    case 'ozel': return {start:ozelStart||isoMonthStart(), end:ozelEnd||end};
+    case 'ay':
+    default: return {start:isoDaysAgo(29), end};
+  }
+}
+function collectProjeRaporKayitlari(proj, start, end){
+  const inRange = (tarih)=> !!tarih && tarih>=start && tarih<=end;
+  const results = [];
+  (proj.personel||[]).forEach(p=>{
+    if(inRange(p.girisTarihi)){
+      results.push({kind:'personel', id:p.id, label:p.adSoyad||'Personel', sublabel:(p.pozisyon||'Personel')+' · İşe giriş', date:p.girisTarihi, tutar:null});
+    }
+  });
+  projeTumTeklifler(proj).forEach(t=>{
+    if(inRange(t.teklifTarihi)){
+      let tutar = null;
+      try{ tutar = teklifKdvliToplam(t).brut; }catch(e){ tutar = null; }
+      results.push({kind:'teklif', id:null, teklifId:t.id, label:t.teklifNo||t.ad||'Teklif', sublabel:(t.musteriAdSoyad?t.musteriAdSoyad+' · ':'')+'Teklif', date:t.teklifTarihi, tutar});
+    }
+  });
+  (proj.masraflar||[]).forEach(r=>{
+    if(inRange(r.odemeTarihi)){
+      results.push({kind:'masraf', id:r.id, label:r.masrafKalemi||'Masraf', sublabel:r.aciklama||'Masraf', date:r.odemeTarihi, tutar:parseFloat(r.tutar)||0, paraBirimi:r.paraBirimi});
+    }
+  });
+  (proj.avanslar||[]).forEach(r=>{
+    if(inRange(r.odemeTarihi)){
+      results.push({kind:'avans', id:r.id, label:'Avans: '+(r.adSoyad||'—'), sublabel:r.aciklama||'Avans/Zimmet', date:r.odemeTarihi, tutar:parseFloat(r.tutar)||0, paraBirimi:r.paraBirimi});
+    }
+  });
+  (proj.zimmetler||[]).forEach(r=>{
+    if(inRange(r.zimmetTarihi)){
+      results.push({kind:'zimmet', id:r.id, label:'Zimmet: '+(r.markaModel||r.adSoyad||'—'), sublabel:r.aciklama||'Zimmet', date:r.zimmetTarihi, tutar:null});
+    }
+  });
+  (proj.bordrolar||[]).forEach(r=>{
+    if(inRange(r.odemeTarihi)){
+      results.push({kind:'bordro', id:r.id, label:'Bordro: '+(r.adSoyad||'—'), sublabel:(r.donem?r.donem+' · ':'')+'Maaş Bordro', date:r.odemeTarihi, tutar:parseFloat(r.net)||0, paraBirimi:r.paraBirimi});
+    }
+  });
+  (proj.personelGiderler||[]).forEach(r=>{
+    if(inRange(r.tarih)){
+      results.push({kind:'personelgider', id:r.id, label:'Gider: '+(r.giderTuru||r.adSoyad||'—'), sublabel:r.aciklama||'Personel Gideri', date:r.tarih, tutar:parseFloat(r.tutar)||0, paraBirimi:r.paraBirimi});
+    }
+  });
+  (proj.tahsilatlar||[]).forEach(r=>{
+    if(inRange(r.odemeTarihi)){
+      results.push({kind:'tahsilat', id:r.id, label:(r.odemeYapan||'—')+' → '+(r.odemeAlan||'—'), sublabel:r.aciklama||'Tahsilat / Ödeme', date:r.odemeTarihi, tutar:parseFloat(r.tutar)||0, paraBirimi:r.paraBirimi});
+    }
+  });
+  (proj.yemekler||[]).forEach(r=>{
+    if(inRange(r.tarih)){
+      results.push({kind:'yemek', id:r.id, label:'Yemek', sublabel:r.aciklama||'Yemek kaydı', date:r.tarih, tutar:null});
+    }
+  });
+  (proj.gunlukKayitlar||[]).forEach(r=>{
+    if(inRange(r.tarih)){
+      results.push({kind:'gunluk', id:r.id, label:'Şantiye Günlüğü', sublabel:(r.yapilanIsler?r.yapilanIsler.slice(0,60):'Günlük kayıt'), date:r.tarih, tutar:null});
+    }
+  });
+  results.sort((a,b)=> (b.date||'').localeCompare(a.date||''));
+  return results;
+}
+function renderProjeRaporTab(main, proj){
+  if(!PROJE_RAPOR_PERIYOTLAR.some(p=>p.key===ui.projeRaporPeriyot)) ui.projeRaporPeriyot = 'ay';
+  const {start, end} = projeRaporPeriyotAralik(ui.projeRaporPeriyot, ui.projeRaporBaslangic, ui.projeRaporBitis);
+  const kayitlar = collectProjeRaporKayitlari(proj, start, end);
+
+  // Genel özet: Proje Dashboard ile aynı, tüm zamanlar bazlı hesap (tarih filtresinden bağımsız).
+  const hakedis = projeIsverenAlacakToplam(proj);
+  const tahsilat = sumTahsilatProject(proj);
+  const kalanIsveren = hakedis - tahsilat;
+  const odenecek = projeCalisanaOdenecekToplam(proj);
+  const odenen = projeCalisanaOdenenToplam(proj);
+  const kalanCalisan = odenecek - odenen;
+  const masrafToplam = projeMasrafToplam(proj);
+  const yemekToplam = projeYemekToplam(proj);
+  const personelGiderToplam = projePersonelGiderToplam(proj) + projeBordroSskIsverenToplam(proj);
+  const kalanKar = hakedis - odenecek - masrafToplam - yemekToplam - personelGiderToplam;
+
+  main.innerHTML = `
+    <div class="card glass">
+      <h2>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/></svg>
+        Raporlar — <span style="color:var(--aqua-dim)">${esc(proj.name)}</span>
+      </h2>
+      <p class="hint">Dönem seçin: bu projeye bağlı tüm kayıtlar seçtiğiniz tarih aralığına göre listelenir. Altta projenin tüm zamanlar genel özeti yer alır.</p>
+      <div class="field-grid" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr));">
+        <div class="field">
+          <label>Dönem</label>
+          <select id="projeRaporPeriyotSelect">
+            ${PROJE_RAPOR_PERIYOTLAR.map(p=>`<option value="${p.key}" ${ui.projeRaporPeriyot===p.key?'selected':''}>${p.label}</option>`).join('')}
+          </select>
+        </div>
+        ${ui.projeRaporPeriyot==='ozel' ? `
+        <div class="field"><label>Başlangıç</label><input type="date" id="projeRaporBaslangicInput" value="${esc(ui.projeRaporBaslangic)}"></div>
+        <div class="field"><label>Bitiş</label><input type="date" id="projeRaporBitisInput" value="${esc(ui.projeRaporBitis)}"></div>
+        ` : ''}
+      </div>
+    </div>
+
+    <div class="card glass">
+      <h2>Kayıtlar <span class="badge">${kayitlar.length}</span></h2>
+      <p class="hint">${fmtDateStr(start)} — ${fmtDateStr(end)} arası. (Metraj satırlarının tarihi tutulmadığı için bu listeye girmez; Metraj sekmesinden görüntülenebilir.)</p>
+      <div class="pick-list" id="projeRaporKayitListesi">
+        ${kayitlar.length===0 ? `<div class="empty-state">Bu tarih aralığında kayıt bulunamadı.</div>` : kayitlar.map(item=>{
+          const meta = ARAMA_KIND_META[item.kind] || {label:item.kind, icon:''};
+          const tutarEtiket = item.tutar!=null ? fmtMoney(item.tutar, (item.paraBirimi && CURRENCY_INFO[item.paraBirimi]) ? item.paraBirimi : projectCurrency(proj)) : meta.label;
+          return `
+          <div class="pick-item arama-sonuc-item" data-kind="${item.kind}" data-id="${item.id||''}" data-teklif="${item.teklifId||''}" style="cursor:pointer;">
+            <div style="width:30px;height:30px;border-radius:8px;background:rgba(47,143,227,0.15);display:flex;align-items:center;justify-content:center;color:var(--aqua-dim);flex-shrink:0;">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">${meta.icon}</svg>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:2px;min-width:0;flex:1;">
+              <b style="font-family:var(--font-display);font-size:0.85rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(item.label)}</b>
+              <span style="font-size:0.7rem;color:var(--ink-soft);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(item.sublabel)} · ${fmtDateStr(item.date)}</span>
+            </div>
+            <span class="badge" style="flex-shrink:0;">${tutarEtiket}</span>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>
+
+    <div class="card glass">
+      <h2>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>
+        Genel Özet — <span style="color:var(--aqua-dim)">${esc(proj.name)}</span>
+      </h2>
+      <p class="hint">Bu projenin tüm zamanlar finansal durumu (tarih filtresinden bağımsız).</p>
+      <div class="totals-strip">
+        <div class="total-chip"><span class="lbl">Toplam Hakediş</span><span class="val">${fmtMoney(hakedis)}</span></div>
+        <div class="total-chip"><span class="lbl">Kalan Ödeme (İşveren)</span><span class="val">${fmtMoney(kalanIsveren)}</span></div>
+        <div class="total-chip"><span class="lbl">Kalan Ödeme (Çalışan)</span><span class="val">${fmtMoney(kalanCalisan)}</span></div>
+        <div class="total-chip"><span class="lbl">Kalan Kâr</span><span class="val">${fmtMoney(kalanKar)}</span></div>
+      </div>
+    </div>
+  `;
+  document.getElementById('projeRaporPeriyotSelect').addEventListener('change',(e)=>{
+    ui.projeRaporPeriyot = e.target.value;
+    renderProjeRaporTab(main, proj);
+  });
+  document.getElementById('projeRaporBaslangicInput')?.addEventListener('change',(e)=>{
+    ui.projeRaporBaslangic = e.target.value;
+    renderProjeRaporTab(main, proj);
+  });
+  document.getElementById('projeRaporBitisInput')?.addEventListener('change',(e)=>{
+    ui.projeRaporBitis = e.target.value;
+    renderProjeRaporTab(main, proj);
+  });
+  document.getElementById('projeRaporKayitListesi').addEventListener('click',(e)=>{
+    const item = e.target.closest('.arama-sonuc-item');
+    if(!item) return;
+    handleGlobalAramaClick(item.dataset.kind, proj.id, item.dataset.id, item.dataset.teklif);
+  });
+}
+
 /* ---- Genel Arama: tüm projelerdeki HER ŞEYİ arar (proje, personel, metraj, teklif,
    masraf, avans/zimmet, tahsilat, yemek, şantiye günlüğü). Bulunan kayda tıklanınca
    ilgili projeye ve bölüme geçilir, satır/kayıt kısa süreliğine vurgulanır. ---- */
@@ -4999,7 +5298,9 @@ const ARAMA_KIND_META = {
   zimmet:{label:'Zimmet', icon:'<rect x="2" y="6" width="20" height="13" rx="2"/><path d="M2 10h20"/><path d="M6 15h4"/>'},
   tahsilat:{label:'Tahsilat', icon:'<path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/>'},
   yemek:{label:'Yemek', icon:'<path d="M18 8h1a4 4 0 010 8h-1M2 8h16v9a4 4 0 01-4 4H6a4 4 0 01-4-4V8z"/>'},
-  gunluk:{label:'Şantiye Günlüğü', icon:'<path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/>'}
+  gunluk:{label:'Şantiye Günlüğü', icon:'<path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/>'},
+  bordro:{label:'Bordro', icon:'<path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h5"/>'},
+  personelgider:{label:'Personel Gideri', icon:'<path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/>'}
 };
 
 function collectGlobalAramaResults(query){
@@ -5145,7 +5446,7 @@ function handleGlobalAramaClick(kind, projId, rowId, teklifId){
   if(!proj) return;
   if(kind==='proje'){
     state.activeProjectId = projId;
-    ui.tab = 'projeler';
+    ui.tab = 'projeDetay';
     saveState(); renderAll();
     pushAppHistory();
     window.scrollTo({top:0, behavior:'smooth'});
@@ -5315,7 +5616,7 @@ function renderProjeBilgiPanosuHtml(proj){
     return `
     <div class="card glass">
       <h2>Proje Bilgilendirme Panosu</h2>
-      <div class="empty-state">Panoyu görmek için Raporlar &gt; Proje Listesi'nden bir proje seçin.</div>
+      <div class="empty-state">Panoyu görmek için Projeler'den bir proje seçin.</div>
     </div>`;
   }
   const hakedisToplam = projeIsverenAlacakToplam(proj);
@@ -6002,7 +6303,7 @@ function renderRaporDashboardTab(main, proj){
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>
           Seçili Proje Dashboard
         </h2>
-        <div class="empty-state">Proje bazlı grafikleri görmek için Raporlar &gt; Proje Listesi'nden bir proje seçin.</div>
+        <div class="empty-state">Proje bazlı grafikleri görmek için Projeler'den bir proje seçin.</div>
       </div>`;
   } else {
     const hakedis = projeIsverenAlacakToplam(proj);
@@ -16505,7 +16806,7 @@ function renderAyarlarTab(main){
       <div class="btn-row">
         <button class="btn btn-primary" id="btnAyarlarProjeler">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 11l9-8 9 8"/><path d="M5 10v10a1 1 0 001 1h4v-6h4v6h4a1 1 0 001-1V10"/></svg>
-          Proje Listesine Git
+          Projeler'e Git
         </button>
       </div>
     </div>
@@ -18327,6 +18628,7 @@ window.__dnzInitApp = async function init(){
     if(!p.yemekFiyat) p.yemekFiyat = { sabah:MEAL_PRICES.sabah, ogle:MEAL_PRICES.ogle, aksam:MEAL_PRICES.aksam };
     if(!p.gunlukKayitlar) p.gunlukKayitlar = [];
     if(p.havaKonum===undefined) p.havaKonum = null;
+    if(!p.customShortcuts) p.customShortcuts = [];
     (p.yemekler||[]).forEach(r=>{
       if(r.tarih) r.tarih = fixLegacyDateStr(r.tarih);
       if(r.sabahFiyat==null) r.sabahFiyat = parseFloat(p.yemekFiyat.sabah)||0;
