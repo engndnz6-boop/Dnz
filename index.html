@@ -2515,7 +2515,7 @@ function renderTasiyiciFormsHtml(tips, ayarlar, uygulamaTipi){
           <input type="checkbox" data-tasiyici-checkbox="${tip}" data-field="yariParca" ${a.yariParca?'checked':''} style="width:18px;height:18px;flex-shrink:0;accent-color:var(--aqua-dim);margin-top:2px;">
           <span style="flex:1;min-width:0;">
             <b style="font-size:0.8rem;">Son parçayı yarım parça olarak hesapla</b>
-            <span style="display:block;font-size:0.68rem;color:var(--ink-soft);margin-top:2px;">İşaretliyse: kalan parça profil boyunun yarısından büyükse tam parçaya tamamlanır, yarısına eşit/küçükse yarım parça (0.5 adet) sayılır. Örn: profil 1.2 m, net 5.8 m → 4 tam + 1.0 m kalan (yarıdan büyük) = 5 adet. Kalan 0.5 m olsaydı (yarıdan küçük) = 4.5 adet. İşaretli değilse standart şekilde, kalan ne olursa olsun bir üst tam parçaya tamamlanır.</span>
+            <span style="display:block;font-size:0.68rem;color:var(--ink-soft);margin-top:2px;">İşaretliyse: her hat (sıra) kendi kalanına göre ayrı değerlendirilir. Bir hattın kalanı profil boyunun yarısından büyükse o hat kendi başına 1 tam parçaya tamamlanır. Yarısına eşit/küçükse, bu küçük kalanlar tüm hatlardan toplanıp (her biri gerçek ölçüsü yerine sabit yarım profil ölçüsüyle) bir havuzda birleştirilir; bu havuz en sonda profil boyunun katına tamamlanır. Örn: 5×6,4 tavan, Tali taşıyıcı profil 120 cm, 9 hat, her hat 500 cm → her hatta 4 tam (480 cm) + 20 cm kalan (yarıdan az) → kalanlar havuzda 9×60 cm = 540 cm → 120'nin katına tamamlanınca 600 cm = 5 adet → toplam 9×4 + 5 = 41 adet. İşaretli değilse standart şekilde, tüm hatların toplam metrajı tek seferde bir üst tam parçaya tamamlanır.</span>
           </span>
         </label>` : ''}
         <p class="hint" style="margin:0;font-size:0.68rem;">${normalizeUygulamaTipi(uygulamaTipi)==='duvar'
@@ -8227,20 +8227,42 @@ function tamAdetYuvarla(deger){
   return Math.ceil(d - 1e-9);
 }
 // Tali/Ara taşıyıcıda "Son parçayı yarım parça olarak hesapla" işaretliyken kullanılan
-// yuvarlama: son parçadan kalan, profil boyunun yarısından büyükse tam parçaya tamamlanır;
-// yarısına eşit veya küçükse yarım parça (0.5 adet) sayılır. deger = net metraj / profil boyu
-// (tamAdetYuvarla ile aynı çağrı biçimi — oran ölçekten bağımsız olduğu için 0.5 eşiği
-// doğrudan oran üzerinden uygulanabilir). Örn: profil 1.2 m, net 5.8 m → deger=4.833 →
-// tam=4, kalan oranı 0.833 (>0.5) → 5 adet. Net 5.1 m olsaydı → deger=4.25 → kalan 0.25
-// (≤0.5) → 4.5 adet.
-function tamAdetYariParcaYuvarla(deger){
-  const d = parseFloat(deger)||0;
-  if(!(d>0)) return 0;
-  const tam = Math.floor(d + 1e-9);
-  const kalanOran = d - tam;
-  if(kalanOran <= 1e-9) return tam;
-  if(kalanOran > 0.5 + 1e-9) return tam+1;
-  return tam+0.5;
+// hesap: HER hat (sıra) kendi uzunluğu üzerinden ayrı ayrı tam parça + kalan hesaplar
+// (satırları toplayıp tek bir orandan hesaplamaz). Her hattın tam parçaları toplanır.
+// Her hattın kalanı, profil boyunun yarısından büyükse O HAT kendi başına 1 tam parçaya
+// tamamlanır; yarısına eşit/küçükse kalan, gerçek değeri yerine SABİT yarım ölçü (profil/2)
+// olarak bir havuzda toplanır. Tüm hatlar işlendikten sonra bu havuz, profil boyunun katına
+// yukarı yuvarlanır (ceil) ve çıkan parça adedi toplam tam parça sayısına eklenir.
+// Örn (kullanıcı örneği): 5x6,4 tavan, Tali taşıyıcı profil 120cm, 9 hat, her hat 500cm →
+// her hatta tam=4 (480cm), kalan=20cm (yarıdan küçük) → kalan havuza 60cm olarak eklenir →
+// 9 hat × 60cm = 540cm → 540/120 yukarı yuvarlanır = 5 adet tamamlama → toplam tam = 9×4=36
+// → genel toplam = 36 + 5 = 41 adet.
+function hesaplaTasiyiciYariParcaAdet(hatLengths, stock){
+  const s = parseFloat(stock)||0;
+  const sonuc = { adet:0, tamToplam:0, buyukTamamlama:0, kucukTamamlama:0, kucukKalanToplam:0 };
+  if(!(s>0)) return sonuc;
+  let tamToplam = 0, buyukTamamlama = 0, kucukKalanToplam = 0;
+  (hatLengths||[]).forEach(rawLen=>{
+    const hatLen = parseFloat(rawLen)||0;
+    if(!(hatLen>0)) return;
+    const tam = Math.floor(hatLen / s + 1e-9);
+    const kalan = hatLen - tam*s;
+    tamToplam += tam;
+    if(kalan <= 1e-9){
+      // tam bölünmüş, kalan yok
+    } else if(kalan > s/2 + 1e-9){
+      buyukTamamlama += 1; // bu hattın kalanı tek başına 1 tam parçaya tamamlanır
+    } else {
+      kucukKalanToplam += s/2; // yarıdan küçük/eşit kalan, sabit yarım ölçü olarak havuzlanır
+    }
+  });
+  const kucukTamamlama = kucukKalanToplam>1e-9 ? Math.ceil(kucukKalanToplam/s - 1e-9) : 0;
+  sonuc.tamToplam = tamToplam;
+  sonuc.buyukTamamlama = buyukTamamlama;
+  sonuc.kucukTamamlama = kucukTamamlama;
+  sonuc.kucukKalanToplam = kucukKalanToplam;
+  sonuc.adet = tamToplam + buyukTamamlama + kucukTamamlama;
+  return sonuc;
 }
 // Paket tamamla: adet'i paket katına çıkarır; m²/mt/kg miktarını aynı oranda büyütür.
 function applyPaketTamamlaAdet(adetNote, miktar, kgNote, birimLower, paketAdet){
@@ -8604,7 +8626,12 @@ function computeTasiyiciProfilFromRoom(malzeme, room, ekstraM, polyPts){
     } else {
       const r = countProfilParcasiFromHats(hats, stock);
       const yariParcaAktif = (tip==='tali' || tip==='ara') && !!a.yariParca;
-      parcaAdet = stock>0 ? (yariParcaAktif ? tamAdetYariParcaYuvarla(hatMetraj / stock) : tamAdetYuvarla(hatMetraj / stock)) : hatSayisi;
+      if(yariParcaAktif && stock>0){
+        const yp = hesaplaTasiyiciYariParcaAdet(hats, stock);
+        parcaAdet = yp.adet;
+      } else {
+        parcaAdet = stock>0 ? tamAdetYuvarla(hatMetraj / stock) : hatSayisi;
+      }
       metrajTam = stock>0 ? Math.round(parcaAdet * stock * 100) / 100 : hatMetraj;
       rem = r.rem;
       splices = r.splices;
