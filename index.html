@@ -2511,8 +2511,8 @@ function renderTasiyiciFormsHtml(tips, ayarlar, uygulamaTipi){
           </div>
         </div>
         ${(tip==='tali' || tip==='ara') ? `
-        <label class="pick-item" style="cursor:pointer;margin:0;">
-          <input type="checkbox" data-tasiyici-checkbox="${tip}" data-field="yariParca" ${a.yariParca?'checked':''}>
+        <label class="pick-item" style="cursor:pointer;margin:0;align-items:flex-start;">
+          <input type="checkbox" data-tasiyici-checkbox="${tip}" data-field="yariParca" ${a.yariParca?'checked':''} style="width:18px;height:18px;flex-shrink:0;accent-color:var(--aqua-dim);margin-top:2px;">
           <span style="flex:1;min-width:0;">
             <b style="font-size:0.8rem;">Son parçayı yarım parça olarak hesapla</b>
             <span style="display:block;font-size:0.68rem;color:var(--ink-soft);margin-top:2px;">İşaretliyse: kalan parça profil boyunun yarısından büyükse tam parçaya tamamlanır, yarısına eşit/küçükse yarım parça (0.5 adet) sayılır. Örn: profil 1.2 m, net 5.8 m → 4 tam + 1.0 m kalan (yarıdan büyük) = 5 adet. Kalan 0.5 m olsaydı (yarıdan küçük) = 4.5 adet. İşaretli değilse standart şekilde, kalan ne olursa olsun bir üst tam parçaya tamamlanır.</span>
