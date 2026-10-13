@@ -2353,7 +2353,10 @@ const IMALAT_TASIYICI_TIPLERI = new Set(['ana','alt','tali','ara']);
 const IMALAT_TASIYICI_SIRASI = ['ana','alt','tali','ara'];
 function imalatUrunTipiLabel(id){ return IMALAT_URUN_TIPI_LABEL[id] || (id ? String(id) : '—'); }
 function imalatUrunTipiColor(id){ return IMALAT_URUN_TIPI_COLOR[id] || '#8096A3'; }
-function emptyTasiyiciAyar(){ return { parallel:'kisa', firstCm:'70', stepCm:'100', profilBoyu:'3' }; }
+// yariParca: yalnızca Tali/Ara taşıyıcıda kullanılabilen özel yuvarlama seçeneği — bkz.
+// tamAdetYariParcaYuvarla(). İşaretli değilse standart (her zaman tam parçaya yukarı
+// tamamlanan) hesaplama yapılır.
+function emptyTasiyiciAyar(){ return { parallel:'kisa', firstCm:'70', stepCm:'100', profilBoyu:'3', yariParca:false }; }
 function seciliTasiyiciTipleri(val){
   const tips = normalizeUrunTipleri(val);
   return IMALAT_TASIYICI_SIRASI.filter(id=>tips.includes(id));
@@ -2394,14 +2397,16 @@ function normalizeTasiyiciAyarlari(m){
         parallel: fromMap.parallel==='uzun' ? 'uzun' : 'kisa',
         firstCm: fromMap.firstCm!=null && fromMap.firstCm!=='' ? String(fromMap.firstCm) : base.firstCm,
         stepCm: fromMap.stepCm!=null && fromMap.stepCm!=='' ? String(fromMap.stepCm) : base.stepCm,
-        profilBoyu: fromMap.profilBoyu!=null && fromMap.profilBoyu!=='' ? String(fromMap.profilBoyu) : base.profilBoyu
+        profilBoyu: fromMap.profilBoyu!=null && fromMap.profilBoyu!=='' ? String(fromMap.profilBoyu) : base.profilBoyu,
+        yariParca: !!fromMap.yariParca
       };
     } else if(m && (m.parallel!=null || m.firstCm!=null || m.stepCm!=null || m.profilBoyu!=null)){
       out[tip] = {
         parallel: m.parallel==='uzun' ? 'uzun' : 'kisa',
         firstCm: m.firstCm!=null && m.firstCm!=='' ? String(m.firstCm) : base.firstCm,
         stepCm: m.stepCm!=null && m.stepCm!=='' ? String(m.stepCm) : base.stepCm,
-        profilBoyu: m.profilBoyu!=null && m.profilBoyu!=='' ? String(m.profilBoyu) : base.profilBoyu
+        profilBoyu: m.profilBoyu!=null && m.profilBoyu!=='' ? String(m.profilBoyu) : base.profilBoyu,
+        yariParca: !!m.yariParca
       };
     } else {
       out[tip] = Object.assign({}, base);
@@ -2415,7 +2420,8 @@ function normalizeTasiyiciAyarlari(m){
         parallel: fromMap.parallel==='uzun' ? 'uzun' : 'kisa',
         firstCm: fromMap.firstCm!=null && fromMap.firstCm!=='' ? String(fromMap.firstCm) : '70',
         stepCm: fromMap.stepCm!=null && fromMap.stepCm!=='' ? String(fromMap.stepCm) : '100',
-        profilBoyu: fromMap.profilBoyu!=null && fromMap.profilBoyu!=='' ? String(fromMap.profilBoyu) : '3'
+        profilBoyu: fromMap.profilBoyu!=null && fromMap.profilBoyu!=='' ? String(fromMap.profilBoyu) : '3',
+        yariParca: !!fromMap.yariParca
       };
     });
   }
@@ -2442,7 +2448,8 @@ function serializeTasiyiciAyarlari(ayarlar, tips){
       parallel: a.parallel==='uzun' ? 'uzun' : 'kisa',
       firstCm: !isNaN(firstCm) && firstCm>=0 ? firstCm : 70,
       stepCm: !isNaN(stepCm) && stepCm>0 ? stepCm : 100,
-      profilBoyu: !isNaN(profilBoyu) && profilBoyu>0 ? profilBoyu : 3
+      profilBoyu: !isNaN(profilBoyu) && profilBoyu>0 ? profilBoyu : 3,
+      yariParca: (tip==='tali' || tip==='ara') ? !!a.yariParca : false
     };
   });
   return out;
@@ -2503,6 +2510,14 @@ function renderTasiyiciFormsHtml(tips, ayarlar, uygulamaTipi){
             <input class="mono" type="number" step="any" min="0.01" data-tasiyici-field="${tip}" data-field="profilBoyu" value="${esc(a.profilBoyu??'3')}" placeholder="Örn: 3">
           </div>
         </div>
+        ${(tip==='tali' || tip==='ara') ? `
+        <label class="pick-item" style="cursor:pointer;margin:0;">
+          <input type="checkbox" data-tasiyici-checkbox="${tip}" data-field="yariParca" ${a.yariParca?'checked':''}>
+          <span style="flex:1;min-width:0;">
+            <b style="font-size:0.8rem;">Son parçayı yarım parça olarak hesapla</b>
+            <span style="display:block;font-size:0.68rem;color:var(--ink-soft);margin-top:2px;">İşaretliyse: kalan parça profil boyunun yarısından büyükse tam parçaya tamamlanır, yarısına eşit/küçükse yarım parça (0.5 adet) sayılır. Örn: profil 1.2 m, net 5.8 m → 4 tam + 1.0 m kalan (yarıdan büyük) = 5 adet. Kalan 0.5 m olsaydı (yarıdan küçük) = 4.5 adet. İşaretli değilse standart şekilde, kalan ne olursa olsun bir üst tam parçaya tamamlanır.</span>
+          </span>
+        </label>` : ''}
         <p class="hint" style="margin:0;font-size:0.68rem;">${normalizeUygulamaTipi(uygulamaTipi)==='duvar'
           ? 'Duvar: uzunluk yatay, yükseklik dikey. Profil boyunu istediğiniz gibi yazın (örn. 2.7 · 3 · 3.2). Hat boyundan uzunsa ek yeri oluşur; kalan sonraki hatta aktarılır.'
           : 'Profil boyunu serbest girin. Hat boyu profil boyundan büyükse ek yeri oluşur; kesimden kalan sonraki hatta devam eder. Örn: 5 m hat + 3 m profil → ek 3 m’de.'}</p>
@@ -7888,6 +7903,14 @@ function bindImalatMalzemeSectionEvents(sistem){
         }
         return;
       }
+      const yEl = e.target.closest('[data-tasiyici-checkbox]');
+      if(yEl){
+        const tip = yEl.dataset.tasiyiciCheckbox;
+        const field = yEl.dataset.field;
+        if(!imalatMalzemeForm.tasiyiciAyarlari[tip]) imalatMalzemeForm.tasiyiciAyarlari[tip] = emptyTasiyiciAyar();
+        imalatMalzemeForm.tasiyiciAyarlari[tip][field] = yEl.checked;
+        return;
+      }
       const tEl = e.target.closest('[data-tasiyici-field]');
       if(tEl){
         const tip = tEl.dataset.tasiyiciField;
@@ -8202,6 +8225,22 @@ function tamAdetYuvarla(deger){
   const d = parseFloat(deger)||0;
   if(!(d>0)) return 0;
   return Math.ceil(d - 1e-9);
+}
+// Tali/Ara taşıyıcıda "Son parçayı yarım parça olarak hesapla" işaretliyken kullanılan
+// yuvarlama: son parçadan kalan, profil boyunun yarısından büyükse tam parçaya tamamlanır;
+// yarısına eşit veya küçükse yarım parça (0.5 adet) sayılır. deger = net metraj / profil boyu
+// (tamAdetYuvarla ile aynı çağrı biçimi — oran ölçekten bağımsız olduğu için 0.5 eşiği
+// doğrudan oran üzerinden uygulanabilir). Örn: profil 1.2 m, net 5.8 m → deger=4.833 →
+// tam=4, kalan oranı 0.833 (>0.5) → 5 adet. Net 5.1 m olsaydı → deger=4.25 → kalan 0.25
+// (≤0.5) → 4.5 adet.
+function tamAdetYariParcaYuvarla(deger){
+  const d = parseFloat(deger)||0;
+  if(!(d>0)) return 0;
+  const tam = Math.floor(d + 1e-9);
+  const kalanOran = d - tam;
+  if(kalanOran <= 1e-9) return tam;
+  if(kalanOran > 0.5 + 1e-9) return tam+1;
+  return tam+0.5;
 }
 // Paket tamamla: adet'i paket katına çıkarır; m²/mt/kg miktarını aynı oranda büyütür.
 function applyPaketTamamlaAdet(adetNote, miktar, kgNote, birimLower, paketAdet){
@@ -8564,7 +8603,8 @@ function computeTasiyiciProfilFromRoom(malzeme, room, ekstraM, polyPts){
       splices = [];
     } else {
       const r = countProfilParcasiFromHats(hats, stock);
-      parcaAdet = stock>0 ? tamAdetYuvarla(hatMetraj / stock) : hatSayisi;
+      const yariParcaAktif = (tip==='tali' || tip==='ara') && !!a.yariParca;
+      parcaAdet = stock>0 ? (yariParcaAktif ? tamAdetYariParcaYuvarla(hatMetraj / stock) : tamAdetYuvarla(hatMetraj / stock)) : hatSayisi;
       metrajTam = stock>0 ? Math.round(parcaAdet * stock * 100) / 100 : hatMetraj;
       rem = r.rem;
       splices = r.splices;
